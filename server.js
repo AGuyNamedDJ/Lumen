@@ -6,6 +6,7 @@ const cors = require('cors');
 const app = express();
 
 // Import project dirs
+const { client } = require('./db/index');
 
 // Middleware
 app.use(express.json());
