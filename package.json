@@ -1,0 +1,38 @@
+{
+  "name": "lumen",
+  "version": "1.0.0",
+  "description": "Lumen",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "seed": "nodemon ./db/Seed.js",
+    "seed:dev": "nodemon ./db/Seed.js",
+    "start": "node server.js",
+    "start:dev": "nodemon server.js",
+    "seed-and-start": "node ./db/seed.js && node server.js",
+    "start-seed": "node ./db/Seed.js && node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AGuyNamedDJ/Lumen.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/AGuyNamedDJ/Lumen/issues"
+  },
+  "homepage": "https://github.com/AGuyNamedDJ/Lumen#readme",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "pg": "^8.11.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}
