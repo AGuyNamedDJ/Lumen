@@ -3,6 +3,7 @@ const { client } = require('./index');
 
 // File Imports
 const importSpecificCSVFile = require('./importHistoricalData');
+const { createUser, getAllUsers, getUserById, getUserByUsername, deleteUser, updateUser } = require('./user');
 
 // Methods: Drop Tables
 async function dropTables(){
@@ -117,7 +118,23 @@ async function createTables() {
         console.log(error);
     }
 }
+// Create
+async function createInitialUsers() {
+    console.log("Creating initial users...");
+    try {
+        await createUser({
+            username: 'Admin', 
+            password: 'admin1', 
+            email: 'admin@gmail.com',
+            role: 'admin'
+        });
 
+        console.log("Finished creating initial users.");
+    } catch (error) {
+        console.error("Error creating initial users!");
+        console.error(error);
+    }
+};
 
 // Rebuild DB
 async function rebuildDB() {
@@ -125,6 +142,7 @@ async function rebuildDB() {
         await client.connect();
         await dropTables();
         await createTables();
+        await createInitialUsers();
         console.log('Tables have been successfully created.');
     } catch (error) {
         console.error("Error during rebuildDB!", error);
