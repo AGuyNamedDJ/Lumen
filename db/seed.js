@@ -1,8 +1,8 @@
 // Import Client & Exports;
-const { create } = require('domain');
 const { client } = require('./index');
 
 // File Imports
+const importSpecificCSVFile = require('./importHistoricalData');
 
 // Methods: Drop Tables
 async function dropTables(){
@@ -13,7 +13,7 @@ async function dropTables(){
         DROP TABLE IF EXISTS strategies CASCADE;
         DROP TABLE IF EXISTS trades CASCADE;
         DROP TABLE IF EXISTS decision_rules;
-        DROP TABLE IF EXISTS alert CASCADE;
+        DROP TABLE IF EXISTS alerts CASCADE;
         DROP TABLE IF EXISTS market_data CASCADE;
         DROP TABLE IF EXISTS audit_logs CASCADE;
         DROP TABLE IF EXISTS configurations CASCADE;
@@ -25,9 +25,8 @@ async function dropTables(){
         console.log("Error dropping tables!")
         console.log(error)
     }
-};
+}
 
-// Method: Create Tables:
 async function createTables() {
     try {
         console.log('Starting to build tables...');
@@ -39,6 +38,15 @@ async function createTables() {
             email VARCHAR(255) UNIQUE NOT NULL,
             role VARCHAR(50),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS historical_spx (
+            id SERIAL PRIMARY KEY,
+            timestamp TIMESTAMP NOT NULL,
+            open NUMERIC NOT NULL,
+            high NUMERIC NOT NULL,
+            low NUMERIC NOT NULL,
+            close NUMERIC NOT NULL,
+            volume BIGINT
         );
         CREATE TABLE IF NOT EXISTS strategies (
             id SERIAL PRIMARY KEY,
@@ -93,15 +101,6 @@ async function createTables() {
             value TEXT NOT NULL,
             last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
-        CREATE TABLE IF NOT EXISTS historical_spx (
-            id SERIAL PRIMARY KEY,
-            timestamp TIMESTAMP NOT NULL,
-            open NUMERIC NOT NULL,
-            high NUMERIC NOT NULL,
-            low NUMERIC NOT NULL,
-            close NUMERIC NOT NULL,
-            volume BIGINT
-        );
         CREATE TABLE IF NOT EXISTS real_time_spx (
             id SERIAL PRIMARY KEY,
             timestamp TIMESTAMP NOT NULL,
@@ -117,36 +116,32 @@ async function createTables() {
         console.error('Error building tables!');
         console.log(error);
     }
-};
+}
 
 
-  // Rebuild DB
-  async function rebuildDB() {
+// Rebuild DB
+async function rebuildDB() {
     try {
-        client.connect();
+        await client.connect();
         await dropTables();
         await createTables();
-
-
+        console.log('Tables have been successfully created.');
     } catch (error) {
-        console.log("Error during rebuildDB!")
-        console.log(error.detail);
+        console.error("Error during rebuildDB!", error);
     }
-};
+}
 
-// Test DB
-async function testDB() {
+// Seed and Import
+async function seedAndImport() {
     try {
-        console.log("Starting to test database...");
-    
+        await rebuildDB();
+        await importSpecificCSVFile(); // Import historical data after rebuilding tables
+        console.log('Seed and import completed successfully.');
     } catch (error) {
-        console.log("Error during testDB!");
-        console.log(error);
-        }
-    };
+        console.error("Error during seedAndImport!", error);
+    } finally {
+        await client.end(); // Close client connection after all operations are done
+    }
+}
 
-// Rebuild Call
-rebuildDB()
-.then(testDB)
-.catch(console.error)
-.finally(() => client.end())
+seedAndImport();
