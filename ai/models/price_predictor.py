@@ -37,4 +37,4 @@ X_train_reshaped = X_train.values.reshape(
 # Model Training
 model.fit(X_train_reshaped, y_train, epochs=50, batch_size=32)
 
-# You can expand this model by integrating more layers, changing the architecture, or tuning more parameters.
+# Expansion
