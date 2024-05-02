@@ -51,8 +51,3 @@ X_train_reshaped = X_train.values.reshape(
 
 # Model Training
 model.fit(X_train_reshaped, y_train, epochs=50, batch_size=32)
-
-# If needed, add code here to evaluate the model on test data
-# X_test_reshaped = X_test.values.reshape((X_test.shape[0], X_test.shape[1], 1))
-# y_pred = model.predict(X_test_reshaped)
-# Compare y_pred with y_test to evaluate the model
