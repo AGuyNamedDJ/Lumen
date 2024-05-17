@@ -3,7 +3,7 @@ const { client } = require('./index');
 
 // File Imports
 const importSpecificCSVFile = require('./importHistoricalData');
-const { createUser, getAllUsers, getUserById, getUserByUsername, deleteUser, updateUser } = require('./user');
+const { createUser, getAllUsers, getUserById, getUserByUsername, deleteUser, updateUser, loginUser } = require('./helperFunctions/user');
 
 // Methods: Drop Tables
 async function dropTables(){
@@ -37,8 +37,15 @@ async function createTables() {
             username VARCHAR(255) UNIQUE NOT NULL,
             password VARCHAR(255) NOT NULL,
             email VARCHAR(255) UNIQUE NOT NULL,
-            role VARCHAR(50),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            first_name VARCHAR(255),
+            last_name VARCHAR(255),
+            phone_number VARCHAR(15),
+            date_of_birth DATE,
+            role VARCHAR(50) DEFAULT 'user',
+            status VARCHAR(50) DEFAULT 'active',
+            profile_picture_url TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE IF NOT EXISTS historical_spx (
             id SERIAL PRIMARY KEY,
@@ -117,15 +124,20 @@ async function createTables() {
         console.error('Error building tables!');
         console.log(error);
     }
-}
-// Create
+};
+
+// createInitialUsers
 async function createInitialUsers() {
     console.log("Creating initial users...");
     try {
         await createUser({
-            username: 'Admin', 
-            password: 'admin1', 
-            email: 'admin@gmail.com',
+            username: 'Owner1', 
+            password: 'SecurePass123!', 
+            email: 'user1@example.com', 
+            first_name: 'Dalron', 
+            last_name: 'Robertson', 
+            phone_number: '601-456-7890',
+            date_of_birth: '1980-01-01',
             role: 'admin'
         });
 
@@ -145,21 +157,65 @@ async function rebuildDB() {
         await createInitialUsers();
         console.log('Tables have been successfully created.');
     } catch (error) {
-        console.error("Error during rebuildDB!", error);
+        console.error("Error during rebuildDB!");
+        console.log(error.detail);
     }
-}
+};
+
+// Test Suite
+async function testDB() {
+    try {
+        console.log("Starting to test database...");
+
+        // Test User Helper FNs
+        const initialUser = await getUserByUsername('Admin');
+        console.log("Initial user", initialUser);
+
+        if (initialUser) {
+            // Test getAllUsers
+            console.log("Calling getAllUsers...");
+            const allUsers = await getAllUsers();
+            console.log("All users", allUsers);
+
+            // Test getUserById
+            console.log("Calling getUserById for the initial user...");
+            const userById = await getUserById(initialUser.id);
+            console.log("User by ID", userById);
+
+            // Test updateUser
+            console.log("Updating initial user's last name...");
+            const updatedUser = await updateUser(initialUser.username, { last_name: 'UpdatedLastName' });
+            console.log("Updated user", updatedUser);
+
+            // Test deleteUser
+            console.log("Deleting the initial user...");
+            const deletedUser = await deleteUser(initialUser.username);
+            console.log("Deleted user", deletedUser);
+        };
+
+    // Test
+
+    } catch (error) {
+        console.log("Error during testDB!");
+        console.log(error);
+    }
+};
+
+
+
 
 // Seed and Import
 async function seedAndImport() {
     try {
         await rebuildDB();
         await importSpecificCSVFile(); // Import historical data after rebuilding tables
+        await testDB();
         console.log('Seed and import completed successfully.');
     } catch (error) {
         console.error("Error during seedAndImport!", error);
     } finally {
-        await client.end(); // Close client connection after all operations are done
+        await client.end(); 
     }
-}
+};
 
 seedAndImport();
