@@ -4,6 +4,7 @@ const { client } = require('./index');
 // File Imports
 const importSpecificCSVFile = require('./importHistoricalData');
 const { createUser, getAllUsers, getUserById, getUserByUsername, deleteUser, updateUser, loginUser } = require('./helperFunctions/user');
+const { createHistoricalRecord, getAllHistoricalRecords, getHistoricalRecordById, updateHistoricalRecord, deleteHistoricalRecord } = require ('./helperFunctions/historicalSPX');
 const { createStrategy, getAllStrategies, getStrategyByName, getStrategyById, updateStrategy, deleteStrategy } = require('./helperFunctions/strategies');
 
 
@@ -151,6 +152,28 @@ async function createInitialUsers() {
     }
 };
 
+// createInitialHistoricalSPX
+async function createInitialHistoricalSPX() {
+    console.log("Creating initial historical SPX data...");
+    try {
+        const historicalRecords = [
+            { timestamp: new Date('2023-01-01'), open: 4200.0, high: 4250.0, low: 4150.0, close: 4225.0, volume: 500000 },
+            { timestamp: new Date('2023-01-02'), open: 4225.0, high: 4300.0, low: 4200.0, close: 4280.0, volume: 600000 },
+            // Add more records as needed
+        ];
+
+        for (const record of historicalRecords) {
+            await createHistoricalRecord(record);
+        }
+
+        console.log("Finished creating initial historical SPX data.");
+    } catch (error) {
+        console.error("Error creating initial historical SPX data!");
+        console.error(error);
+    }
+}
+
+
 // createInitialStrategies
 async function createInitialStrategies() {
     console.log("Creating initial strategies...");
@@ -188,6 +211,7 @@ async function rebuildDB() {
         await dropTables();
         await createTables();
         await createInitialUsers();
+        await createInitialHistoricalSPX();
         await createInitialStrategies();
         console.log('Tables have been successfully created.');
     } catch (error) {
@@ -228,32 +252,60 @@ async function testDB() {
         //     console.log("Deleted user", deletedUser);
         // };
 
-        // Test Strategies Helper FNs
-        console.log("Starting to test strategies...");
-        await createInitialStrategies();
+        // Test Historical SPX Helper FNs
+        console.log("Starting to test historical SPX...");
 
-        // Get all strategies
-        console.log("Calling getAllStrategies...");
-        const allStrategies = await getAllStrategies();
-        console.log("All strategies", allStrategies);
+        // Get all historical SPX records
+        console.log("Calling getAllHistoricalRecords...");
+        const allHistoricalRecords = await getAllHistoricalRecords();
+        console.log("All historical SPX records", allHistoricalRecords);
 
-        // Assuming at least one strategy is created successfully
-        if (allStrategies.length > 0) {
-            // Get strategy by ID
-            console.log("Calling getStrategyById for the first strategy...");
-            const strategyById = await getStrategyById(allStrategies[0].id);
-            console.log("Strategy by ID", strategyById);
+        // Assuming at least one historical SPX record is created successfully
+        if (allHistoricalRecords.length > 0) {
+            // Get historical SPX record by ID
+            console.log("Calling getHistoricalRecordById for the first record...");
+            const historicalRecordById = await getHistoricalRecordById(allHistoricalRecords[0].id);
+            console.log("Historical SPX record by ID", historicalRecordById);
 
-            // Update strategy
-            console.log("Updating first strategy's description...");
-            const updatedStrategy = await updateStrategy(allStrategies[0].id, { description: 'Updated strategy description' });
-            console.log("Updated strategy", updatedStrategy);
+            // Update historical SPX record
+            console.log("Updating first historical SPX record's volume...");
+            const updatedHistoricalRecord = await updateHistoricalRecord(allHistoricalRecords[0].id, { volume: 700000 });
+            console.log("Updated historical SPX record", updatedHistoricalRecord);
 
-            // Delete strategy
-            console.log("Deleting the first strategy...");
-            const deletedStrategy = await deleteStrategy(allStrategies[0].id);
-            console.log("Deleted strategy", deletedStrategy);
+            // Delete historical SPX record
+            console.log("Deleting the first historical SPX record...");
+            const deletedHistoricalRecord = await deleteHistoricalRecord(allHistoricalRecords[0].id);
+            console.log("Deleted historical SPX record", deletedHistoricalRecord);
         }
+
+        
+
+        // // Test Strategies Helper FNs
+        // console.log("Starting to test strategies...");
+        // await createInitialStrategies();
+
+        // // Get all strategies
+        // console.log("Calling getAllStrategies...");
+        // const allStrategies = await getAllStrategies();
+        // console.log("All strategies", allStrategies);
+
+        // // Assuming at least one strategy is created successfully
+        // if (allStrategies.length > 0) {
+        //     // Get strategy by ID
+        //     console.log("Calling getStrategyById for the first strategy...");
+        //     const strategyById = await getStrategyById(allStrategies[0].id);
+        //     console.log("Strategy by ID", strategyById);
+
+        //     // Update strategy
+        //     console.log("Updating first strategy's description...");
+        //     const updatedStrategy = await updateStrategy(allStrategies[0].id, { description: 'Updated strategy description' });
+        //     console.log("Updated strategy", updatedStrategy);
+
+        //     // Delete strategy
+        //     console.log("Deleting the first strategy...");
+        //     const deletedStrategy = await deleteStrategy(allStrategies[0].id);
+        //     console.log("Deleted strategy", deletedStrategy);
+        // };
 
 
     } catch (error) {
