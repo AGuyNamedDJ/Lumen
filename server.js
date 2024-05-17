@@ -7,6 +7,7 @@ const app = express();
 
 // Import project dirs
 const { client } = require('./db/index');
+const handleWebSocket = require('./finnhubAPI/finnhubWebSocketHandler'); 
 
 // Middleware
 app.use(express.json());
@@ -20,9 +21,9 @@ app.get("/", (req, res) => {
 });
 
 // Router Handelers
-
 try {
     client.connect();
+    handleWebSocket();
 } catch (error) {
     console.error("Unable to connect to database.", error);
     process.exit(1);
