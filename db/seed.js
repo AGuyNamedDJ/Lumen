@@ -6,7 +6,7 @@ const importSpecificCSVFile = require('./importHistoricalData');
 const { createUser, getAllUsers, getUserById, getUserByUsername, deleteUser, updateUser, loginUser } = require('./helperFunctions/user');
 const { createHistoricalRecord, getAllHistoricalRecords, getHistoricalRecordById, updateHistoricalRecord, deleteHistoricalRecord } = require ('./helperFunctions/historicalSPX');
 const { createStrategy, getAllStrategies, getStrategyByName, getStrategyById, updateStrategy, deleteStrategy } = require('./helperFunctions/strategies');
-
+const { createTrade, getAllTrades, getTradeById, updateTrade, deleteTrade } = require('./helperFunctions/trades');
 
 
 // Methods: Drop Tables
@@ -153,25 +153,25 @@ async function createInitialUsers() {
 };
 
 // createInitialHistoricalSPX
-async function createInitialHistoricalSPX() {
-    console.log("Creating initial historical SPX data...");
-    try {
-        const historicalRecords = [
-            { timestamp: new Date('2023-01-01'), open: 4200.0, high: 4250.0, low: 4150.0, close: 4225.0, volume: 500000 },
-            { timestamp: new Date('2023-01-02'), open: 4225.0, high: 4300.0, low: 4200.0, close: 4280.0, volume: 600000 },
-            // Add more records as needed
-        ];
+// async function createInitialHistoricalSPX() {
+//     console.log("Creating initial historical SPX data...");
+//     try {
+//         const historicalRecords = [
+//             { timestamp: new Date('2023-01-01'), open: 4200.0, high: 4250.0, low: 4150.0, close: 4225.0, volume: 500000 },
+//             { timestamp: new Date('2023-01-02'), open: 4225.0, high: 4300.0, low: 4200.0, close: 4280.0, volume: 600000 },
+//             // Add more records as needed
+//         ];
 
-        for (const record of historicalRecords) {
-            await createHistoricalRecord(record);
-        }
+//         for (const record of historicalRecords) {
+//             await createHistoricalRecord(record);
+//         }
 
-        console.log("Finished creating initial historical SPX data.");
-    } catch (error) {
-        console.error("Error creating initial historical SPX data!");
-        console.error(error);
-    }
-}
+//         console.log("Finished creating initial historical SPX data.");
+//     } catch (error) {
+//         console.error("Error creating initial historical SPX data!");
+//         console.error(error);
+//     }
+// };
 
 
 // createInitialStrategies
@@ -203,6 +203,44 @@ async function createInitialStrategies() {
     }
 };
 
+// createInitialTrades
+async function createInitialTrades() {
+    console.log("Creating initial trades...");
+    try {
+        const trades = [
+            {
+                strategy_id: 1,  // Assuming strategy_id 1 exists
+                open_time: new Date('2023-01-01T10:00:00Z'),
+                close_time: new Date('2023-01-01T16:00:00Z'),
+                status: 'closed',
+                entry_price: 4200.0,
+                exit_price: 4250.0,
+                profit_loss: 50.0
+            },
+            {
+                strategy_id: 2,  // Assuming strategy_id 2 exists
+                open_time: new Date('2023-01-02T10:00:00Z'),
+                close_time: null,  // Trade still open
+                status: 'open',
+                entry_price: 4225.0,
+                exit_price: null,
+                profit_loss: null
+            },
+
+        ];
+
+        for (const trade of trades) {
+            await createTrade(trade);
+        }
+
+        console.log("Finished creating initial trades.");
+    } catch (error) {
+        console.error("Error creating initial trades!");
+        console.error(error);
+    }
+};
+
+
 
 // Rebuild DB
 async function rebuildDB() {
@@ -211,8 +249,9 @@ async function rebuildDB() {
         await dropTables();
         await createTables();
         await createInitialUsers();
-        await createInitialHistoricalSPX();
+        // await createInitialHistoricalSPX();
         await createInitialStrategies();
+        await createInitialTrades();
         console.log('Tables have been successfully created.');
     } catch (error) {
         console.error("Error during rebuildDB!");
@@ -276,9 +315,7 @@ async function testDB() {
             console.log("Deleting the first historical SPX record...");
             const deletedHistoricalRecord = await deleteHistoricalRecord(allHistoricalRecords[0].id);
             console.log("Deleted historical SPX record", deletedHistoricalRecord);
-        }
-
-        
+        };
 
         // // Test Strategies Helper FNs
         // console.log("Starting to test strategies...");
@@ -306,6 +343,32 @@ async function testDB() {
         //     const deletedStrategy = await deleteStrategy(allStrategies[0].id);
         //     console.log("Deleted strategy", deletedStrategy);
         // };
+
+        // Test Trades Helper FNs
+        console.log("Starting to test trades...");
+
+        // Get all trades
+        console.log("Calling getAllTrades...");
+        const allTrades = await getAllTrades();
+        console.log("All trades", allTrades);
+
+        // Assuming at least one trade is created successfully
+        if (allTrades.length > 0) {
+            // Get trade by ID
+            console.log("Calling getTradeById for the first trade...");
+            const tradeById = await getTradeById(allTrades[0].id);
+            console.log("Trade by ID", tradeById);
+
+            // Update trade
+            console.log("Updating first trade's profit_loss...");
+            const updatedTrade = await updateTrade(allTrades[0].id, { profit_loss: 100.0 });
+            console.log("Updated trade", updatedTrade);
+
+            // Delete trade
+            console.log("Deleting the first trade...");
+            const deletedTrade = await deleteTrade(allTrades[0].id);
+            console.log("Deleted trade", deletedTrade);
+        }
 
 
     } catch (error) {
