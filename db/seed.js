@@ -7,7 +7,7 @@ const { createUser, getAllUsers, getUserById, getUserByUsername, deleteUser, upd
 const { createHistoricalRecord, getAllHistoricalRecords, getHistoricalRecordById, updateHistoricalRecord, deleteHistoricalRecord } = require ('./helperFunctions/historicalSPX');
 const { createStrategy, getAllStrategies, getStrategyByName, getStrategyById, updateStrategy, deleteStrategy } = require('./helperFunctions/strategies');
 const { createTrade, getAllTrades, getTradeById, updateTrade, deleteTrade } = require('./helperFunctions/trades');
-
+const { createDecisionRule, getAllDecisionRules, getDecisionRuleById, updateDecisionRule, deleteDecisionRule } = require('./helperFunctions/decisionrules');
 
 // Methods: Drop Tables
 async function dropTables(){
@@ -32,6 +32,7 @@ async function dropTables(){
     }
 };
 
+// Methods: Create Tables
 async function createTables() {
     try {
         console.log('Starting to build tables...');
@@ -240,6 +241,36 @@ async function createInitialTrades() {
     }
 };
 
+// createInitialDecisionRules
+async function createInitialDecisionRules() {
+    console.log("Creating initial decision rules...");
+    try {
+        const decisionRules = [
+            {
+                strategy_id: 1,  // Assuming strategy_id 1 exists
+                parameter_name: 'entry_signal',
+                value: 'RSI < 30',
+                description: 'Enter a trade when RSI is below 30'
+            },
+            {
+                strategy_id: 2,  // Assuming strategy_id 2 exists
+                parameter_name: 'exit_signal',
+                value: 'RSI > 70',
+                description: 'Exit a trade when RSI is above 70'
+            },
+            // Add more decision rules as needed
+        ];
+
+        for (const rule of decisionRules) {
+            await createDecisionRule(rule);
+        }
+
+        console.log("Finished creating initial decision rules.");
+    } catch (error) {
+        console.error("Error creating initial decision rules!");
+        console.error(error);
+    }
+};
 
 
 // Rebuild DB
@@ -252,6 +283,7 @@ async function rebuildDB() {
         // await createInitialHistoricalSPX();
         await createInitialStrategies();
         await createInitialTrades();
+        await createInitialDecisionRules();
         console.log('Tables have been successfully created.');
     } catch (error) {
         console.error("Error during rebuildDB!");
@@ -291,31 +323,31 @@ async function testDB() {
         //     console.log("Deleted user", deletedUser);
         // };
 
-        // Test Historical SPX Helper FNs
-        console.log("Starting to test historical SPX...");
+        // // Test Historical SPX Helper FNs
+        // console.log("Starting to test historical SPX...");
 
-        // Get all historical SPX records
-        console.log("Calling getAllHistoricalRecords...");
-        const allHistoricalRecords = await getAllHistoricalRecords();
-        console.log("All historical SPX records", allHistoricalRecords);
+        // // Get all historical SPX records
+        // console.log("Calling getAllHistoricalRecords...");
+        // const allHistoricalRecords = await getAllHistoricalRecords();
+        // console.log("All historical SPX records", allHistoricalRecords);
 
-        // Assuming at least one historical SPX record is created successfully
-        if (allHistoricalRecords.length > 0) {
-            // Get historical SPX record by ID
-            console.log("Calling getHistoricalRecordById for the first record...");
-            const historicalRecordById = await getHistoricalRecordById(allHistoricalRecords[0].id);
-            console.log("Historical SPX record by ID", historicalRecordById);
+        // // Assuming at least one historical SPX record is created successfully
+        // if (allHistoricalRecords.length > 0) {
+        //     // Get historical SPX record by ID
+        //     console.log("Calling getHistoricalRecordById for the first record...");
+        //     const historicalRecordById = await getHistoricalRecordById(allHistoricalRecords[0].id);
+        //     console.log("Historical SPX record by ID", historicalRecordById);
 
-            // Update historical SPX record
-            console.log("Updating first historical SPX record's volume...");
-            const updatedHistoricalRecord = await updateHistoricalRecord(allHistoricalRecords[0].id, { volume: 700000 });
-            console.log("Updated historical SPX record", updatedHistoricalRecord);
+        //     // Update historical SPX record
+        //     console.log("Updating first historical SPX record's volume...");
+        //     const updatedHistoricalRecord = await updateHistoricalRecord(allHistoricalRecords[0].id, { volume: 700000 });
+        //     console.log("Updated historical SPX record", updatedHistoricalRecord);
 
-            // Delete historical SPX record
-            console.log("Deleting the first historical SPX record...");
-            const deletedHistoricalRecord = await deleteHistoricalRecord(allHistoricalRecords[0].id);
-            console.log("Deleted historical SPX record", deletedHistoricalRecord);
-        };
+        //     // Delete historical SPX record
+        //     console.log("Deleting the first historical SPX record...");
+        //     const deletedHistoricalRecord = await deleteHistoricalRecord(allHistoricalRecords[0].id);
+        //     console.log("Deleted historical SPX record", deletedHistoricalRecord);
+        // };
 
         // // Test Strategies Helper FNs
         // console.log("Starting to test strategies...");
@@ -344,31 +376,58 @@ async function testDB() {
         //     console.log("Deleted strategy", deletedStrategy);
         // };
 
-        // Test Trades Helper FNs
-        console.log("Starting to test trades...");
+        // // Test Trades Helper FNs
+        // console.log("Starting to test trades...");
 
-        // Get all trades
-        console.log("Calling getAllTrades...");
-        const allTrades = await getAllTrades();
-        console.log("All trades", allTrades);
+        // // Get all trades
+        // console.log("Calling getAllTrades...");
+        // const allTrades = await getAllTrades();
+        // console.log("All trades", allTrades);
 
-        // Assuming at least one trade is created successfully
-        if (allTrades.length > 0) {
-            // Get trade by ID
-            console.log("Calling getTradeById for the first trade...");
-            const tradeById = await getTradeById(allTrades[0].id);
-            console.log("Trade by ID", tradeById);
+        // // Assuming at least one trade is created successfully
+        // if (allTrades.length > 0) {
+        //     // Get trade by ID
+        //     console.log("Calling getTradeById for the first trade...");
+        //     const tradeById = await getTradeById(allTrades[0].id);
+        //     console.log("Trade by ID", tradeById);
 
-            // Update trade
-            console.log("Updating first trade's profit_loss...");
-            const updatedTrade = await updateTrade(allTrades[0].id, { profit_loss: 100.0 });
-            console.log("Updated trade", updatedTrade);
+        //     // Update trade
+        //     console.log("Updating first trade's profit_loss...");
+        //     const updatedTrade = await updateTrade(allTrades[0].id, { profit_loss: 100.0 });
+        //     console.log("Updated trade", updatedTrade);
 
-            // Delete trade
-            console.log("Deleting the first trade...");
-            const deletedTrade = await deleteTrade(allTrades[0].id);
-            console.log("Deleted trade", deletedTrade);
+        //     // Delete trade
+        //     console.log("Deleting the first trade...");
+        //     const deletedTrade = await deleteTrade(allTrades[0].id);
+        //     console.log("Deleted trade", deletedTrade);
+        // };
+
+        // Test Decision Rules Helper FNs
+        console.log("Starting to test decision rules...");
+
+        // Get all decision rules
+        console.log("Calling getAllDecisionRules...");
+        const allDecisionRules = await getAllDecisionRules();
+        console.log("All decision rules", allDecisionRules);
+
+        // Assuming at least one decision rule is created successfully
+        if (allDecisionRules.length > 0) {
+            // Get decision rule by ID
+            console.log("Calling getDecisionRuleById for the first rule...");
+            const decisionRuleById = await getDecisionRuleById(allDecisionRules[0].id);
+            console.log("Decision rule by ID", decisionRuleById);
+
+            // Update decision rule
+            console.log("Updating first decision rule's value...");
+            const updatedDecisionRule = await updateDecisionRule(allDecisionRules[0].id, { value: 'RSI < 25' });
+            console.log("Updated decision rule", updatedDecisionRule);
+
+            // Delete decision rule
+            console.log("Deleting the first decision rule...");
+            const deletedDecisionRule = await deleteDecisionRule(allDecisionRules[0].id);
+            console.log("Deleted decision rule", deletedDecisionRule);
         }
+
 
 
     } catch (error) {
