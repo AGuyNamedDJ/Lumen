@@ -3,6 +3,7 @@ const { client } = require('./index');
 
 // File Imports
 const importSpecificCSVFile = require('./importHistoricalData');
+
 const { createUser, getAllUsers, getUserById, getUserByUsername, deleteUser, updateUser, loginUser } = require('./helperFunctions/user');
 const { createHistoricalRecord, getAllHistoricalRecords, getHistoricalRecordById, updateHistoricalRecord, deleteHistoricalRecord } = require ('./helperFunctions/historicalSPX');
 const { createStrategy, getAllStrategies, getStrategyByName, getStrategyById, updateStrategy, deleteStrategy } = require('./helperFunctions/strategies');
@@ -109,7 +110,8 @@ async function createTables() {
             high NUMERIC,
             low NUMERIC,
             close NUMERIC,
-            volume BIGINT
+            volume BIGINT,
+            conditions TEXT
         );
     `);
     console.log('Finished building tables.');
@@ -552,39 +554,36 @@ async function testDB() {
         //     console.log("Deleted audit log", deletedAuditLog);
         // };
 
-        // Test Audit Logs Helper FNs
-        console.log("Starting to test real-time SPX data...");
+        // // Test Audit Logs Helper FNs
+        // console.log("Starting to test real-time SPX data...");
 
-        // Get all real-time SPX records
-        console.log("Calling getAllRealTimeSPXRecords...");
-        const allRealTimeSPXRecords = await getAllRealTimeSPXRecords();
-        console.log("All real-time SPX records", allRealTimeSPXRecords);
+        // // Get all real-time SPX records
+        // console.log("Calling getAllRealTimeSPXRecords...");
+        // const allRealTimeSPXRecords = await getAllRealTimeSPXRecords();
+        // console.log("All real-time SPX records", allRealTimeSPXRecords);
 
-        // Assuming at least one real-time SPX record is created successfully
-        if (allRealTimeSPXRecords.length > 0) {
-            // Get real-time SPX record by ID
-            console.log("Calling getRealTimeSPXRecordById for the first record...");
-            const realTimeSPXRecordById = await getRealTimeSPXRecordById(allRealTimeSPXRecords[0].id);
-            console.log("Real-time SPX record by ID", realTimeSPXRecordById);
+        // // Assuming at least one real-time SPX record is created successfully
+        // if (allRealTimeSPXRecords.length > 0) {
+        //     // Get real-time SPX record by ID
+        //     console.log("Calling getRealTimeSPXRecordById for the first record...");
+        //     const realTimeSPXRecordById = await getRealTimeSPXRecordById(allRealTimeSPXRecords[0].id);
+        //     console.log("Real-time SPX record by ID", realTimeSPXRecordById);
 
-            // Update real-time SPX record
-            console.log("Updating first real-time SPX record's current_price...");
-            const updatedRealTimeSPXRecord = await updateRealTimeSPXRecord(allRealTimeSPXRecords[0].id, { current_price: 5290.0 });
-            console.log("Updated real-time SPX record", updatedRealTimeSPXRecord);
+        //     // Update real-time SPX record
+        //     console.log("Updating first real-time SPX record's current_price...");
+        //     const updatedRealTimeSPXRecord = await updateRealTimeSPXRecord(allRealTimeSPXRecords[0].id, { current_price: 5290.0 });
+        //     console.log("Updated real-time SPX record", updatedRealTimeSPXRecord);
 
-            // Delete real-time SPX record
-            console.log("Deleting the first real-time SPX record...");
-            const deletedRealTimeSPXRecord = await deleteRealTimeSPXRecord(allRealTimeSPXRecords[0].id);
-            console.log("Deleted real-time SPX record", deletedRealTimeSPXRecord);
-        };
+        //     // Delete real-time SPX record
+        //     console.log("Deleting the first real-time SPX record...");
+        //     const deletedRealTimeSPXRecord = await deleteRealTimeSPXRecord(allRealTimeSPXRecords[0].id);
+        //     console.log("Deleted real-time SPX record", deletedRealTimeSPXRecord);
+        // };
     } catch (error) {
         console.log("Error during testDB!");
         console.log(error);
     }
 };
-
-
-
 
 // Seed and Import
 async function seedAndImport() {

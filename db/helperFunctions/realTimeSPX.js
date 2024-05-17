@@ -2,13 +2,13 @@
 const { client } = require("../index");
 
 // Create Real-Time SPX Record
-async function createRealTimeSPXRecord({ timestamp, current_price, open = null, high = null, low = null, close = null, volume = null }) {
+async function createRealTimeSPXRecord({ timestamp, current_price, volume, conditions }) {
     try {
         const result = await client.query(`
-            INSERT INTO real_time_spx (timestamp, current_price, open, high, low, close, volume)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO real_time_spx (timestamp, current_price, volume, conditions)
+            VALUES ($1, $2, $3, $4)
             RETURNING *;
-        `, [timestamp, current_price, open, high, low, close, volume]);
+        `, [timestamp, current_price, volume, conditions]);
 
         return result.rows[0];
     } catch (error) {

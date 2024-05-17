@@ -7,7 +7,7 @@ const app = express();
 
 // Import project dirs
 const { client } = require('./db/index');
-const handleWebSocket = require('./finnhubAPI/finnhubWebSocketHandler'); 
+const handleWebSocket = require('./api/finnhubAPI/finnhubWebsocket'); 
 
 // Middleware
 app.use(express.json());
@@ -15,15 +15,17 @@ app.use(express.urlencoded({ extended: false }));
 app.use(morgan('dev'));
 app.use(cors());
 
+// WebSocket Setup
+handleWebSocket();
+
 // Catch-all route handler
 app.get("/", (req, res) => {
     res.send("Server is Running!")
 });
 
-// Router Handelers
+// Router Handlers
 try {
     client.connect();
-    handleWebSocket();
 } catch (error) {
     console.error("Unable to connect to database.", error);
     process.exit(1);
