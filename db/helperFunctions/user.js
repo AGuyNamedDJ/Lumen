@@ -1,4 +1,4 @@
-// improts
+// Imports
 const { client } = require("../index");
 const bcrypt = require('bcrypt');
 const validator = require('validator');
