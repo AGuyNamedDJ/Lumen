@@ -8,6 +8,9 @@ const { createHistoricalRecord, getAllHistoricalRecords, getHistoricalRecordById
 const { createStrategy, getAllStrategies, getStrategyByName, getStrategyById, updateStrategy, deleteStrategy } = require('./helperFunctions/strategies');
 const { createTrade, getAllTrades, getTradeById, updateTrade, deleteTrade } = require('./helperFunctions/trades');
 const { createDecisionRule, getAllDecisionRules, getDecisionRuleById, updateDecisionRule, deleteDecisionRule } = require('./helperFunctions/decisionrules');
+const { createAlert, getAllAlerts, getAlertById, updateAlert, deleteAlert} = require('./helperFunctions/alerts');
+const { createAuditLog, getAllAuditLogs, getAuditLogById, deleteAuditLog } = require('./helperFunctions/auditLogs');
+
 
 // Methods: Drop Tables
 async function dropTables(){
@@ -91,16 +94,6 @@ async function createTables() {
             message TEXT NOT NULL,
             alert_type VARCHAR(50),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS market_data (
-            id SERIAL PRIMARY KEY,
-            timestamp TIMESTAMP NOT NULL,
-            open_price NUMERIC NOT NULL,
-            close_price NUMERIC NOT NULL,
-            high_price NUMERIC NOT NULL,
-            low_price NUMERIC NOT NULL,
-            volume BIGINT
         );
         CREATE TABLE IF NOT EXISTS audit_logs (
             id SERIAL PRIMARY KEY,
@@ -272,6 +265,68 @@ async function createInitialDecisionRules() {
     }
 };
 
+// createInitialAlerts
+async function createInitialAlerts() {
+    console.log("Creating initial alerts...");
+    try {
+        const alerts = [
+            {
+                user_id: 1,  // Assuming user_id 1 exists
+                trade_id: 1,  // Assuming trade_id 1 exists
+                strategy_id: 1,  // Assuming strategy_id 1 exists
+                message: 'Trade is available to take',
+                alert_type: 'trade_available'
+            },
+            {
+                user_id: 1,  // Assuming user_id 1 exists
+                trade_id: 2,  // Assuming trade_id 2 exists
+                strategy_id: 2,  // Assuming strategy_id 2 exists
+                message: 'Trade has hit optimal profit',
+                alert_type: 'optimal_profit'
+            },
+            // Add more alerts as needed
+        ];
+
+        for (const alert of alerts) {
+            await createAlert(alert);
+        }
+
+        console.log("Finished creating initial alerts.");
+    } catch (error) {
+        console.error("Error creating initial alerts!");
+        console.error(error);
+    }
+};
+
+// createInitialAuditLogs
+async function createInitialAuditLogs() {
+    console.log("Creating initial audit logs...");
+    try {
+        const auditLogs = [
+            {
+                action_type: 'login',
+                description: 'User admin logged in'
+            },
+            {
+                action_type: 'trade_execution',
+                description: 'Executed trade for strategy ID 1'
+            },
+            // Add more audit logs as needed
+        ];
+
+        for (const log of auditLogs) {
+            await createAuditLog(log);
+        }
+
+        console.log("Finished creating initial audit logs.");
+    } catch (error) {
+        console.error("Error creating initial audit logs!");
+        console.error(error);
+    }
+};
+
+
+
 
 // Rebuild DB
 async function rebuildDB() {
@@ -284,6 +339,8 @@ async function rebuildDB() {
         await createInitialStrategies();
         await createInitialTrades();
         await createInitialDecisionRules();
+        await createInitialAlerts();
+        await createInitialAuditLogs();
         console.log('Tables have been successfully created.');
     } catch (error) {
         console.error("Error during rebuildDB!");
@@ -402,30 +459,77 @@ async function testDB() {
         //     console.log("Deleted trade", deletedTrade);
         // };
 
-        // Test Decision Rules Helper FNs
-        console.log("Starting to test decision rules...");
+        // // Test Decision Rules Helper FNs
+        // console.log("Starting to test decision rules...");
 
-        // Get all decision rules
-        console.log("Calling getAllDecisionRules...");
-        const allDecisionRules = await getAllDecisionRules();
-        console.log("All decision rules", allDecisionRules);
+        // // Get all decision rules
+        // console.log("Calling getAllDecisionRules...");
+        // const allDecisionRules = await getAllDecisionRules();
+        // console.log("All decision rules", allDecisionRules);
 
-        // Assuming at least one decision rule is created successfully
-        if (allDecisionRules.length > 0) {
-            // Get decision rule by ID
-            console.log("Calling getDecisionRuleById for the first rule...");
-            const decisionRuleById = await getDecisionRuleById(allDecisionRules[0].id);
-            console.log("Decision rule by ID", decisionRuleById);
+        // // Assuming at least one decision rule is created successfully
+        // if (allDecisionRules.length > 0) {
+        //     // Get decision rule by ID
+        //     console.log("Calling getDecisionRuleById for the first rule...");
+        //     const decisionRuleById = await getDecisionRuleById(allDecisionRules[0].id);
+        //     console.log("Decision rule by ID", decisionRuleById);
 
-            // Update decision rule
-            console.log("Updating first decision rule's value...");
-            const updatedDecisionRule = await updateDecisionRule(allDecisionRules[0].id, { value: 'RSI < 25' });
-            console.log("Updated decision rule", updatedDecisionRule);
+        //     // Update decision rule
+        //     console.log("Updating first decision rule's value...");
+        //     const updatedDecisionRule = await updateDecisionRule(allDecisionRules[0].id, { value: 'RSI < 25' });
+        //     console.log("Updated decision rule", updatedDecisionRule);
 
-            // Delete decision rule
-            console.log("Deleting the first decision rule...");
-            const deletedDecisionRule = await deleteDecisionRule(allDecisionRules[0].id);
-            console.log("Deleted decision rule", deletedDecisionRule);
+        //     // Delete decision rule
+        //     console.log("Deleting the first decision rule...");
+        //     const deletedDecisionRule = await deleteDecisionRule(allDecisionRules[0].id);
+        //     console.log("Deleted decision rule", deletedDecisionRule);
+        // };
+
+        // // Test Alerts Helper FNs
+        // console.log("Starting to test alerts...");
+
+        // // Get all alerts
+        // console.log("Calling getAllAlerts...");
+        // const allAlerts = await getAllAlerts();
+        // console.log("All alerts", allAlerts);
+
+        // // Assuming at least one alert is created successfully
+        // if (allAlerts.length > 0) {
+        //     // Get alert by ID
+        //     console.log("Calling getAlertById for the first alert...");
+        //     const alertById = await getAlertById(allAlerts[0].id);
+        //     console.log("Alert by ID", alertById);
+
+        //     // Update alert
+        //     console.log("Updating first alert's message...");
+        //     const updatedAlert = await updateAlert(allAlerts[0].id, { message: 'Updated message' });
+        //     console.log("Updated alert", updatedAlert);
+
+        //     // Delete alert
+        //     console.log("Deleting the first alert...");
+        //     const deletedAlert = await deleteAlert(allAlerts[0].id);
+        //     console.log("Deleted alert", deletedAlert);
+        // };
+
+        // Test Audit Logs Helper FNs
+        console.log("Starting to test audit logs...");
+
+        // Get all audit logs
+        console.log("Calling getAllAuditLogs...");
+        const allAuditLogs = await getAllAuditLogs();
+        console.log("All audit logs", allAuditLogs);
+
+        // Assuming at least one audit log is created successfully
+        if (allAuditLogs.length > 0) {
+            // Get audit log by ID
+            console.log("Calling getAuditLogById for the first log...");
+            const auditLogById = await getAuditLogById(allAuditLogs[0].id);
+            console.log("Audit log by ID", auditLogById);
+
+            // Delete audit log
+            console.log("Deleting the first audit log...");
+            const deletedAuditLog = await deleteAuditLog(allAuditLogs[0].id);
+            console.log("Deleted audit log", deletedAuditLog);
         }
 
 
