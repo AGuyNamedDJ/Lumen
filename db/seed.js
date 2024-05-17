@@ -106,12 +106,12 @@ async function createTables() {
             id SERIAL PRIMARY KEY,
             timestamp TIMESTAMP NOT NULL,
             current_price NUMERIC NOT NULL,
+            volume BIGINT,
+            conditions TEXT,
             open NUMERIC,
             high NUMERIC,
             low NUMERIC,
-            close NUMERIC,
-            volume BIGINT,
-            conditions TEXT
+            close NUMERIC
         );
     `);
     console.log('Finished building tables.');
