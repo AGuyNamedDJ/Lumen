@@ -3,6 +3,7 @@ const { client } = require('./index');
 
 // File Imports
 const importSpecificCSVFile = require('./importHistoricalData');
+const importDetailedHistoricalSPX = require('./importDetailedHistoricalData');
 const { createUser, getAllUsers, getUserById, getUserByUsername, deleteUser, updateUser, loginUser } = require('./helperFunctions/user');
 const { createHistoricalRecord, getAllHistoricalRecords, getHistoricalRecordById, updateHistoricalRecord, deleteHistoricalRecord } = require ('./helperFunctions/historicalSPX');
 const { createStrategy, getAllStrategies, getStrategyByName, getStrategyById, updateStrategy, deleteStrategy } = require('./helperFunctions/strategies');
@@ -11,6 +12,7 @@ const { createDecisionRule, getAllDecisionRules, getDecisionRuleById, updateDeci
 const { createAlert, getAllAlerts, getAlertById, updateAlert, deleteAlert} = require('./helperFunctions/alerts');
 const { createAuditLog, getAllAuditLogs, getAuditLogById, deleteAuditLog } = require('./helperFunctions/auditLogs');
 const { createRealTimeSPXRecord, getAllRealTimeSPXRecords, getRealTimeSPXRecordById, updateRealTimeSPXRecord, deleteRealTimeSPXRecord } = require('./helperFunctions/realTimeSPX');
+const { createDetailedRecord, getAllDetailedRecords, getDetailedRecordById, updateDetailedRecord, deleteDetailedRecord} = require('./helperFunctions/detailedHistoricalSPX');
 
 // Methods: Drop Tables
 async function dropTables(){
@@ -27,6 +29,7 @@ async function dropTables(){
             DROP TABLE IF EXISTS configurations CASCADE;
             DROP TABLE IF EXISTS historical_spx CASCADE;
             DROP TABLE IF EXISTS real_time_spx CASCADE;
+            DROP TABLE IF EXISTS detailed_historical_spx CASCADE;
         `);
         console.log("Finished dropping tables.")
     } catch(error){
@@ -111,6 +114,12 @@ async function createTables() {
             high NUMERIC,
             low NUMERIC,
             close NUMERIC
+        );
+        CREATE TABLE IF NOT EXISTS detailed_historical_spx (
+            id SERIAL PRIMARY KEY,
+            timestamp TIMESTAMP NOT NULL,
+            price NUMERIC NOT NULL,
+            volume BIGINT
         );
     `);
     console.log('Finished building tables.');
@@ -322,31 +331,52 @@ async function createInitialAuditLogs() {
 };
 
 // createInitialRealTimeSPXData
-async function createInitialRealTimeSPXData() {
-    console.log("Creating initial real-time SPX data...");
-    try {
-        const realTimeData = [
-            {
-                timestamp: new Date('2024-05-17T14:00:00Z'),
-                current_price: 5286.0
-            },
-            {
-                timestamp: new Date('2024-05-17T14:01:00Z'),
-                current_price: 5287.5
-            },
-            // Add more records as needed
-        ];
+// async function createInitialRealTimeSPXData() {
+//     console.log("Creating initial real-time SPX data...");
+//     try {
+//         const realTimeData = [
+//             {
+//                 timestamp: new Date('2024-05-17T14:00:00Z'),
+//                 current_price: 5286.0
+//             },
+//             {
+//                 timestamp: new Date('2024-05-17T14:01:00Z'),
+//                 current_price: 5287.5
+//             },
+//             // Add more records as needed
+//         ];
 
-        for (const data of realTimeData) {
-            await createRealTimeSPXRecord(data);
-        }
+//         for (const data of realTimeData) {
+//             await createRealTimeSPXRecord(data);
+//         }
 
-        console.log("Finished creating initial real-time SPX data.");
-    } catch (error) {
-        console.error("Error creating initial real-time SPX data!");
-        console.error(error);
-    }
-};
+//         console.log("Finished creating initial real-time SPX data.");
+//     } catch (error) {
+//         console.error("Error creating initial real-time SPX data!");
+//         console.error(error);
+//     }
+// };
+
+// // createInitialDetailedHistoricalSPX
+// async function createInitialDetailedHistoricalSPX() {
+//     console.log("Creating initial detailed historical SPX data...");
+//     try {
+//         const data = [
+//             { timestamp: new Date('2024-01-01T10:00:00Z'), price: 4300.12, volume: 12345 },
+//             { timestamp: new Date('2024-01-01T10:01:00Z'), price: 4301.45, volume: 6789 },
+//             // Add more initial data as needed
+//         ];
+
+//         for (const record of data) {
+//             await createDetailedRecord(record);
+//         }
+
+//         console.log("Finished creating initial detailed historical SPX data.");
+//     } catch (error) {
+//         console.error("Error creating initial detailed historical SPX data!");
+//         console.error(error);
+//     }
+// };
 
 // Rebuild DB
 async function rebuildDB() {
@@ -361,7 +391,8 @@ async function rebuildDB() {
         await createInitialDecisionRules();
         await createInitialAlerts();
         await createInitialAuditLogs();
-        await createInitialRealTimeSPXData();
+        // await createInitialRealTimeSPXData();
+        // await createInitialDetailedHistoricalSPX();
         console.log('Tables have been successfully created.');
     } catch (error) {
         console.error("Error during rebuildDB!");
@@ -588,7 +619,8 @@ async function testDB() {
 async function seedAndImport() {
     try {
         await rebuildDB();
-        await importSpecificCSVFile(); // Import historical data after rebuilding tables
+        await importSpecificCSVFile();
+        await importDetailedHistoricalSPX();
         await testDB();
         console.log('Seed and import completed successfully.');
     } catch (error) {
