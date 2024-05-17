@@ -10,7 +10,7 @@ const { createTrade, getAllTrades, getTradeById, updateTrade, deleteTrade } = re
 const { createDecisionRule, getAllDecisionRules, getDecisionRuleById, updateDecisionRule, deleteDecisionRule } = require('./helperFunctions/decisionrules');
 const { createAlert, getAllAlerts, getAlertById, updateAlert, deleteAlert} = require('./helperFunctions/alerts');
 const { createAuditLog, getAllAuditLogs, getAuditLogById, deleteAuditLog } = require('./helperFunctions/auditLogs');
-
+const { createRealTimeSPXRecord, getAllRealTimeSPXRecords, getRealTimeSPXRecordById, updateRealTimeSPXRecord, deleteRealTimeSPXRecord } = require('./helperFunctions/realTimeSPX');
 
 // Methods: Drop Tables
 async function dropTables(){
@@ -101,19 +101,14 @@ async function createTables() {
             description TEXT NOT NULL,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
-        CREATE TABLE IF NOT EXISTS configurations (
-            id SERIAL PRIMARY KEY,
-            key VARCHAR(255) UNIQUE NOT NULL,
-            value TEXT NOT NULL,
-            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
         CREATE TABLE IF NOT EXISTS real_time_spx (
             id SERIAL PRIMARY KEY,
             timestamp TIMESTAMP NOT NULL,
-            open NUMERIC NOT NULL,
-            high NUMERIC NOT NULL,
-            low NUMERIC NOT NULL,
-            close NUMERIC NOT NULL,
+            current_price NUMERIC NOT NULL,
+            open NUMERIC,
+            high NUMERIC,
+            low NUMERIC,
+            close NUMERIC,
             volume BIGINT
         );
     `);
@@ -325,8 +320,32 @@ async function createInitialAuditLogs() {
     }
 };
 
+// createInitialRealTimeSPXData
+async function createInitialRealTimeSPXData() {
+    console.log("Creating initial real-time SPX data...");
+    try {
+        const realTimeData = [
+            {
+                timestamp: new Date('2024-05-17T14:00:00Z'),
+                current_price: 5286.0
+            },
+            {
+                timestamp: new Date('2024-05-17T14:01:00Z'),
+                current_price: 5287.5
+            },
+            // Add more records as needed
+        ];
 
+        for (const data of realTimeData) {
+            await createRealTimeSPXRecord(data);
+        }
 
+        console.log("Finished creating initial real-time SPX data.");
+    } catch (error) {
+        console.error("Error creating initial real-time SPX data!");
+        console.error(error);
+    }
+};
 
 // Rebuild DB
 async function rebuildDB() {
@@ -341,6 +360,7 @@ async function rebuildDB() {
         await createInitialDecisionRules();
         await createInitialAlerts();
         await createInitialAuditLogs();
+        await createInitialRealTimeSPXData();
         console.log('Tables have been successfully created.');
     } catch (error) {
         console.error("Error during rebuildDB!");
@@ -511,29 +531,52 @@ async function testDB() {
         //     console.log("Deleted alert", deletedAlert);
         // };
 
+        // // Test Audit Logs Helper FNs
+        // console.log("Starting to test audit logs...");
+
+        // // Get all audit logs
+        // console.log("Calling getAllAuditLogs...");
+        // const allAuditLogs = await getAllAuditLogs();
+        // console.log("All audit logs", allAuditLogs);
+
+        // // Assuming at least one audit log is created successfully
+        // if (allAuditLogs.length > 0) {
+        //     // Get audit log by ID
+        //     console.log("Calling getAuditLogById for the first log...");
+        //     const auditLogById = await getAuditLogById(allAuditLogs[0].id);
+        //     console.log("Audit log by ID", auditLogById);
+
+        //     // Delete audit log
+        //     console.log("Deleting the first audit log...");
+        //     const deletedAuditLog = await deleteAuditLog(allAuditLogs[0].id);
+        //     console.log("Deleted audit log", deletedAuditLog);
+        // };
+
         // Test Audit Logs Helper FNs
-        console.log("Starting to test audit logs...");
+        console.log("Starting to test real-time SPX data...");
 
-        // Get all audit logs
-        console.log("Calling getAllAuditLogs...");
-        const allAuditLogs = await getAllAuditLogs();
-        console.log("All audit logs", allAuditLogs);
+        // Get all real-time SPX records
+        console.log("Calling getAllRealTimeSPXRecords...");
+        const allRealTimeSPXRecords = await getAllRealTimeSPXRecords();
+        console.log("All real-time SPX records", allRealTimeSPXRecords);
 
-        // Assuming at least one audit log is created successfully
-        if (allAuditLogs.length > 0) {
-            // Get audit log by ID
-            console.log("Calling getAuditLogById for the first log...");
-            const auditLogById = await getAuditLogById(allAuditLogs[0].id);
-            console.log("Audit log by ID", auditLogById);
+        // Assuming at least one real-time SPX record is created successfully
+        if (allRealTimeSPXRecords.length > 0) {
+            // Get real-time SPX record by ID
+            console.log("Calling getRealTimeSPXRecordById for the first record...");
+            const realTimeSPXRecordById = await getRealTimeSPXRecordById(allRealTimeSPXRecords[0].id);
+            console.log("Real-time SPX record by ID", realTimeSPXRecordById);
 
-            // Delete audit log
-            console.log("Deleting the first audit log...");
-            const deletedAuditLog = await deleteAuditLog(allAuditLogs[0].id);
-            console.log("Deleted audit log", deletedAuditLog);
-        }
+            // Update real-time SPX record
+            console.log("Updating first real-time SPX record's current_price...");
+            const updatedRealTimeSPXRecord = await updateRealTimeSPXRecord(allRealTimeSPXRecords[0].id, { current_price: 5290.0 });
+            console.log("Updated real-time SPX record", updatedRealTimeSPXRecord);
 
-
-
+            // Delete real-time SPX record
+            console.log("Deleting the first real-time SPX record...");
+            const deletedRealTimeSPXRecord = await deleteRealTimeSPXRecord(allRealTimeSPXRecords[0].id);
+            console.log("Deleted real-time SPX record", deletedRealTimeSPXRecord);
+        };
     } catch (error) {
         console.log("Error during testDB!");
         console.log(error);
