@@ -25,7 +25,7 @@ async function insertRecords(records) {
     } finally {
         client.release();
     }
-}
+};
 
 async function importSpecificCSVFile() {
     const filePath = './db/csvHistory/SPXTest.csv';

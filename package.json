@@ -26,6 +26,7 @@
   "dependencies": {
     "axios": "^1.6.8",
     "bcrypt": "^5.1.1",
+    "bottleneck": "^2.19.5",
     "cors": "^2.8.5",
     "csv-parser": "^3.0.0",
     "dotenv": "^16.4.5",
