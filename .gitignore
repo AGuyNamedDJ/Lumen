@@ -132,6 +132,7 @@ dist
 # Ignore virtual environment directories
 ai/env/
 ai/venv/
+ai/.env
 
 # Ignore Python cache files
 __pycache__/
