@@ -129,5 +129,10 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-# Python
+# Ignore virtual environment directories
 ai/env/
+ai/venv/
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
