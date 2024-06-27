@@ -7,7 +7,8 @@ const app = express();
 
 // Import project dirs
 const { client } = require('./db/index');
-const handleWebSocket = require('./api/finnhubAPI/finnhubWebsocket'); 
+const handleWebSocket = require('./api/finnhubAPI/finnhubWebsocket');
+const importSpecificCSVFile = require('./db/fetchS3Data');
 
 // Middleware
 app.use(express.json());
@@ -15,12 +16,40 @@ app.use(express.urlencoded({ extended: false }));
 app.use(morgan('dev'));
 app.use(cors());
 
-// WebSocket Setup
-handleWebSocket();
+// Function to start WebSocket
+async function startWebSocket() {
+    try {
+        handleWebSocket();
+    } catch (error) {
+        console.error('Error starting WebSocket:', error);
+    }
+}
+
+// Function to import CSV data
+async function importCSVData() {
+    try {
+        await importSpecificCSVFile();
+    } catch (error) {
+        console.error('Error importing CSV data:', error);
+    }
+}
+
+// Concurrently run WebSocket and CSV import
+async function startServer() {
+    await Promise.all([
+        importCSVData(),
+        startWebSocket()
+    ]);
+
+    console.log('Both CSV import and WebSocket started');
+}
+
+// Import CSV Data and Start WebSocket concurrently on Server Start
+startServer();
 
 // Catch-all route handler
 app.get("/", (req, res) => {
-    res.send("Server is Running!")
+    res.send("Server is Running!");
 });
 
 // Router Handlers
@@ -38,12 +67,12 @@ process.on('exit', () => {
 });
 
 // Port
-const PORT = process.env.PORT || 3001
+const PORT = process.env.PORT || 3001;
 if (process.env.NODE_ENV !== 'test') {
     app.listen(PORT, () => {
-        console.log(`Now running on port ${PORT}`)
+        console.log(`Now running on port ${PORT}`);
     });
-};
+}
 
 // Export
 module.exports = {
