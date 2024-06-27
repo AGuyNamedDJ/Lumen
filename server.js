@@ -52,7 +52,7 @@ app.get("/", (req, res) => {
     res.send("Server is Running!");
 });
 
-// Router Handlers
+// Connect to the database
 try {
     client.connect();
 } catch (error) {
