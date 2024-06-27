@@ -81,3 +81,80 @@ Testing is a critical phase in the software development lifecycle. It helps ensu
 For example, to test the **Fetch Stock Price** endpoint:
 
 1. **Logging in Code**: Add `console.log` statements in `stockPrice.js` to log the incoming request data and the response being sent back.
+
+   ```javascript
+   router.get("/stockPrice", async (req, res) => {
+     try {
+       console.log("Fetching stock price for:", req.query.symbol);
+       const stockPrice = await getStockPrice(req.query.symbol);
+       console.log("Stock price fetched:", stockPrice);
+       res.status(200).json(stockPrice);
+     } catch (error) {
+       console.error("Error fetching stock price:", error);
+       res.status(500).json({ error: "Failed to fetch stock price" });
+     }
+   });
+   ```
+
+2. **Manual Request with Postman**:
+
+   - Open Postman and create a GET request to `http://localhost:3000/api/finnhubAPI/stockPrice`.
+   - In the query parameters, include the stock symbol, e.g., `symbol=AAPL`.
+   - Send the request and observe the response.
+
+3. **Verify Logs**:
+
+   - Check the server logs to ensure the data was received and processed correctly.
+   - Verify the logs show the expected data at each stage of the process.
+
+4. **Database Verification**:
+   - Use a PostgreSQL client to query the relevant table and verify that the data has been updated or retrieved correctly.
+
+By following this detailed manual testing process, you can ensure each part of the system works as intended and catch any issues early.
+
+---
+
+## Deployment & Maintenance <a name="d-m"></a>
+
+### Deployment <a name="deployment"></a>
+
+Deployment is the phase where the application is made available to end users. For the Lumen project, I've chosen [Render](https://render.com) as the deployment platform, given its simplicity, reliability, and excellent support for Node.js applications.
+
+Render enables automatic deployments from your GitHub or GitLab repositories, along with integrated support for HTTPS, custom domains, and continuous integration/continuous deployment (CI/CD).
+
+Here's a snapshot of the deployment process:
+
+1. **Push to Repository**: I commit and push the finalized application code to the repository.
+2. **Connect to Render**: Link the GitHub repository to the Render account. This sets up Render to watch for changes in the repository.
+3. **Automatic Deployments**: Render automatically deploys the application whenever I push to the selected branch of the repository. This ensures the application is always up-to-date with the latest changes.
+4. **Database Connection**: Configure the environment variables on Render to securely connect to the PostgreSQL database.
+5. **Verify Deployment**: Once Render deploys the application, I thoroughly test it to ensure it functions correctly in the live environment.
+
+### Maintenance <a name="maintenance"></a>
+
+Maintenance is an ongoing process of monitoring, updating, and improving the application post-deployment. I use Render's integrated metrics and analytics to continually monitor the application's performance and health.
+
+1. **Monitor Performance**: I continuously keep tabs on the application's performance, reliability, and usage patterns using Render's analytics tools.
+2. **Updates and Improvements**: As I collect user feedback and data, I iterate on the application, making updates and improvements as necessary. These changes are tested in the development environment before being deployed to the live site.
+3. **Security Updates**: I stay alert to any potential security vulnerabilities and promptly update the application with necessary security patches.
+
+Through these Deployment and Maintenance procedures, I ensure that the application is not only always accessible to users but also continues to meet and exceed their needs over time. This also helps maintain a robust, secure, and high-performing application that aligns with industry best practices.
+
+---
+
+## Credits <a name="credits"></a>
+
+Lumen was designed and developed by Dalron J. Robertson, showcasing his expertise in backend development, quantitative trading, and AI model training. This project reflects a commitment to creating efficient, secure, and scalable solutions for advanced trading strategies.
+
+    - **Project Lead and Developer**: Dalron J. Robertson
+
+---
+
+## Contact Information <a name="contact-information"></a>
+
+For any questions, feedback, or contributions, please contact:
+
+- **Dalron J. Robertson**
+- **Email**: dalronjrobertson@example.com
+- **LinkedIn**: [Your LinkedIn Profile](https://www.linkedin.com/in/dalronjrobertson)
+- **GitHub**: [Your GitHub Profile](https://github.com/dalronjrobertson)
