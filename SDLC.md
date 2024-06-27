@@ -150,7 +150,7 @@ Lumen was designed and developed by Dalron J. Robertson, showcasing his expertis
 
 ---
 
-## Contact Information <a name="contact-information"></a>
+## Contact Information <a name="contact-information "></a>
 
 - Email: dalronj.robertson@gmail.com
 - Github: [AGuyNamedDJ](https://github.com/AGuyNamedDJ)
