@@ -146,15 +146,14 @@ Through these Deployment and Maintenance procedures, I ensure that the applicati
 
 Lumen was designed and developed by Dalron J. Robertson, showcasing his expertise in backend development, quantitative trading, and AI model training. This project reflects a commitment to creating efficient, secure, and scalable solutions for advanced trading strategies.
 
-    - **Project Lead and Developer**: Dalron J. Robertson
+**Project Lead and Developer**: Dalron J. Robertson
 
 ---
 
 ## Contact Information <a name="contact-information"></a>
 
-For any questions, feedback, or contributions, please contact:
-
-- **Dalron J. Robertson**
-- **Email**: dalronjrobertson@example.com
-- **LinkedIn**: [Your LinkedIn Profile](https://www.linkedin.com/in/dalronjrobertson)
-- **GitHub**: [Your GitHub Profile](https://github.com/dalronjrobertson)
+- Email: dalronj.robertson@gmail.com
+- Github: [AGuyNamedDJ](https://github.com/AGuyNamedDJ)
+- LinkedIn: [Dalron J. Robertson](https://www.linkedin.com/in/dalronjrobertson/)
+- Website: [dalronjrobertson.com](https://dalronjrobertson.com)
+- YouTube: [AGNDJ](https://youtube.com/@AGNDJ)
