@@ -8,7 +8,7 @@ const app = express();
 // Import project dirs
 const { client } = require('./db/index');
 const handleWebSocket = require('./api/finnhubAPI/finnhubWebsocket');
-const importSpecificCSVFile = require('./db/fetchS3Data');
+const importAllCSVFiles = require('./db/fetchS3Data');
 
 // Middleware
 app.use(express.json());
@@ -20,6 +20,7 @@ app.use(cors());
 async function startWebSocket() {
     try {
         handleWebSocket();
+        console.log('WebSocket connection started');
     } catch (error) {
         console.error('Error starting WebSocket:', error);
     }
@@ -28,51 +29,50 @@ async function startWebSocket() {
 // Function to import CSV data
 async function importCSVData() {
     try {
-        await importSpecificCSVFile();
+        await importAllCSVFiles();
+        console.log('CSV import completed');
     } catch (error) {
         console.error('Error importing CSV data:', error);
     }
 }
 
-// Start server function
+// Sequentially run CSV import and then WebSocket
 async function startServer() {
-    // First, import CSV data
-    await importCSVData();
-    console.log('CSV data import completed.');
+    await importCSVData(); // Wait for CSV import to complete before starting WebSocket
+    await startWebSocket();
 
-    // Then, start the WebSocket
-    startWebSocket();
-    console.log('WebSocket connection started.');
+    console.log('Server initialization completed');
+}
 
-    // Catch-all route handler
-    app.get("/", (req, res) => {
-        res.send("Server is Running!");
-    });
+// Import CSV Data and Start WebSocket on Server Start
+startServer();
 
-    // Router Handlers
-    try {
-        client.connect();
-    } catch (error) {
-        console.error("Unable to connect to database.", error);
-        process.exit(1);
-    };
+// Catch-all route handler
+app.get("/", (req, res) => {
+    res.send("Server is Running!");
+});
 
-    // Close the database connection when the server stops
-    process.on('exit', () => {
-        console.log('Closing database connection');
-        client.end();
-    });
-
-    // Start the server listening
-    const PORT = process.env.PORT || 3001;
-    if (process.env.NODE_ENV !== 'test') {
-        app.listen(PORT, () => {
-            console.log(`Now running on port ${PORT}`);
-        });
-    }
+// Router Handlers
+try {
+    client.connect();
+} catch (error) {
+    console.error("Unable to connect to database.", error);
+    process.exit(1);
 };
 
-startServer();
+// Close the database connection when the server stops
+process.on('exit', () => {
+    console.log('Closing database connection');
+    client.end();
+});
+
+// Port
+const PORT = process.env.PORT || 3001;
+if (process.env.NODE_ENV !== 'test') {
+    app.listen(PORT, () => {
+        console.log(`Now running on port ${PORT}`);
+    });
+}
 
 // Export
 module.exports = {
