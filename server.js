@@ -40,7 +40,6 @@ async function importCSVData() {
 async function startServer() {
     await importCSVData(); // Wait for CSV import to complete before starting WebSocket
     await startWebSocket();
-
     console.log('Server initialization completed');
 }
 
@@ -53,12 +52,12 @@ app.get("/", (req, res) => {
 });
 
 // Router Handlers
-try {
-    client.connect();
-} catch (error) {
+client.connect().then(() => {
+    console.log('Connected to the database');
+}).catch(error => {
     console.error("Unable to connect to database.", error);
     process.exit(1);
-};
+});
 
 // Close the database connection when the server stops
 process.on('exit', () => {

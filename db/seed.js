@@ -15,9 +15,9 @@ const { createRealTimeSPXRecord, getAllRealTimeSPXRecords, getRealTimeSPXRecordB
 const { createDetailedRecord, getAllDetailedRecords, getDetailedRecordById, updateDetailedRecord, deleteDetailedRecord} = require('./helperFunctions/detailedHistoricalSPX');
 
 // Methods: Drop Tables
-async function dropTables(){
+async function dropTables() {
     try {
-        console.log("Dropping tables... ");
+        console.log("Dropping tables except real_time_spx...");
         await client.query(`
             DROP TABLE IF EXISTS users CASCADE;
             DROP TABLE IF EXISTS strategies CASCADE;
@@ -28,11 +28,11 @@ async function dropTables(){
             DROP TABLE IF EXISTS audit_logs CASCADE;
             DROP TABLE IF EXISTS configurations CASCADE;
             DROP TABLE IF EXISTS historical_spx CASCADE;
-            DROP TABLE IF EXISTS real_time_spx CASCADE;
             DROP TABLE IF EXISTS detailed_historical_spx CASCADE;
+            -- Note: Do not drop real_time_spx table
         `);
         console.log("Finished dropping tables.")
-    } catch(error){
+    } catch (error) {
         console.log("Error dropping tables!")
         console.log(error)
     }
