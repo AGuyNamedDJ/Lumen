@@ -1,85 +1,82 @@
 const AWS = require('aws-sdk');
-const csv = require('csv-parser');
-const { client } = require('./index');
+const { Client } = require('pg');
+const csv = require('fast-csv');
+
 require('dotenv').config();
 
-// Configure AWS SDK
-const s3 = new AWS.S3({
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  region: process.env.AWS_REGION,
+// Configure AWS SDK with environment variables
+AWS.config.update({
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    region: process.env.AWS_REGION
 });
 
-// Insert records into the DB
-async function insertRecords(records) {
-  try {
-    await client.query('BEGIN');
-    const query = `
-      INSERT INTO historical_spx (timestamp, open, high, low, close, volume)
-      VALUES ($1, $2, $3, $4, $5, $6);
-    `;
-    for (const record of records) {
-      await client.query(query, record);
+const s3 = new AWS.S3();
+
+const pool = new Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false
     }
-    await client.query('COMMIT');
-    console.log(`Inserted ${records.length} records successfully`);
-  } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('Error inserting records:', error);
-  }
+});
+
+async function importSpecificCSVFile() {
+    const params = {
+        Bucket: 'spx-data-bucket', 
+        Key: 'HistoricalData_1713558856481.csv' 
+    };
+
+    const stream = s3.getObject(params).createReadStream();
+    const records = [];
+
+    stream.pipe(csv.parse({ headers: true }))
+        .on('data', row => {
+            const [month, day, year] = row['Date'].split('/');
+            const formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            records.push([
+                formattedDate,
+                parseFloat(row['Open']),
+                parseFloat(row['High']),
+                parseFloat(row['Low']),
+                parseFloat(row['Close/Last']),
+                parseInt(row['Volume'], 10) || null
+            ]);
+
+            if (records.length >= 200) {
+                insertRecords([...records]);
+                records.length = 0;
+            }
+        })
+        .on('end', () => {
+            if (records.length > 0) {
+                insertRecords(records);
+            }
+            console.log(`Finished importing data from S3`);
+        })
+        .on('error', error => {
+            console.error('Error reading the CSV file:', error);
+        });
 }
 
-// Fetch and process the CSV file from S3
-async function importSpecificCSVFile() {
-  const params = {
-    Bucket: 'spx-data-bucket', 
-    Key: 'HistoricalData_1713558856481.csv',
-  };
-
-  console.log(`Starting to import data from S3 bucket ${params.Bucket} with key ${params.Key}`);
-  const records = [];
-  let totalRecords = 0;
-  let processedRecords = 0;
-
-  const s3Stream = s3.getObject(params).createReadStream();
-  const csvStream = s3Stream.pipe(csv());
-
-  csvStream.on('data', (row) => {
-    const [month, day, year] = row['Date'].split('/');
-    const formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-    records.push([
-      formattedDate,
-      parseFloat(row['Open']),
-      parseFloat(row['High']),
-      parseFloat(row['Low']),
-      parseFloat(row['Close/Last']),
-      parseInt(row['Volume'], 10) || null
-    ]);
-
-    totalRecords += 1;
-
-    if (records.length >= 1000) { // Batch size
-      insertRecords([...records]);
-      processedRecords += records.length;
-      console.log(`Processed ${processedRecords} of ${totalRecords} records`);
-      records.length = 0;
+async function insertRecords(records) {
+    await pool.connect();
+    try {
+        await pool.query('BEGIN');
+        const query = `
+            INSERT INTO historical_spx (timestamp, open, high, low, close, volume)
+            VALUES ($1, $2, $3, $4, $5, $6);
+        `;
+        for (const record of records) {
+            await pool.query(query, record);
+        }
+        await pool.query('COMMIT');
+        console.log(`Inserted ${records.length} records successfully`);
+    } catch (error) {
+        await pool.query('ROLLBACK');
+        console.error('Error inserting records:', error);
+    } finally {
+        await pool.end();
     }
-  });
-
-  csvStream.on('end', () => {
-    if (records.length > 0) {
-      insertRecords(records);
-      processedRecords += records.length;
-    }
-    console.log(`Finished importing data from S3. Processed ${processedRecords} records in total.`);
-  });
-
-  csvStream.on('error', (error) => {
-    console.error('Error reading the CSV file from S3:', error);
-  });
 }
 
 module.exports = importSpecificCSVFile;
-
-// Run
-// importSpecificCSVFile();
