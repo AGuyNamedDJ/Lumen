@@ -1,5 +1,5 @@
 const AWS = require('aws-sdk');
-const { Client } = require('pg');
+const { client } = require('./index'); // Import the client from index.js
 const csv = require('fast-csv');
 
 require('dotenv').config();
@@ -13,17 +13,10 @@ AWS.config.update({
 
 const s3 = new AWS.S3();
 
-const pool = new Client({
-    connectionString: process.env.DATABASE_URL,
-    ssl: {
-        rejectUnauthorized: false
-    }
-});
-
 async function importSpecificCSVFile() {
     const params = {
         Bucket: 'spx-data-bucket', 
-        Key: 'HistoricalData_1713558856481.csv' 
+        Key: 'HistoricalData_1713558856481.csv'
     };
 
     const stream = s3.getObject(params).createReadStream();
@@ -59,23 +52,20 @@ async function importSpecificCSVFile() {
 }
 
 async function insertRecords(records) {
-    await pool.connect();
     try {
-        await pool.query('BEGIN');
+        await client.query('BEGIN');
         const query = `
             INSERT INTO historical_spx (timestamp, open, high, low, close, volume)
             VALUES ($1, $2, $3, $4, $5, $6);
         `;
         for (const record of records) {
-            await pool.query(query, record);
+            await client.query(query, record);
         }
-        await pool.query('COMMIT');
+        await client.query('COMMIT');
         console.log(`Inserted ${records.length} records successfully`);
     } catch (error) {
-        await pool.query('ROLLBACK');
+        await client.query('ROLLBACK');
         console.error('Error inserting records:', error);
-    } finally {
-        await pool.end();
     }
 }
 
