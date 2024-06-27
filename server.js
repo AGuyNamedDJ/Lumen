@@ -70,7 +70,7 @@ async function startServer() {
             console.log(`Now running on port ${PORT}`);
         });
     }
-}
+};
 
 startServer();
 
