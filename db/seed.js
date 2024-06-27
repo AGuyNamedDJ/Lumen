@@ -619,8 +619,8 @@ async function testDB() {
 async function seedAndImport() {
     try {
         await rebuildDB();
-        await importSpecificCSVFile();
-        await importDetailedHistoricalSPX();
+        // await importSpecificCSVFile();
+        // await importDetailedHistoricalSPX();
         await testDB();
         console.log('Seed and import completed successfully.');
     } catch (error) {
