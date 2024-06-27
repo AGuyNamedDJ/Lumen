@@ -1,5 +1,5 @@
 const AWS = require('aws-sdk');
-const { client } = require('./index'); // Import the client from index.js
+const { client } = require('./index');
 const csv = require('fast-csv');
 
 require('dotenv').config();
@@ -35,7 +35,7 @@ async function importSpecificCSVFile() {
                 parseInt(row['Volume'], 10) || null
             ]);
 
-            if (records.length >= 200) {
+            if (records.length >= 1000) {
                 insertRecords([...records]);
                 records.length = 0;
             }
