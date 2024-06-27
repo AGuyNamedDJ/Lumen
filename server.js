@@ -34,45 +34,46 @@ async function importCSVData() {
     }
 }
 
-// Concurrently run WebSocket and CSV import
+// Start server function
 async function startServer() {
-    await Promise.all([
-        importCSVData(),
-        startWebSocket()
-    ]);
+    // First, import CSV data
+    await importCSVData();
+    console.log('CSV data import completed.');
 
-    console.log('Both CSV import and WebSocket started');
-}
+    // Then, start the WebSocket
+    startWebSocket();
+    console.log('WebSocket connection started.');
 
-// Import CSV Data and Start WebSocket concurrently on Server Start
-startServer();
-
-// Catch-all route handler
-app.get("/", (req, res) => {
-    res.send("Server is Running!");
-});
-
-// Connect to the database
-try {
-    client.connect();
-} catch (error) {
-    console.error("Unable to connect to database.", error);
-    process.exit(1);
-};
-
-// Close the database connection when the server stops
-process.on('exit', () => {
-    console.log('Closing database connection');
-    client.end();
-});
-
-// Port
-const PORT = process.env.PORT || 3001;
-if (process.env.NODE_ENV !== 'test') {
-    app.listen(PORT, () => {
-        console.log(`Now running on port ${PORT}`);
+    // Catch-all route handler
+    app.get("/", (req, res) => {
+        res.send("Server is Running!");
     });
+
+    // Router Handlers
+    try {
+        client.connect();
+    } catch (error) {
+        console.error("Unable to connect to database.", error);
+        process.exit(1);
+    };
+
+    // Close the database connection when the server stops
+    process.on('exit', () => {
+        console.log('Closing database connection');
+        client.end();
+    });
+
+    // Start the server listening
+    const PORT = process.env.PORT || 3001;
+    if (process.env.NODE_ENV !== 'test') {
+        app.listen(PORT, () => {
+            console.log(`Now running on port ${PORT}`);
+        });
+    }
 }
+
+// Start the server
+startServer();
 
 // Export
 module.exports = {
