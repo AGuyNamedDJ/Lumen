@@ -63,6 +63,9 @@ def normalize_data(data):
 
 
 def preprocess_data(data):
+    # Ensure consistent column naming
+    if 'date' in data.columns:
+        data.rename(columns={'date': 'timestamp'}, inplace=True)
     data['timestamp'] = pd.to_datetime(data['timestamp'])
     data.set_index('timestamp', inplace=True)
     data = handle_missing_values(data)
@@ -78,7 +81,8 @@ def main():
     if data is not None:
         print(f"Data shape before preprocessing: {data.shape}")
         preprocessed_data = preprocess_data(data)
-        preprocessed_data.to_csv('data/processed/preprocessed_spx_data.csv')
+        preprocessed_data.to_csv(os.path.join(os.path.dirname(
+            __file__), 'processed/preprocessed_spx_data.csv'))
         print("Data preprocessed and saved successfully.")
     else:
         print("Failed to preprocess data.")
