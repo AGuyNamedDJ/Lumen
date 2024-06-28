@@ -55,20 +55,28 @@ def handle_missing_values(data):
 
 def normalize_data(data):
     scaler = MinMaxScaler()
-    data[['open', 'high', 'low', 'close', 'volume']] = scaler.fit_transform(
-        data[['open', 'high', 'low', 'close', 'volume']].fillna(0))
+    data[['open', 'high', 'low', 'close', 'volume', 'ema_10', 'ema_50']] = scaler.fit_transform(
+        data[['open', 'high', 'low', 'close', 'volume', 'ema_10', 'ema_50']].fillna(0))
     return data
+
+# Function to calculate EMA
+
+
+def calculate_ema(data, span):
+    return data['close'].ewm(span=span, adjust=False).mean()
 
 # Function to preprocess the fetched data
 
 
 def preprocess_data(data):
-    # Ensure consistent column naming
-    if 'date' in data.columns:
-        data.rename(columns={'date': 'timestamp'}, inplace=True)
     data['timestamp'] = pd.to_datetime(data['timestamp'])
     data.set_index('timestamp', inplace=True)
     data = handle_missing_values(data)
+
+    # Calculate EMA
+    data['ema_10'] = calculate_ema(data, 10)
+    data['ema_50'] = calculate_ema(data, 50)
+
     data = normalize_data(data)
     return data
 
@@ -81,8 +89,7 @@ def main():
     if data is not None:
         print(f"Data shape before preprocessing: {data.shape}")
         preprocessed_data = preprocess_data(data)
-        preprocessed_data.to_csv(os.path.join(os.path.dirname(
-            __file__), 'processed/preprocessed_spx_data.csv'))
+        preprocessed_data.to_csv('data/processed/preprocessed_spx_data.csv')
         print("Data preprocessed and saved successfully.")
     else:
         print("Failed to preprocess data.")
