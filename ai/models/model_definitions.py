@@ -31,6 +31,7 @@ def create_lstm_model(input_shape, num_layers=2, num_neurons=50):
 
 # Main function to test model creation
 if __name__ == "__main__":
-    input_shape = (1, 7)  # Example input shape (time steps, features)
+    # Example input shape (time steps, features) to include ema_10 and ema_50
+    input_shape = (1, 7)
     model = create_lstm_model(input_shape, num_layers=3, num_neurons=100)
     model.summary()
