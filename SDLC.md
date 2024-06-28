@@ -8,7 +8,11 @@ This document outlines the high-level strategy and plan for developing the backe
 2. [Design](#design)
 3. [Implementation](#implementation)
 4. [Testing](#testing)
-5. [Deployment & Maintenance](#d-m)
+5. [Model Training](#mt)
+   - [Defining the Model](#defining)
+   - [Training the Model](#training)
+   - [Evaluating the Model](#evaluating)
+6. [Deployment & Maintenance](#d-m)
    - [Deployment](#deployment)
    - [Maintenance](#maintenance)
 
@@ -111,6 +115,37 @@ For example, to test the **Fetch Stock Price** endpoint:
    - Use a PostgreSQL client to query the relevant table and verify that the data has been updated or retrieved correctly.
 
 By following this detailed manual testing process, you can ensure each part of the system works as intended and catch any issues early.
+
+---
+
+## Model Training <a name="mt"></a>
+
+### Defining the Model
+
+    1. **Model Selection**:
+      • We selected an LSTM (Long Short-Term Memory) model for predicting SPX prices. LSTM is well-suited for time series prediction tasks due to its ability to capture long-term dependencies.
+    2. **Model Parameters**:
+      • Defined parameters such as the number of layers, number of neurons in each layer, dropout rate, learning rate, and batch size.
+      • Parameters are adjusted during training to minimize the error between predicted and actual SPX prices.
+
+### Training the Model
+
+    1. **Data Preparation**:
+      • Collected and preprocessed historical SPX data.
+      • Normalized the data to ensure it is on the same scale, making it easier for the model to learn.
+    2. **Training Process**:
+      • Split the data into training and validation sets.
+      • Trained the LSTM model on the training set, adjusting parameters to minimize prediction error.
+      • Used the validation set to monitor the model’s performance and prevent overfitting.
+
+### Evaluating the Model
+
+    1. **Performance Metrics**:
+      • Evaluated the model’s performance using metrics such as Mean Absolute Error (MAE), Root Mean Squared Error (RMSE), and R-squared.
+    2. **Validation**:
+      • Tested the model on unseen data to ensure it generalizes well and makes accurate predictions.
+    3. **Model Improvement**:
+      • Iteratively refined the model by adjusting parameters and incorporating more data to improve accuracy.
 
 ---
 
