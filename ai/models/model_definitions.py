@@ -24,13 +24,13 @@ def create_lstm_model(input_shape, num_layers=2, num_neurons=50):
     # Add a Dense layer for output
     model.add(Dense(1))
 
-    model.compile(optimizer='adam', loss='mean_squared_error')
+    model.compile(optimizer='Adam', loss='mean_squared_error')
 
     return model
 
 
 # Main function to test model creation
 if __name__ == "__main__":
-    input_shape = (1, 5)  # Example input shape (time steps, features)
+    input_shape = (1, 7)  # Example input shape (time steps, features)
     model = create_lstm_model(input_shape, num_layers=3, num_neurons=100)
     model.summary()
