@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '../../.env'))
 
 # Read environment variables
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = os.getenv("DB_URL")
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 AWS_REGION = os.getenv("AWS_REGION")
@@ -24,23 +24,42 @@ print(f"AWS_REGION: {AWS_REGION}")
 print(f"S3_BUCKET_NAME: {S3_BUCKET_NAME}")
 
 
-def load_data_from_db():
-    """Load data from the PostgreSQL database."""
+def check_db_connection():
+    """Check if the database connection can be established."""
     try:
         connection = psycopg2.connect(DATABASE_URL)
         cursor = connection.cursor()
-        cursor.execute("SELECT * FROM historical_spx;")
-        data = cursor.fetchall()
-        print("Data loaded from database successfully.")
+        cursor.execute("SELECT 1;")
         cursor.close()
         connection.close()
-        return data
+        print("Database connection established successfully.")
+    except Exception as e:
+        print(f"Error establishing database connection: {e}")
+        return False
+    return True
+
+
+def load_data_from_db(query):
+    """Load data from the PostgreSQL database based on the provided query."""
+    try:
+        connection = psycopg2.connect(DATABASE_URL)
+        cursor = connection.cursor()
+        cursor.execute(query)
+        data = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        df = pd.DataFrame(data, columns=columns)
+        print(f"Data loaded from database with query '{query}' successfully.")
+        cursor.close()
+        connection.close()
+        return df
     except Exception as e:
         print(f"Error loading data from database: {e}")
+        return pd.DataFrame()
 
 
 def load_data_from_s3():
-    """Load data from CSV files stored in an AWS S3 bucket."""
+    """Load historical data from CSV files stored in an AWS S3 bucket."""
+    all_data = []
     try:
         s3_client = boto3.client(
             's3',
@@ -49,17 +68,16 @@ def load_data_from_s3():
             region_name=AWS_REGION
         )
         response = s3_client.list_objects_v2(Bucket=S3_BUCKET_NAME)
-        print(f"S3 list objects response: {response}")
         for obj in response.get('Contents', []):
             key = obj['Key']
-            print(f"Loading data from {key}...")
             csv_obj = s3_client.get_object(Bucket=S3_BUCKET_NAME, Key=key)
             body = csv_obj['Body'].read().decode('utf-8')
             data = pd.read_csv(StringIO(body))
-            print(f"CSV data loaded successfully from {key}.")
-            insert_data_into_db(data)
+            all_data.append(data)
+        print(f"Data loaded from S3 bucket '{S3_BUCKET_NAME}' successfully.")
     except Exception as e:
         print(f"Error loading data from S3: {e}")
+    return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
 
 
 def insert_data_into_db(data):
@@ -114,6 +132,39 @@ def insert_data_into_db(data):
         print(f"Error inserting data into the database: {e}")
 
 
+def main():
+    # Check database connection
+    if not check_db_connection():
+        print("Exiting script due to database connection issues.")
+        return
+
+    # Load historical data from DB
+    historical_data_query = "SELECT * FROM historical_spx;"
+    historical_data_db = load_data_from_db(historical_data_query)
+
+    # Load live data from DB
+    live_data_query = "SELECT * FROM real_time_spx;"
+    live_data_db = load_data_from_db(live_data_query)
+
+    # Load historical data from S3
+    historical_data_s3 = load_data_from_s3()
+
+    # Combine historical data from DB and S3
+    combined_historical_data = pd.concat(
+        [historical_data_db, historical_data_s3], ignore_index=True)
+
+    # Combine all data
+    combined_data = pd.concat(
+        [combined_historical_data, live_data_db], ignore_index=True)
+
+    # Save combined data to CSV
+    combined_data.to_csv('data/processed/combined_data.csv', index=False)
+    print("Combined data saved to data/processed/combined_data.csv")
+
+    # Print the first few rows of the combined data for verification
+    print("First few rows of the combined data:")
+    print(combined_data.head())
+
+
 if __name__ == "__main__":
-    db_data = load_data_from_db()
-    s3_data = load_data_from_s3()
+    main()
