@@ -1,62 +1,65 @@
-import os
+import openai
 import pandas as pd
-from openai import OpenAI
 from dotenv import load_dotenv
+import os
+import json
 
-# Load environment variables from .env file
+# Load environment variables
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '../../.env'))
-
-# Environment variables
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+api_key = os.getenv('OPENAI_API_KEY')
 
 # Initialize OpenAI client
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = openai.OpenAI(api_key=api_key)
 
 
 def prepare_fine_tuning_data(input_csv, output_jsonl):
-    """
-    Prepare the data for fine-tuning.
-
-    :param input_csv: Path to the input CSV file.
-    :param output_jsonl: Path to the output JSONL file.
-    """
+    # Load the data
     df = pd.read_csv(input_csv)
+
+    # Prepare chat-formatted data
+    chat_data = []
+    for i in range(len(df) - 1):
+        message = f"Given the market data: Open: {df.loc[i, 'open']}, High: {df.loc[i, 'high']}, Low: {df.loc[i, 'low']}, Close: {df.loc[i, 'close']}, Volume: {df.loc[i, 'volume']}, EMA_10: {df.loc[i, 'ema_10']}, EMA_50: {df.loc[i, 'ema_50']}, what will be the closing price of SPX tomorrow?"
+        response = f"{df.loc[i + 1, 'close']}"
+        chat_data.append({
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": message},
+                {"role": "assistant", "content": response}
+            ]
+        })
+
+    # Save to JSONL file
     with open(output_jsonl, 'w') as f:
-        for i, row in df.iterrows():
-            f.write(
-                f'{{"prompt": "The close price is {row["close"]}", "completion": "{row["close"]}"}}\n')
+        for item in chat_data:
+            f.write(json.dumps(item) + "\n")
 
 
-def fine_tune_model(training_file_id):
-    """
-    Fine-tune the model using the training file.
+def fine_tune_model():
+    # Prepare the fine-tuning data
+    input_csv = 'data/processed/preprocessed_spx_data.csv'
+    output_jsonl = 'data/processed/fine_tune_data.jsonl'
+    prepare_fine_tuning_data(input_csv, output_jsonl)
 
-    :param training_file_id: ID of the training file uploaded to OpenAI.
-    """
+    # Upload the training file using new API method
+    with open(output_jsonl, "rb") as f:
+        response = client.files.create(
+            file=f,
+            purpose='fine-tune'
+        )
+    training_file_id = response.id
+    print(f"Uploaded fine-tuning file ID: {training_file_id}")
+
+    # Create a fine-tuning job using new API method
     response = client.fine_tuning.jobs.create(
         training_file=training_file_id,
         model="gpt-3.5-turbo"
     )
-    print("Fine-tuning job response:", response)
+    print(f"Fine-tuning job response: {response}")
 
 
 def main():
-    input_csv = 'data/processed/preprocessed_spx_data.csv'
-    output_jsonl = 'data/processed/spx_fine_tuning_data.jsonl'
-
-    # Prepare the fine-tuning data
-    prepare_fine_tuning_data(input_csv, output_jsonl)
-
-    # Upload the fine-tuning data
-    response = client.files.create(
-        file=open(output_jsonl, 'rb'),
-        purpose='fine-tune'
-    )
-    training_file_id = response.id
-    print("Uploaded fine-tuning file ID:", training_file_id)
-
-    # Start fine-tuning
-    fine_tune_model(training_file_id)
+    fine_tune_model()
 
 
 if __name__ == "__main__":
