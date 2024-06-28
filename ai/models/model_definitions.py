@@ -2,27 +2,35 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense
 
 
-def create_model(input_shape):
+def create_lstm_model(input_shape, num_layers=2, num_neurons=50):
     """
-    Creates and compiles an LSTM model for predicting SPX percentage change.
+    Create an LSTM model with specified hyperparameters.
 
-    Parameters:
-    input_shape (tuple): Shape of the input data (timesteps, features).
-
-    Returns:
-    model (Sequential): A compiled Keras Sequential model.
+    :param input_shape: Shape of the input data.
+    :param num_layers: Number of LSTM layers.
+    :param num_neurons: Number of neurons in each LSTM layer.
+    :return: Compiled LSTM model.
     """
     model = Sequential()
-    model.add(LSTM(units=50, return_sequences=True, input_shape=input_shape))
-    model.add(LSTM(units=50))
-    model.add(Dense(units=1))
+
+    # Add LSTM layers
+    for i in range(num_layers):
+        if i == 0:
+            model.add(LSTM(num_neurons, return_sequences=(
+                i < num_layers - 1), input_shape=input_shape))
+        else:
+            model.add(LSTM(num_neurons, return_sequences=(i < num_layers - 1)))
+
+    # Add a Dense layer for output
+    model.add(Dense(1))
+
     model.compile(optimizer='adam', loss='mean_squared_error')
+
     return model
 
 
+# Main function to test model creation
 if __name__ == "__main__":
-    # Example input shape: 1 timestep, 5 features
-    input_shape = (1, 5)
-    model = create_model(input_shape)
-    # Print model summary to verify the architecture
+    input_shape = (1, 5)  # Example input shape (time steps, features)
+    model = create_lstm_model(input_shape, num_layers=3, num_neurons=100)
     model.summary()
