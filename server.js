@@ -3,8 +3,8 @@ require('dotenv').config();
 const express = require('express');
 const morgan = require('morgan');
 const cors = require('cors');
-const app = express();
 const cron = require('node-cron');
+const app = express();
 
 // Import project dirs
 const { client } = require('./db/index');
@@ -47,9 +47,9 @@ async function startServer() {
 // Import CSV Data and Start WebSocket on Server Start
 startServer();
 
-// Schedule WebSocket restart every 30 minutes
-cron.schedule('*/30 * * * *', () => {
-    console.log('Restarting WebSocket connection...');
+// Schedule WebSocket restart every 15 minutes
+cron.schedule('*/15 * * * *', () => {
+    console.log('Cron job triggered: Restarting WebSocket connection...');
     restartWebSocket();
 });
 
