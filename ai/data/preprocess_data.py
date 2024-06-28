@@ -33,7 +33,6 @@ def fetch_data():
         engine = get_db_connection()
         if engine is None:
             raise Exception("Database connection failed")
-
         query = "SELECT * FROM historical_spx"
         data = pd.read_sql(query, engine)
         print("Data fetched successfully from the database.")
@@ -80,6 +79,23 @@ def preprocess_data(data):
     data = normalize_data(data)
     return data
 
+# Function to create chat-formatted data
+
+
+def create_chat_data(data):
+    chat_data = []
+    for i in range(1, len(data)):
+        chat_data.append({
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user",
+                    "content": f"Predict the closing price for {data.index[i].strftime('%Y-%m-%d')}."},
+                {"role": "assistant",
+                    "content": f"The closing price will be {data.iloc[i]['close']}."}
+            ]
+        })
+    return chat_data
+
 # Main function to orchestrate data fetching and preprocessing
 
 
@@ -91,6 +107,12 @@ def main():
         preprocessed_data = preprocess_data(data)
         preprocessed_data.to_csv('data/processed/preprocessed_spx_data.csv')
         print("Data preprocessed and saved successfully.")
+
+        chat_data = create_chat_data(preprocessed_data)
+        with open('data/processed/preprocessed_spx_chat_data.jsonl', 'w') as f:
+            for entry in chat_data:
+                f.write(f"{entry}\n")
+        print("Chat data preprocessed and saved successfully.")
     else:
         print("Failed to preprocess data.")
 
