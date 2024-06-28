@@ -1,6 +1,7 @@
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
+import json
 
 # Load environment variables from .env file
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '../../.env'))
@@ -16,11 +17,13 @@ def check_fine_tune_status(job_id):
     :param job_id: ID of the fine-tuning job.
     """
     response = client.fine_tuning.jobs.retrieve(job_id)
-    print("Fine-tuning job status:", response)
+    print("Fine-tuning job status:")
+    # Format error, if not present its unreadable
+    print(json.dumps(response.to_dict(), indent=4))
 
 
 def main():
-    job_id = 'ftjob-ciwBDgBxYV2GZAHhg48KvdcJ'  # Update Job IDs
+    job_id = 'ftjob-Xh3gQrbWOeSdJvo15QPQ8WJk'  # Update Job IDs
     check_fine_tune_status(job_id)
 
 

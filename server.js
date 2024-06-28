@@ -4,10 +4,11 @@ const express = require('express');
 const morgan = require('morgan');
 const cors = require('cors');
 const app = express();
+const cron = require('node-cron');
 
 // Import project dirs
 const { client } = require('./db/index');
-const handleWebSocket = require('./api/finnhubAPI/finnhubWebsocket');
+const { handleWebSocket, restartWebSocket } = require('./api/finnhubAPI/finnhubWebsocket');
 const importAllCSVFiles = require('./db/fetchS3Data');
 
 // Middleware
@@ -45,6 +46,12 @@ async function startServer() {
 
 // Import CSV Data and Start WebSocket on Server Start
 startServer();
+
+// Schedule WebSocket restart every 30 minutes
+cron.schedule('*/30 * * * *', () => {
+    console.log('Restarting WebSocket connection...');
+    restartWebSocket();
+});
 
 // Catch-all route handler
 app.get("/", (req, res) => {

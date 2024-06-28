@@ -1,18 +1,20 @@
 const WebSocket = require('ws');
-require('dotenv').config(); 
+require('dotenv').config();
 const { createRealTimeSPXRecord } = require('../../db/helperFunctions/realTimeSPX');
 const Bottleneck = require('bottleneck');
 
-const API_KEY = 'cohasq1r01qrf6b2ivj0cohasq1r01qrf6b2ivjg';
+const API_KEY = process.env.FINNHUB_API_KEY;
 const SOCKET_URL = `wss://ws.finnhub.io?token=${API_KEY}`;
 
 const limiter = new Bottleneck({
-    minTime: 50, // Adjust based on rate limits (20 requests per second)
+    minTime: 10000, // 10 seconds between requests
     maxConcurrent: 1
 });
 
+let socket;
+
 const handleWebSocket = () => {
-    const socket = new WebSocket(SOCKET_URL);
+    socket = new WebSocket(SOCKET_URL);
 
     socket.on('open', () => {
         console.log('WebSocket connection opened');
@@ -34,8 +36,11 @@ const handleWebSocket = () => {
                 const conditions = trade.c ? trade.c.join(', ') : null; // Join conditions array to a string
                 console.log(`Extracted volume: ${volume}, conditions: ${conditions}`); // Add logging for volume and conditions
                 try {
-                    await limiter.schedule(() => createRealTimeSPXRecord({ timestamp, current_price, volume, conditions }));
-                    console.log(`Stored trade data: ${JSON.stringify({ timestamp, current_price, volume, conditions })}`);
+                    await limiter.schedule(async () => {
+                        console.log(`Scheduling data storage: ${JSON.stringify({ timestamp, current_price, volume, conditions })}`);
+                        await createRealTimeSPXRecord({ timestamp, current_price, volume, conditions });
+                        console.log('Data stored successfully');
+                    });
                 } catch (error) {
                     console.error('Error storing real-time SPX data:', error);
                 }
@@ -56,4 +61,12 @@ const handleWebSocket = () => {
     });
 };
 
-module.exports = handleWebSocket;
+
+const restartWebSocket = () => {
+    if (socket) {
+        socket.terminate();
+    }
+    handleWebSocket();
+};
+
+module.exports = { handleWebSocket, restartWebSocket };
