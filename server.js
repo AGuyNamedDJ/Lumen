@@ -4,6 +4,7 @@ const express = require('express');
 const morgan = require('morgan');
 const cors = require('cors');
 const cron = require('node-cron');
+const axios = require('axios');
 const app = express();
 
 // Import project dirs
@@ -39,7 +40,7 @@ async function importCSVData() {
 
 // Sequentially run CSV import and then WebSocket
 async function startServer() {
-    await importCSVData(); // Wait for CSV import to complete before starting WebSocket
+    await importCSVData(); 
     await startWebSocket();
     console.log('Server initialization completed');
 }
@@ -51,6 +52,20 @@ startServer();
 cron.schedule('*/15 * * * *', () => {
     console.log('Cron job triggered: Restarting WebSocket connection...');
     restartWebSocket();
+});
+
+// Keep the server alive with periodic requests
+const URL = `https://lumen-0q0f.onrender.com`;
+
+cron.schedule('*/5 * * * *', () => {
+    console.log('Sending keep-alive request to the server');
+    axios.get(URL)
+        .then(response => {
+            console.log('Keep-alive request successful:', response.status);
+        })
+        .catch(error => {
+            console.error('Keep-alive request failed:', error);
+        });
 });
 
 // Catch-all route handler

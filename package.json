@@ -25,7 +25,7 @@
   "homepage": "https://github.com/AGuyNamedDJ/Lumen#readme",
   "dependencies": {
     "aws-sdk": "^2.1649.0",
-    "axios": "^1.6.8",
+    "axios": "^1.7.2",
     "bcrypt": "^5.1.1",
     "bottleneck": "^2.19.5",
     "cors": "^2.8.5",
