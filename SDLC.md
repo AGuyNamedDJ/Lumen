@@ -15,6 +15,12 @@ This document outlines the high-level strategy and plan for developing the backe
 6. [Deployment & Maintenance](#d-m)
    - [Deployment](#deployment)
    - [Maintenance](#maintenance)
+7. [API Development](#api)
+   - [API Design and Architecture](#api-design)
+   - [Backend API Endpoints](#backend-endpoints)
+   - [Frontend User Interface](#frontend-ui)
+   - [Integration and Testing](#integration-testing)
+   - [Documentation](#documentation)
 
 ---
 
@@ -120,32 +126,32 @@ By following this detailed manual testing process, you can ensure each part of t
 
 ## Model Training <a name="mt"></a>
 
-### Defining the Model
+### Defining the Model <a name="defining"></a>
 
-    1. **Model Selection**:
-      • We selected an LSTM (Long Short-Term Memory) model for predicting SPX prices. LSTM is well-suited for time series prediction tasks due to its ability to capture long-term dependencies.
-    2. **Model Parameters**:
-      • Defined parameters such as the number of layers, number of neurons in each layer, dropout rate, learning rate, and batch size.
-      • Parameters are adjusted during training to minimize the error between predicted and actual SPX prices.
+1. **Model Selection**:
+   - We selected an LSTM (Long Short-Term Memory) model for predicting SPX prices. LSTM is well-suited for time series prediction tasks due to its ability to capture long-term dependencies.
+2. **Model Parameters**:
+   - Defined parameters such as the number of layers, number of neurons in each layer, dropout rate, learning rate, and batch size.
+   - Parameters are adjusted during training to minimize the error between predicted and actual SPX prices.
 
-### Training the Model
+### Training the Model <a name="training"></a>
 
-    1. **Data Preparation**:
-      • Collected and preprocessed historical SPX data.
-      • Normalized the data to ensure it is on the same scale, making it easier for the model to learn.
-    2. **Training Process**:
-      • Split the data into training and validation sets.
-      • Trained the LSTM model on the training set, adjusting parameters to minimize prediction error.
-      • Used the validation set to monitor the model’s performance and prevent overfitting.
+1. **Data Preparation**:
+   - Collected and preprocessed historical SPX data.
+   - Normalized the data to ensure it is on the same scale, making it easier for the model to learn.
+2. **Training Process**:
+   - Split the data into training and validation sets.
+   - Trained the LSTM model on the training set, adjusting parameters to minimize prediction error.
+   - Used the validation set to monitor the model’s performance and prevent overfitting.
 
-### Evaluating the Model
+### Evaluating the Model <a name="evaluating"></a>
 
-    1. **Performance Metrics**:
-      • Evaluated the model’s performance using metrics such as Mean Absolute Error (MAE), Root Mean Squared Error (RMSE), and R-squared.
-    2. **Validation**:
-      • Tested the model on unseen data to ensure it generalizes well and makes accurate predictions.
-    3. **Model Improvement**:
-      • Iteratively refined the model by adjusting parameters and incorporating more data to improve accuracy.
+1. **Performance Metrics**:
+   - Evaluated the model’s performance using metrics such as Mean Absolute Error (MAE), Root Mean Squared Error (RMSE), and R-squared.
+2. **Validation**:
+   - Tested the model on unseen data to ensure it generalizes well and makes accurate predictions.
+3. **Model Improvement**:
+   - Iteratively refined the model by adjusting parameters and incorporating more data to improve accuracy.
 
 ---
 
@@ -177,6 +183,107 @@ Through these Deployment and Maintenance procedures, I ensure that the applicati
 
 ---
 
+## API Development <a name="api"></a>
+
+### API Design and Architecture <a name="api-design"></a>
+
+1. **Defining API Requirements**:
+
+   - The API needs to support multiple operations related to market data, trading strategies, and model predictions.
+   - It must be robust, secure, and capable of handling high-frequency requests.
+
+2. **Choosing the Right Framework**:
+
+   - For our backend, we will use Express.js, a minimal and flexible Node.js web application framework.
+
+3. **Setting Up Routes**:
+
+   - Define the routes and methods for the API.
+   - Ensure each route has appropriate handlers and middleware for validation and authentication.
+
+4. **Database Integration**:
+   - Connect the API endpoints to the PostgreSQL database to perform CRUD operations.
+
+### Backend API Endpoints <a name="backend-endpoints"></a>
+
+1. **User Management**:
+
+   - `/api/users/register` (POST): Register a new user.
+   - `/api/users/login` (POST): Authenticate a user and provide a token.
+
+2. **Market Data**:
+
+   - `/api/market/historical` (GET): Fetch historical market data.
+   - `/api/market/realtime` (GET): Fetch real-time market data.
+
+3. **Trading Strategies**:
+
+   - `/api/strategies/create` (POST): Create a new trading strategy.
+   - `/api/strategies/update` (PUT): Update an existing trading strategy.
+   - `/api/strategies/delete` (DELETE): Delete a trading strategy.
+
+4. **Model Predictions**:
+
+   - `/api/predictions/spx` (POST): Get SPX predictions based on historical data.
+
+5. **Performance Metrics**:
+   - `/api/performance/metrics` (GET): Retrieve performance metrics for strategies.
+
+### Frontend User Interface <a name="frontend-ui"></a>
+
+1. **User Authentication**:
+
+   - Provide a secure login and registration interface.
+   - Implement token-based authentication to secure frontend routes.
+
+2. **Dashboard**:
+
+   - Display real-time and historical market data.
+   - Show performance metrics and strategy analytics.
+
+3. **Trading Strategies**:
+
+   - Interface to create, update, and delete trading strategies.
+   - Visualize strategy performance over time.
+
+4. **Predictions**:
+   - Display predictions from the AI model.
+   - Allow users to input parameters and see predicted outcomes.
+
+### Integration and Testing <a name="integration-testing"></a>
+
+1. **API Testing**:
+
+   - Use tools like Postman to test API endpoints.
+   - Write unit tests for each API route to ensure they return the correct responses.
+
+2. **Frontend-Backend Integration**:
+
+   - Ensure the frontend correctly calls the API endpoints and displays the data.
+   - Test the full user flow from the frontend to the backend and back.
+
+3. **Load Testing**:
+   - Simulate high traffic to ensure the system can handle concurrent requests.
+   - Optimize endpoints for performance under load.
+
+### Documentation <a name="documentation"></a>
+
+1. **API Documentation**:
+
+   - Create detailed documentation for each API endpoint.
+   - Include request and response formats, status codes, and examples.
+
+2. **User Guide**:
+
+   - Provide a guide for users on how to use the application.
+   - Include steps for creating and managing trading strategies, understanding predictions, and using the dashboard.
+
+3. **Developer Guide**:
+   - Document the codebase structure and development setup.
+   - Provide guidelines for contributing to the project and extending the API.
+
+---
+
 ## Credits <a name="credits"></a>
 
 Lumen was designed and developed by Dalron J. Robertson, showcasing his expertise in backend development, quantitative trading, and AI model training. This project reflects a commitment to creating efficient, secure, and scalable solutions for advanced trading strategies.
@@ -185,7 +292,7 @@ Lumen was designed and developed by Dalron J. Robertson, showcasing his expertis
 
 ---
 
-## Contact Information <a name="contact-information "></a>
+## Contact Information <a name="contact-information"></a>
 
 - Email: dalronj.robertson@gmail.com
 - Github: [AGuyNamedDJ](https://github.com/AGuyNamedDJ)
