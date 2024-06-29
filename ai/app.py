@@ -1,22 +1,31 @@
 from flask import Flask, request, jsonify
-# Import AI conversation handler
-from models.lumen_1.conversation import handle_conversation
+from models.lumen_1.conversation import process_conversation
+import logging
+import os
 
-app = Flask(__name__)  # Initialize
+app = Flask(__name__)
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
 
 
-# Define endpoint for conversation requests
 @app.route('/conversation', methods=['POST'])
 def conversation():
-    data = request.json  # Extract JSON data from request
+    logging.debug("Received a request at /conversation endpoint")
+    data = request.json
+    logging.debug(f"Request JSON data: {data}")
+
     user_message = data.get('message')
     if not user_message:
+        logging.debug("No user message found in the request")
         return jsonify({'error': 'User message is required'}), 400
 
-    # Process message with AI handler
-    ai_response = handle_conversation(user_message)
-    return jsonify({'response': ai_response})  # Return AI response as JSON
+    ai_response = process_conversation(user_message)
+    logging.debug(f"AI response: {ai_response}")
+    return jsonify({'response': ai_response})
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000)  # Run
+    # Use port from environment variable or default to 8000
+    port = int(os.environ.get('PORT', 8000))
+    app.run(host='0.0.0.0', port=port)
