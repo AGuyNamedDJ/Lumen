@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: lumen-flask
+    env: python
+    buildCommand: pip install -r ai/requirements.txt
+    startCommand: gunicorn -c ai/gunicorn_config.py ai.app:app
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: OPENAI_API_KEY
+        value: your_openai_api_key
+
+  - type: web
+    name: lumen-node
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AI_BACKEND_URL
+        value: https://lumen-0q0f.onrender.com
+      - key: FINNHUB_API_KEY
+        value: your_finnhub_api_key
+      - key: JWT_SECRET
+        value: your_jwt_secret
