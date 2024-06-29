@@ -4,41 +4,78 @@ import pandas as pd
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '../../.env'))
+current_dir = os.path.dirname(__file__)
+project_root = os.path.abspath(os.path.join(current_dir, '../../../'))
+dotenv_path = os.path.join(project_root, '.env')
+load_dotenv(dotenv_path)
 
 # Initialize OpenAI client
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+api_key = os.getenv('OPENAI_API_KEY')
+if api_key:
+    client = OpenAI(api_key=api_key)
+else:
+    print("API key is not set. Please check the .env file.")
+    client = None
+
 
 # Function to prepare data for prediction
-
-
-def prepare_data_for_prediction(input_csv):
+def prepare_data_for_prediction(input_csv, subset_size):
     df = pd.read_csv(input_csv)
-    # Assuming your data preprocessing steps here
-    return df
+    # Use only the first `subset_size` rows of data
+    # Our data is currently too massive and exceeding our token limit
+    df_subset = df.head(subset_size)
+    return df_subset
 
 
-# Load data for prediction
-data_for_prediction = prepare_data_for_prediction(
-    'data/processed/preprocessed_spx_data.csv')
+# Path to the preprocessed data CSV
+data_path = os.path.join(os.path.dirname(
+    __file__), '../../data/lumen_1/processed/preprocessed_spx_data.csv')
 
-# Convert your data to the format expected by OpenAI
-# Here, convert to JSON with necessary fields
+# Load data for prediction with a smaller subset size
+subset_size = 50  # Adjust this size to ensure it fits within the token limit
+data_for_prediction = prepare_data_for_prediction(data_path, subset_size)
+
+# Convert to JSON expected by OpenAI with necessary fields
 data_for_prediction_json = data_for_prediction.to_json(orient='records')
-
-# Function to use the fine-tuned model for prediction
 
 
 def get_predictions(data):
-    response = client.chat.completions.create(
-        model='ft:gpt-3.5-turbo:your-org:custom_suffix:id',  # Replace fine-tuned model IDs
-        messages=[
-            {"role": "user", "content": f"Predict SPX values: {data}"}
-        ]
-    )
-    return response.choices[0].message['content']
+    try:
+        response = client.chat.completions.create(
+            model='ft:gpt-3.5-turbo-0125:personal::9fB2NCNH',
+            messages=[
+                {"role": "user", "content": f"Given the following market data: {data}, predict the closing price of SPX for tomorrow."}
+            ]
+        )
+        return response.choices[0].message.content
+    except openai.error.OpenAIError as e:
+        print(f"OpenAI API error: {e}")
+        return None
 
+
+def convert_to_percentage_change(raw_prediction, last_close_price):
+    try:
+        predicted_price = float(raw_prediction)
+        percentage_change = (
+            (predicted_price - last_close_price) / last_close_price) * 100
+        return percentage_change
+    except ValueError:
+        print("Error converting prediction to float.")
+        return None
+
+
+# Get the last close price from the dataset
+last_close_price = data_for_prediction.iloc[-1]['close']
 
 # Get predictions
-predictions = get_predictions(data_for_prediction_json)
-print(predictions)
+if client:
+    predictions = get_predictions(data_for_prediction_json)
+    if predictions:
+        percentage_change = convert_to_percentage_change(
+            predictions, last_close_price)
+        if percentage_change is not None:
+            print(f"Predicted percentage change: {percentage_change:.2f}%")
+    else:
+        print("Prediction could not be made.")
+else:
+    print("Client is not initialized. Exiting...")
