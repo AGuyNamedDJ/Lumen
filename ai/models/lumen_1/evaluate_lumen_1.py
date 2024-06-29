@@ -7,7 +7,7 @@ import os
 
 # Load preprocessed data
 data_path = os.path.join(os.path.dirname(
-    __file__), '../data/processed/preprocessed_spx_data.csv')
+    __file__), '../../data/lumen_1/processed/preprocessed_spx_data.csv')
 data = pd.read_csv(data_path)
 
 # Features and labels
@@ -24,7 +24,8 @@ X_train = np.expand_dims(X_train, axis=1)
 X_test = np.expand_dims(X_test, axis=1)
 
 # Load the trained model
-model = load_model('trained_model.keras')
+model_path = os.path.join(os.path.dirname(__file__), 'trained_model.keras')
+model = load_model(model_path)
 
 # Make predictions
 y_pred = model.predict(X_test)

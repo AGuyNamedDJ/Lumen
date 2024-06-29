@@ -66,8 +66,8 @@ def fine_tune_model():
             training_file=training_file_id,
             model="gpt-3.5-turbo",
             hyperparameters={
-                "n_epochs": 2,  # Adjust based on your needs
-                "batch_size": 8,  # Adjust based on your data size
+                "n_epochs": 2,  # Adjust if be
+                "batch_size": 8,  # Adjust on data size
                 "learning_rate_multiplier": 0.1  # Default or adjusted based on experiments
             }
         )
