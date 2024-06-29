@@ -8,6 +8,7 @@ const axios = require('axios');
 const app = express();
 
 // Import project dirs
+const { apiRouter } = require('./api/index');
 const { client } = require('./db/index');
 const { handleWebSocket, restartWebSocket } = require('./api/finnhubAPI/finnhubWebsocket');
 const importAllCSVFiles = require('./db/fetchS3Data');
@@ -67,6 +68,9 @@ cron.schedule('*/5 * * * *', () => {
             console.error('Keep-alive request failed:', error);
         });
 });
+
+// API
+app.use('/api', apiRouter)
 
 // Catch-all route handler
 app.get("/", (req, res) => {
