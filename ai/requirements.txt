@@ -1,6 +1,9 @@
-pandas
+flask
+gunicorn
 numpy
-scikit-learn
+openai
+pandas
 psycopg2-binary
-sqlalchemy
 python-dotenv
+scikit-learn
+sqlalchemy
