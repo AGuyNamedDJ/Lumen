@@ -48,7 +48,7 @@ def get_predictions(data):
             ]
         )
         return response.choices[0].message.content
-    except openai.error.OpenAIError as e:
+    except openai.OpenAIError as e:
         print(f"OpenAI API error: {e}")
         return None
 
