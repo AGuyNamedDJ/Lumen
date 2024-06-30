@@ -16,6 +16,7 @@ def conversation():
     logging.debug(f"Request JSON data: {data}")
 
     user_message = data.get('message')
+    logging.debug(f"User message: {user_message}")
     if not user_message:
         logging.debug("No user message found in the request")
         return jsonify({'error': 'User message is required'}), 400
@@ -28,4 +29,5 @@ def conversation():
 if __name__ == '__main__':
     # Use port from environment variable or default to 8000
     port = int(os.environ.get('PORT', 8000))
+    logging.debug(f"Starting Flask app on port {port}")
     app.run(host='0.0.0.0', port=port)

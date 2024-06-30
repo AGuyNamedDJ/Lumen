@@ -1,9 +1,18 @@
 import os
 from openai import OpenAI
 import logging
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv(dotenv_path='../.env')
+
+# Retrieve the API key from environment variables
+api_key = os.getenv('OPENAI_API_KEY')
+
+if api_key is None:
+    raise ValueError("OPENAI_API_KEY environment variable not found")
 
 # Initialize the OpenAI client
-api_key = os.getenv('OPENAI_API_KEY')
 client = OpenAI(api_key=api_key)
 
 # Configure logging
