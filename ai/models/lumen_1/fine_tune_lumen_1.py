@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import json
 from openai import OpenAI, APIError, RateLimitError, APIConnectionError
 
-# Load environment variables
+# Load env
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '../../.env'))
 api_key = os.getenv('OPENAI_API_KEY')
 
@@ -66,9 +66,9 @@ def fine_tune_model():
             training_file=training_file_id,
             model="gpt-3.5-turbo",
             hyperparameters={
-                "n_epochs": 2,  # Adjust if be
+                "n_epochs": 2,  # Adjust by # of reiterations
                 "batch_size": 8,  # Adjust on data size
-                "learning_rate_multiplier": 0.1  # Default or adjusted based on experiments
+                "learning_rate_multiplier": 0.1  # Adjusted based on experiments; find middle ground
             }
         )
         print(f"Fine-tuning job response: {response}")

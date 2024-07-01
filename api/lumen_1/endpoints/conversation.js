@@ -5,7 +5,7 @@ require('dotenv').config();
 
 const AI_BACKEND_URL = process.env.AI_BACKEND_URL || 'http://localhost:5000';  // URL to your Python backend
 
-// Middleware for logging requests to /conversation
+// Middleware
 conversationRouter.use((req, res, next) => {
     console.log(`Received request at /conversation: ${new Date().toISOString()}`);
     next();
@@ -19,7 +19,7 @@ conversationRouter.post('/', async (req, res, next) => {
             return res.status(400).json({ success: false, message: 'User message is required' });
         }
 
-        // Make a request to the Python service for a response
+        // Make a request to Lumen
         const response = await axios.post(`${AI_BACKEND_URL}/conversation`, { message });
         const aiResponse = response.data.response;
 

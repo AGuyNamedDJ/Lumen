@@ -1,4 +1,3 @@
-// finnhubAPI.js
 const finnhub = require('finnhub');
 require('dotenv').config();
 
@@ -18,7 +17,6 @@ function getRealTimeQuotes(symbol, callback) {
     });
 }
 
-// Export the function for use elsewhere in your project
 module.exports = {
     getRealTimeQuotes
 };

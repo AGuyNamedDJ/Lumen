@@ -18,7 +18,7 @@ const handleWebSocket = () => {
 
     socket.on('open', () => {
         console.log('WebSocket connection opened');
-        socket.send(JSON.stringify({ 'type': 'subscribe', 'symbol': '^GSPC' })); // Use the correct symbol here
+        socket.send(JSON.stringify({ 'type': 'subscribe', 'symbol': '^GSPC' })); 
         console.log('Subscribed to ^GSPC trade data');
     });
 
@@ -33,8 +33,8 @@ const handleWebSocket = () => {
                 const timestamp = new Date(trade.t);
                 const current_price = trade.p;
                 const volume = trade.v;
-                const conditions = trade.c ? trade.c.join(', ') : null; // Join conditions array to a string
-                console.log(`Extracted volume: ${volume}, conditions: ${conditions}`); // Add logging for volume and conditions
+                const conditions = trade.c ? trade.c.join(', ') : null; 
+                console.log(`Extracted volume: ${volume}, conditions: ${conditions}`); 
                 try {
                     await limiter.schedule(async () => {
                         console.log(`Scheduling data storage: ${JSON.stringify({ timestamp, current_price, volume, conditions })}`);

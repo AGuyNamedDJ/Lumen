@@ -3,10 +3,10 @@ from openai import OpenAI
 import logging
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# Load .env file
 load_dotenv(dotenv_path='../.env')
 
-# Retrieve the API key from environment variables
+# Retrieve the API key
 api_key = os.getenv('OPENAI_API_KEY')
 
 if api_key is None:

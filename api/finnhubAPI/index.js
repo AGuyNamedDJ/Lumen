@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getRealTimeQuotes } = require('./finnhubAPI');
 
-// Example route to get real-time quotes
+// Ex
 router.get('/quote/:symbol', (req, res) => {
     const symbol = req.params.symbol;
     getRealTimeQuotes(symbol, (error, data) => {
