@@ -3,7 +3,7 @@ const dataRouter = express.Router();
 const fs = require('fs');
 const path = require('path');
 
-// Path to the data directory
+// Path
 const dataDir = path.join(__dirname, '../../data/lumen_1/processed');
 
 // Endpoint to upload new data

@@ -34,7 +34,7 @@ def check_fine_tune_status(job_id):
     response = client.fine_tuning.jobs.retrieve(job_id)
     response_dict = response.to_dict()
 
-    # Convert Unix timestamps to human-readable format
+    # Convert Unix timestamps to readable format
     if response_dict.get("created_at"):
         response_dict["created_at"] = convert_unix_to_readable(
             response_dict["created_at"])

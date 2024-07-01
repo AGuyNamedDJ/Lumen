@@ -3,7 +3,7 @@ import sys
 from openai import OpenAI
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# Load .env file
 load_dotenv(dotenv_path='../.env')
 
 # Print the current working directory
@@ -18,7 +18,7 @@ if os.path.exists('../.env'):
 else:
     print(".env file NOT found!")
 
-# Print the environment variable for the OpenAI API key
+# Print the env for the OpenAI API key
 api_key = os.getenv('OPENAI_API_KEY')
 print(f"OPENAI_API_KEY: {api_key}")
 

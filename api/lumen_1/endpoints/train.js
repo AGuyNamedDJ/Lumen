@@ -2,7 +2,6 @@ const express = require('express');
 const trainRouter = express.Router();
 const axios = require('axios');
 
-// Use the Render.com URL for your Python service
 const TRAINING_SERVICE_URL = 'https://lumen-0q0f.onrender.com/train';
 
 // Middleware for logging requests to /train
@@ -19,7 +18,7 @@ trainRouter.post('/', async (req, res, next) => {
             return res.status(400).json({ success: false, message: 'Training data is required' });
         }
 
-        // Make a request to the Python service for training
+        // Make a request to Lumen for training
         const response = await axios.post(TRAINING_SERVICE_URL, { training_data });
         const result = response.data;
 

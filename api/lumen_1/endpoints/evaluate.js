@@ -2,7 +2,6 @@ const express = require('express');
 const evaluateRouter = express.Router();
 const axios = require('axios');
 
-// Use the Render.com URL for your Python service
 const EVALUATION_SERVICE_URL = 'https://lumen-0q0f.onrender.com/evaluate';
 
 // Middleware for logging requests to /evaluate
@@ -19,7 +18,7 @@ evaluateRouter.post('/', async (req, res, next) => {
             return res.status(400).json({ success: false, message: 'Evaluation data is required' });
         }
 
-        // Make a request to the Python service for evaluation
+        // Make a request for evaluation
         const response = await axios.post(EVALUATION_SERVICE_URL, { evaluation_data });
         const result = response.data;
 

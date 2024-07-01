@@ -27,7 +27,7 @@ def conversation():
 
 
 if __name__ == '__main__':
-    # Use port from environment variable or default to 8000
+    # Use port from environment  or default
     port = int(os.environ.get('PORT', 8000))
     logging.debug(f"Starting Flask app on port {port}")
     app.run(host='0.0.0.0', port=port)

@@ -34,7 +34,7 @@ y_pred = model.predict(X_test)
 mse = mean_squared_error(y_test, y_pred)
 print(f"Mean Squared Error: {mse}")
 
-# Print the first 10 predicted vs actual values
+# Print the first {10} predicted vs actual values
 print("Predicted vs Actual:")
 for i in range(10):
     print(f"Predicted: {y_pred[i][0]}, Actual: {y_test.iloc[i]}")

@@ -2,7 +2,7 @@ from openai import OpenAI
 import os
 from dotenv import load_dotenv
 
-# Load environment variables
+# Load env
 load_dotenv()
 
 # Set OpenAI API key
