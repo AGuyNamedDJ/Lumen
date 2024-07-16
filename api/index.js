@@ -44,11 +44,11 @@ apiRouter.use((error, req, res, next) => {
 
 // Importing and using routers
 const finnhubRoutes = require('./finnhubAPI');
-const loginRouter = require('./helperFunctions/login');
+const LoginRouter = require('./helperFunctions/login');
 const lumen1Router = require('./lumen_1');
 
 apiRouter.use('/finnhub', finnhubRoutes);
-apiRouter.use('/login', loginRouter);
+apiRouter.use('/login', LoginRouter);
 apiRouter.use('/lumen_1', lumen1Router);
 
 module.exports = { apiRouter };
