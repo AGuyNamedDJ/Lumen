@@ -136,11 +136,11 @@ async function createInitialUsers() {
         await createUser({
             username: 'Owner1', 
             password: 'SecurePass123!', 
-            email: 'user1@example.com', 
+            email: 'dalronj.robertson@gmail.com', 
             first_name: 'Dalron', 
             last_name: 'Robertson', 
             phone_number: '601-456-7890',
-            date_of_birth: '1980-01-01',
+            date_of_birth: '1995-08-08',
             profile_picture_url: '',
             role: 'admin'
         });
