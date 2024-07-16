@@ -1,4 +1,3 @@
-// Requires
 require('dotenv').config();
 const express = require('express');
 const morgan = require('morgan');
@@ -70,7 +69,10 @@ cron.schedule('*/5 * * * *', () => {
 });
 
 // API
-app.use('/api', apiRouter)
+app.use('/api', apiRouter);
+
+// Temporary direct route to test login
+app.use('/test-login', require('./api/helperFunctions/login'));
 
 // Catch-all route handler
 app.get("/", (req, res) => {

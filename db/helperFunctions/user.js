@@ -130,7 +130,7 @@ async function getUserByUsername(username) {
     try {
         console.log(`Fetching user with username: ${username}`);
         const { rows: [user] } = await client.query(`
-            SELECT id, username, email, first_name, last_name, phone_number, date_of_birth, created_at
+            SELECT id, username, password, email, first_name, last_name, phone_number, date_of_birth, created_at
             FROM users
             WHERE username = $1;
         `, [username]);
@@ -240,6 +240,8 @@ async function deleteUser(username) {
 // Login User
 async function loginUser({ username, password }) {
     try {
+        console.log(`Attempting to log in user with username: ${username}`);
+        
         // Fetch user by username
         const result = await client.query(`
             SELECT * FROM users 
@@ -249,11 +251,21 @@ async function loginUser({ username, password }) {
         // Check if user exists
         const user = result.rows[0];
         if (!user) {
+            console.log(`No user found with username: ${username}`);
             throw new Error('User not found!');
+        }
+
+        console.log(`User found: ${JSON.stringify(user)}`);
+
+        // Check if the user object has the password field
+        if (!user.password) {
+            console.log(`No password found for user: ${username}`);
+            throw new Error('No password found for user');
         }
 
         // Compare provided password with stored hashed password
         const isPasswordValid = await bcrypt.compare(password, user.password);
+        console.log(`Password validation result: ${isPasswordValid}`);
         if (!isPasswordValid) {
             throw new Error('Invalid password!');
         }
@@ -263,11 +275,11 @@ async function loginUser({ username, password }) {
 
         return userWithoutPassword;
     } catch (error) {
-        console.error(`Could not log in user ${username}`);
+        console.error(`Failed to log in user ${username}`);
         console.error(error);
         throw new Error('Failed to log in user due to a server error!');
     }
-};
+}
 
 module.exports = {
     createUser,
