@@ -1,6 +1,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const { createUser, getAllUsers, getUserById, getUserByUsername, deleteUser, updateUser } = require('../db/helperFunctions/user');
+const { createUser, getAllUsers, getUserById, getUserByUsername, deleteUser, updateUser } = require('../../db/helperFunctions/user');
 const JWT_SECRET = process.env.JWT_SECRET;
 
 const userRouter = express.Router();
