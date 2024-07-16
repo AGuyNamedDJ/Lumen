@@ -55,4 +55,9 @@ apiRouter.use('/finnhub', finnhubRoutes);
 apiRouter.use('/login', LoginRouter);
 apiRouter.use('/lumen_1', lumen1Router);
 
+// General error handling middleware
+apiRouter.use((error, req, res, next) => {
+    res.status(500).send({ message: error.message });
+});
+
 module.exports = { apiRouter };

@@ -16,8 +16,10 @@ const importAllCSVFiles = require('./db/fetchS3Data');
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(morgan('dev'));
-app.use(cors());
-
+app.use(cors({
+    origin: ['http://localhost:3000', 'https://lumen-0q0f.onrender.com'],
+    credentials: true
+}));
 // Function to start WebSocket
 async function startWebSocket() {
     try {
