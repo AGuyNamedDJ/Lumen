@@ -21,17 +21,8 @@ app.use(cors({
     credentials: true
 }));
 
-// Adding logs
-app.use((req, res, next) => {
-    console.log(`Received request: ${req.method} ${req.url}`);
-    next();
-});
-
-// API
-app.use('/api', (req, res, next) => {
-    console.log(`Forwarding request to apiRouter: ${req.method} ${req.url}`);
-    next();
-}, apiRouter);
+// Log environment variable for debugging
+console.log('JWT_SECRET:', process.env.JWT_SECRET);
 
 // Function to start WebSocket
 async function startWebSocket() {
@@ -83,9 +74,14 @@ cron.schedule('*/5 * * * *', () => {
         });
 });
 
+// API
+app.use('/api', apiRouter);
+
+// Temporary direct route to test login
+app.use('/test-login', require('./api/helperFunctions/login'));
+
 // Catch-all route handler
 app.get("/", (req, res) => {
-    console.log('Processing root route');
     res.send("Server is Running!");
 });
 
