@@ -141,6 +141,7 @@ async function createInitialUsers() {
             last_name: 'Robertson', 
             phone_number: '601-456-7890',
             date_of_birth: '1980-01-01',
+            profile_picture_url: '',
             role: 'admin'
         });
 
