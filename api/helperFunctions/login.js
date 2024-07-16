@@ -1,12 +1,13 @@
+// backend/api/login.js
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { getUserByUsername } = require('../../db/helperFunctions/user');
 const JWT_SECRET = process.env.JWT_SECRET;
 
-const LoginRouter = express.Router();
+const loginRouter = express.Router();
 
-LoginRouter.post('/login', async (req, res) => {
+loginRouter.post('/login', async (req, res) => {
   const { username, password } = req.body;
 
   try {
@@ -31,4 +32,4 @@ LoginRouter.post('/login', async (req, res) => {
   }
 });
 
-module.exports = LoginRouter;
+module.exports = loginRouter;

@@ -15,7 +15,7 @@ apiRouter.use(async (req, res, next) => {
     } else if (auth.startsWith(prefix)) {
         const token = auth.slice(prefix.length);
         try {
-            const parsedToken = await jwt.verify(token, JWT_SECRET);
+            const parsedToken = jwt.verify(token, JWT_SECRET);
             const id = parsedToken && parsedToken.id;
             if (id) {
                 req.user = await getUserById(id);
@@ -27,7 +27,7 @@ apiRouter.use(async (req, res, next) => {
     } else {
         next({
             name: 'AuthorizationHeaderError',
-            message: `Authorization token must start with ${ prefix }`
+            message: `Authorization token must start with ${prefix}`
         });
     }
 });
@@ -43,12 +43,12 @@ apiRouter.use((error, req, res, next) => {
 });
 
 // Importing and using routers
-const finnhubRoutes = require('./finnhubAPI');
-const LoginRouter = require('./helperFunctions/login');
-const lumen1Router = require('./lumen_1');
+const finnhubRoutes = require('./finnhubAPI/index');
+const loginRouter = require('./helperFunctions/login');
+const lumen1Router = require('./lumen_1/index');
 
 apiRouter.use('/finnhub', finnhubRoutes);
-apiRouter.use('/login', LoginRouter);
+apiRouter.use('/login', loginRouter);
 apiRouter.use('/lumen_1', lumen1Router);
 
 module.exports = { apiRouter };
