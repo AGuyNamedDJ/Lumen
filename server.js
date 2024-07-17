@@ -21,7 +21,7 @@ app.use(cors({
     credentials: true
 }));
 
-// Log environment variable for debugging
+// Log the JWT_SECRET
 console.log('JWT_SECRET:', process.env.JWT_SECRET);
 
 // Function to start WebSocket

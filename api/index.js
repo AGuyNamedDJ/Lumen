@@ -11,18 +11,27 @@ apiRouter.use(async (req, res, next) => {
     const auth = req.header('Authorization');
 
     if (!auth) {
+        console.log('Authorization header is missing');
         next();
     } else if (auth.startsWith(prefix)) {
         const token = auth.slice(prefix.length);
         try {
+            console.log('Received token:', token);
             const parsedToken = await jwt.verify(token, JWT_SECRET);
+            console.log('Parsed token:', parsedToken);
             const id = parsedToken && parsedToken.id;
+            console.log('Extracted ID from token:', id);
             if (id) {
                 req.user = await getUserById(id);
+                console.log('Fetched user:', req.user);
                 next();
+            } else {
+                console.error('ID missing in parsed token');
+                res.status(400).send({ error: 'Invalid token' });
             }
         } catch (error) {
-            next();
+            console.error('Token verification error:', error);
+            res.status(401).send({ error: 'Invalid token' });
         }
     } else {
         next({
