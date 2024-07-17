@@ -2,6 +2,9 @@
 const { client } = require("../index");
 const bcrypt = require('bcrypt');
 const validator = require('validator');
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET;
+
 
 // Validation Functions
 function validateUsername(username) {
@@ -241,7 +244,7 @@ async function deleteUser(username) {
 async function loginUser({ username, password }) {
     try {
         console.log(`Attempting to log in user with username: ${username}`);
-        
+
         // Fetch user by username
         const result = await client.query(`
             SELECT * FROM users 
@@ -270,16 +273,19 @@ async function loginUser({ username, password }) {
             throw new Error('Invalid password!');
         }
 
+        // Generate a JWT token
+        const token = jwt.sign({ id: user.id, username: user.username }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
         // Remove password from user object before returning
         const { password: _, ...userWithoutPassword } = user;
 
-        return userWithoutPassword;
+        return { ...userWithoutPassword, token };
     } catch (error) {
         console.error(`Failed to log in user ${username}`);
         console.error(error);
         throw new Error('Failed to log in user due to a server error!');
     }
-}
+};
 
 module.exports = {
     createUser,
