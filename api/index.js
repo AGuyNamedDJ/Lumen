@@ -55,11 +55,13 @@ apiRouter.use((error, req, res, next) => {
 const finnhubRoutes = require('./finnhubAPI');
 const loginRouter = require('./helperFunctions/login');
 const lumen1Router = require('./lumen_1');
+const signupRouter =require('./helperFunctions/signup')
 const userRouter = require('./helperFunctions/user');
 
 apiRouter.use('/finnhub', finnhubRoutes);
 apiRouter.use('/login', loginRouter);
 apiRouter.use('/lumen_1', lumen1Router);
+apiRouter.use('/signup', signupRouter);
 apiRouter.use('/user', userRouter);
 
 module.exports = { apiRouter };

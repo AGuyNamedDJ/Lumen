@@ -49,10 +49,10 @@ async function createUser({ username, password, email, first_name, last_name, ph
     if (!validateName(first_name) || !validateName(last_name)) {
         throw new Error('Invalid name. Must not be empty.');
     }
-    if (!validatePhoneNumber(phone_number)) {
+    if (phone_number && !validatePhoneNumber(phone_number)) {
         throw new Error('Invalid phone number!');
     }
-    if (!validateDateOfBirth(date_of_birth)) {
+    if (date_of_birth && !validateDateOfBirth(date_of_birth)) {
         throw new Error('Invalid date of birth! Must be a valid date.');
     }
 
