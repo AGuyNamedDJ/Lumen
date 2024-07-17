@@ -18,7 +18,7 @@ loginRouter.post('/', async (req, res) => {
         }
 
         // Generate a JWT token
-        const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '1h' });
+        const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
 
         console.log('Generated token:', token); // Log the generated token
         console.log('JWT Secret during token generation:', JWT_SECRET); // Log the secret used
