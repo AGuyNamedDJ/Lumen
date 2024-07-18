@@ -21,7 +21,7 @@ def conversation():
         logging.debug("No user message found in the request")
         return jsonify({'error': 'User message is required'}), 400
 
-    ai_response = test_openai_response(user_message)
+    ai_response = process_conversation(user_message)
     logging.debug(f"AI response: {ai_response}")
     return jsonify({'response': ai_response})
 
