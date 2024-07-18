@@ -1,5 +1,5 @@
 import os
-import sys
+import sys  # Make sure to import sys
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -28,13 +28,12 @@ client = OpenAI(api_key=api_key)
 
 def test_openai_response(prompt):
     try:
-        response = client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model="gpt-3.5-turbo",
-            max_tokens=50,
-            temperature=0.7
-        )
-        return response.choices[0].message['content'].strip()
+        response = client.chat.completions.create(model="gpt-4-turbo",  # Use the model you want to test
+                                                  messages=[
+                                                      {"role": "user", "content": prompt}],
+                                                  max_tokens=50,
+                                                  temperature=0.7)
+        return response.choices[0].message.content.strip()
     except Exception as e:
         return f"Error: {e}"
 

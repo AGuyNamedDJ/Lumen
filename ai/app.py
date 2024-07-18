@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from models.lumen_1.conversation import process_conversation
+from openai_integration.test_openai_connection import test_openai_response
 import logging
 import os
 
@@ -21,13 +21,13 @@ def conversation():
         logging.debug("No user message found in the request")
         return jsonify({'error': 'User message is required'}), 400
 
-    ai_response = process_conversation(user_message)
+    ai_response = test_openai_response(user_message)
     logging.debug(f"AI response: {ai_response}")
     return jsonify({'response': ai_response})
 
 
 if __name__ == '__main__':
-    # Use port from environment  or default
+    # Use port from environment or default
     port = int(os.environ.get('PORT', 8000))
     logging.debug(f"Starting Flask app on port {port}")
     app.run(host='0.0.0.0', port=port)
