@@ -5,7 +5,6 @@ const validator = require('validator');
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET;
 
-
 // Validation Functions
 function validateUsername(username) {
     return typeof username === 'string' && username.trim().length >= 3 && username.trim().length <= 30;
@@ -87,7 +86,7 @@ async function getAllUsers() {
     try {
         console.log("Fetching all users from the database.");
         const result = await client.query(`
-            SELECT id, username, email, first_name, last_name, phone_number, date_of_birth, created_at
+            SELECT id, username, email, first_name, last_name, phone_number, date_of_birth, profile_picture_url, created_at
             FROM users;
         `);
 
@@ -109,7 +108,7 @@ async function getUserById(id) {
     try {
         console.log(`Fetching user with ID: ${id}`);
         const { rows: [ user ] } = await client.query(`
-            SELECT id, username, email, first_name, last_name, phone_number, date_of_birth, created_at
+            SELECT id, username, email, first_name, last_name, phone_number, date_of_birth, profile_picture_url, created_at
             FROM users
             WHERE id = $1;
         `, [id]);
@@ -133,7 +132,7 @@ async function getUserByUsername(username) {
     try {
         console.log(`Fetching user with username: ${username}`);
         const { rows: [user] } = await client.query(`
-            SELECT id, username, password, email, first_name, last_name, phone_number, date_of_birth, created_at
+            SELECT id, username, password, email, first_name, last_name, phone_number, date_of_birth, profile_picture_url, created_at
             FROM users
             WHERE username = $1;
         `, [username]);
