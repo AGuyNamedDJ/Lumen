@@ -137,11 +137,11 @@ async function createInitialUsers() {
             username: 'Owner1', 
             password: 'SecurePass123!', 
             email: 'dalronj.robertson@gmail.com', 
-            first_name: 'Dalron', 
+            first_name: 'Dalron J.', 
             last_name: 'Robertson', 
-            phone_number: '601-456-7890',
+            phone_number: '601-720-0154',
             date_of_birth: '1995-08-08',
-            profile_picture_url: '',
+            profile_picture_url: 'https://dalronjrobertson.com/images/AGNDJ.png',
             role: 'admin'
         });
 
