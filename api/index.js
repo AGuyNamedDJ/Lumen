@@ -1,9 +1,14 @@
 require("dotenv").config();
 const express = require("express");
+const morgan = require("morgan"); // Import morgan
 const apiRouter = express.Router();
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET;
 const { getUserById } = require('../db/helperFunctions/user');
+
+const app = express();
+app.use(express.json()); // Ensure you can parse JSON bodies
+app.use(morgan('combined')); // Use morgan for logging
 
 // JWT Middleware for authentication
 apiRouter.use(async (req, res, next) => {
@@ -52,12 +57,13 @@ apiRouter.use((error, req, res, next) => {
 });
 
 // Importing and using routers
+const conversationsRouter = require('./helperFunctions/conversations');
 const finnhubRoutes = require('./finnhubAPI');
 const loginRouter = require('./helperFunctions/login');
 const lumen1Router = require('./lumen_1');
 const signupRouter =require('./helperFunctions/signup')
 const userRouter = require('./helperFunctions/user');
-
+apiRouter.use('/conversations', conversationsRouter);
 apiRouter.use('/finnhub', finnhubRoutes);
 apiRouter.use('/login', loginRouter);
 apiRouter.use('/lumen_1', lumen1Router);
