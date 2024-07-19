@@ -6,11 +6,16 @@ const messagesRouter = express.Router();
 // Create Message
 messagesRouter.post('/', async (req, res) => {
     const { conversationId, role, content } = req.body;
+
     console.log("POST /messages - Request received");
     console.log("POST /messages - conversationId:", conversationId, "role:", role, "content:", content);
 
+    if (!conversationId || !role || !content) {
+        return res.status(400).json({ message: 'conversationId, role, and content are required' });
+    }
+
     try {
-        const message = await createMessage({ conversationId, role, content });
+        const message = await createMessage({ conversation_id: conversationId, role, content });
         console.log("POST /messages - Message created:", message);
         res.status(201).json(message);
     } catch (error) {
