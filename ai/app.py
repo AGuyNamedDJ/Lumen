@@ -1,9 +1,11 @@
 from flask import Flask, request, jsonify
-from openai_integration.test_openai_connection import test_openai_response
+from flask_cors import CORS
+from models.lumen_1.conversation import process_conversation
 import logging
 import os
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)

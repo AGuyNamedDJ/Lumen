@@ -31,7 +31,7 @@ def test_openai_response(prompt):
         response = client.chat.completions.create(model="gpt-4-turbo",  # Use the model you want to test
                                                   messages=[
                                                       {"role": "user", "content": prompt}],
-                                                  max_tokens=50,
+                                                  max_tokens=800,
                                                   temperature=0.7)
         return response.choices[0].message.content.strip()
     except Exception as e:

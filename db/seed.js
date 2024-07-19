@@ -13,6 +13,8 @@ const { createAlert, getAllAlerts, getAlertById, updateAlert, deleteAlert} = req
 const { createAuditLog, getAllAuditLogs, getAuditLogById, deleteAuditLog } = require('./helperFunctions/auditLogs');
 const { createRealTimeSPXRecord, getAllRealTimeSPXRecords, getRealTimeSPXRecordById, updateRealTimeSPXRecord, deleteRealTimeSPXRecord } = require('./helperFunctions/realTimeSPX');
 const { createDetailedRecord, getAllDetailedRecords, getDetailedRecordById, updateDetailedRecord, deleteDetailedRecord} = require('./helperFunctions/detailedHistoricalSPX');
+const { createConversation, getAllConversations, getConversationById, getConversationsByUserId, updateConversation, deleteConversation } = require('./helperFunctions/conversations');
+const { createMessage, getAllMessages, getMessageById, getMessagesByConversationId, updateMessage, deleteMessage} = require('./helperFunctions/messages');
 
 // Methods: Drop Tables
 async function dropTables() {
@@ -57,6 +59,19 @@ async function createTables() {
             profile_picture_url TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS conversations (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS messages (
+            id SERIAL PRIMARY KEY,
+            conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE,
+            role VARCHAR(50) NOT NULL, -- 'user' or 'ai'
+            content TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE IF NOT EXISTS historical_spx (
             id SERIAL PRIMARY KEY,
@@ -151,6 +166,62 @@ async function createInitialUsers() {
         console.error(error);
     }
 };
+
+// createInitialConversations
+async function createInitialConversations() {
+    console.log("Creating initial conversations...");
+    try {
+        const conversation = await createConversation({
+            userId: 1,
+        });
+
+        await createMessage({
+            conversationId: conversation.id,
+            role: 'user',
+            content: 'Hello, this is the initial message from the user.'
+        });
+
+        await createMessage({
+            conversationId: conversation.id,
+            role: 'ai',
+            content: 'Hello, this is the initial message from the AI.'
+        });
+
+        console.log("Finished creating initial conversations.");
+    } catch (error) {
+        console.error("Error creating initial conversations!");
+        console.error(error);
+    }
+};
+
+// // createInitialMessages
+// async function createInitialMessages(conversationId) {
+//     console.log("Creating initial messages...");
+//     try {
+//         const conversation = await getConversationById(conversationId);
+//         if (!conversation) {
+//             throw new Error('Conversation not found');
+//         }
+
+//         // Create initial messages for the conversation
+//         await createMessage({
+//             conversationId: conversation.id,
+//             role: 'user',
+//             content: 'Hello, this is the initial message from the user.'
+//         });
+
+//         await createMessage({
+//             conversationId: conversation.id,
+//             role: 'ai',
+//             content: 'Hello, this is the initial message from the AI.'
+//         });
+
+//         console.log("Finished creating initial messages.");
+//     } catch (error) {
+//         console.error("Error creating initial messages!");
+//         console.error(error);
+//     }
+// };
 
 // createInitialHistoricalSPX
 // async function createInitialHistoricalSPX() {
@@ -386,6 +457,7 @@ async function rebuildDB() {
         await dropTables();
         await createTables();
         await createInitialUsers();
+        await createInitialConversations();
         // await createInitialHistoricalSPX();
         await createInitialStrategies();
         await createInitialTrades();
@@ -432,6 +504,71 @@ async function testDB() {
         //     const deletedUser = await deleteUser(initialUser.username);
         //     console.log("Deleted user", deletedUser);
         // };
+
+        // console.log("Creating initial user...");
+        // await createInitialUsers();
+        // const initialUser = await getUserByUsername('Owner1');
+        // console.log("Initial user", initialUser);
+
+        // if (initialUser) {
+        //     // Test createConversation
+        //     console.log("Creating a new conversation...");
+        //     const newConversation = await createConversation({ userId: initialUser.id });
+        //     console.log("New conversation", newConversation);
+
+        //     // Test getAllConversations
+        //     console.log("Calling getAllConversations...");
+        //     const allConversations = await getAllConversations();
+        //     console.log("All conversations", allConversations);
+
+        //     // Test getConversationById
+        //     console.log("Calling getConversationById for the new conversation...");
+        //     const conversationById = await getConversationById(newConversation.id);
+        //     console.log("Conversation by ID", conversationById);
+
+        //     // Test updateConversation
+        //     console.log("Updating new conversation's updated_at timestamp...");
+        //     const updatedConversation = await updateConversation(newConversation.id, { updated_at: new Date() });
+        //     console.log("Updated conversation", updatedConversation);
+
+        //     // Test createMessage
+        //     console.log("Creating messages for the conversation...");
+        //     const userMessage = await createMessage({ conversationId: newConversation.id, role: 'user', content: 'Hello, this is the initial message from the user.' });
+        //     console.log("User message", userMessage);
+
+        //     const aiMessage = await createMessage({ conversationId: newConversation.id, role: 'ai', content: 'Hello, this is the initial message from the AI.' });
+        //     console.log("AI message", aiMessage);
+
+        //     // Test getAllMessages
+        //     console.log("Calling getAllMessages...");
+        //     const allMessages = await getAllMessages();
+        //     console.log("All messages", allMessages);
+
+        //     // Test getMessageById
+        //     console.log("Calling getMessageById for the user message...");
+        //     const messageById = await getMessageById(userMessage.id);
+        //     console.log("Message by ID", messageById);
+
+        //     // Test getMessagesByConversationId
+        //     console.log("Calling getMessagesByConversationId for the new conversation...");
+        //     const messagesByConversationId = await getMessagesByConversationId(newConversation.id);
+        //     console.log("Messages by conversation ID", messagesByConversationId);
+
+        //     // Test updateMessage
+        //     console.log("Updating user message content...");
+        //     const updatedMessage = await updateMessage(userMessage.id, { content: 'Updated user message content.' });
+        //     console.log("Updated message", updatedMessage);
+
+        //     // Test deleteMessage
+        //     console.log("Deleting the AI message...");
+        //     const deletedMessage = await deleteMessage(aiMessage.id);
+        //     console.log("Deleted message", deletedMessage);
+
+        //     // Test deleteConversation
+        //     console.log("Deleting the new conversation...");
+        //     const deletedConversation = await deleteConversation(newConversation.id);
+        //     console.log("Deleted conversation", deletedConversation);
+        // }
 
         // // Test Historical SPX Helper FNs
         // console.log("Starting to test historical SPX...");

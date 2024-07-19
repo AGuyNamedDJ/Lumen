@@ -23,13 +23,14 @@ def get_openai_response(prompt, max_tokens=150):
     logging.debug(f"Sending prompt to OpenAI: {prompt}")
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=max_tokens,
             temperature=0.7
         )
         logging.debug(f"OpenAI response: {response}")
-        return response.choices[0].message['content'].strip()
+        # Adjusted access to message content
+        return response.choices[0].message.content.strip()
     except Exception as e:
         logging.error(f"Error in OpenAI response: {e}")
         return f"Error: {e}"
