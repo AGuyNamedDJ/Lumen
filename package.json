@@ -7,9 +7,11 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "seed": "nodemon ./db/Seed.js",
     "seed:dev": "nodemon ./db/Seed.js",
-    "start": "node server.js",
+    "start": "concurrently \"npm run seed-and-start-node\" \"npm run start-flask\"",
+    "start-node": "node server.js",
+    "start-flask": "cd ai && gunicorn -b 0.0.0.0:5001 app:app", 
     "start:dev": "nodemon server.js",
-    "seed-and-start": "node ./db/seed.js && node server.js",
+    "seed-and-start-node": "node ./db/seed.js && node server.js",
     "start-seed": "node ./db/Seed.js && node server.js"
   },
   "repository": {
@@ -29,6 +31,7 @@
     "axios": "^1.7.2",
     "bcrypt": "^5.1.1",
     "bottleneck": "^2.19.5",
+    "concurrently": "^8.2.2",
     "cors": "^2.8.5",
     "csv-parser": "^3.0.0",
     "dotenv": "^16.4.5",
