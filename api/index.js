@@ -61,12 +61,14 @@ const conversationsRouter = require('./helperFunctions/conversations');
 const finnhubRoutes = require('./finnhubAPI');
 const loginRouter = require('./helperFunctions/login');
 const lumen1Router = require('./lumen_1');
-const signupRouter =require('./helperFunctions/signup')
+const messagesRouter = require('./helperFunctions/messages');
+const signupRouter = require('./helperFunctions/signup')
 const userRouter = require('./helperFunctions/user');
 apiRouter.use('/conversations', conversationsRouter);
 apiRouter.use('/finnhub', finnhubRoutes);
 apiRouter.use('/login', loginRouter);
 apiRouter.use('/lumen_1', lumen1Router);
+apiRouter.use('/messages', messagesRouter);
 apiRouter.use('/signup', signupRouter);
 apiRouter.use('/user', userRouter);
 
