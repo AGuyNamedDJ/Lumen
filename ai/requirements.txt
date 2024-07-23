@@ -8,3 +8,4 @@ psycopg2-binary
 python-dotenv
 scikit-learn
 sqlalchemy
+werkzeug>=2.0
