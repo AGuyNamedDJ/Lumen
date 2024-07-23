@@ -91,9 +91,11 @@ apiRouter.use('/user', userRouter);
 
 app.use('/api', apiRouter);
 
-const port = process.env.PORT || 8001;
-app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
-});
-
+// Port
+const PORT = process.env.PORT || 55555;
+if (process.env.NODE_ENV !== 'test') {
+    app.listen(PORT, () => {
+        console.log(`Now running on port ${PORT}`);
+    });
+}
 module.exports = { apiRouter };
