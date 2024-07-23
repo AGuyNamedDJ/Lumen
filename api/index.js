@@ -59,7 +59,7 @@ apiRouter.post('/openai', async (req, res) => {
     console.log("POST /openai - Request received with message:", message);
 
     try {
-        const response = await axios.post('https://lumen-0q0f.onrender.com/conversation', { message });
+        const response = await axios.post('https://lumen-back-end-flask.onrender.com/conversation', { message });
         console.log("POST /openai - OpenAI response:", response.data);
         res.status(200).json(response.data);
     } catch (error) {
