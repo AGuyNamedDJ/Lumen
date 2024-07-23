@@ -2,7 +2,7 @@ const express = require('express');
 const evaluateRouter = express.Router();
 const axios = require('axios');
 
-const EVALUATION_SERVICE_URL = 'https://lumen-0q0f.onrender.com/evaluate';
+const EVALUATION_SERVICE_URL = 'https://lumen-back-end-flask.onrender.com/evaluate';
 
 // Middleware for logging requests to /evaluate
 evaluateRouter.use((req, res, next) => {
