@@ -9,5 +9,4 @@ const client = new Client({
 });
 
 // 3) Export 
-// Export the client
 module.exports = { client };
