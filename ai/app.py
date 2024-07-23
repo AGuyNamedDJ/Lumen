@@ -5,7 +5,7 @@ import logging
 import os
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all routes
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -29,7 +29,6 @@ def conversation():
 
 
 if __name__ == '__main__':
-    # Ensure the port is set correctly
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 5001))
     logging.debug(f"Starting Flask app on port {port}")
     app.run(host='0.0.0.0', port=port)
