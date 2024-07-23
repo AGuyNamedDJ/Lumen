@@ -100,7 +100,7 @@ process.on('exit', () => {
 });
 
 // Port
-const PORT = process.env.PORT || 3002;
+const PORT = process.env.PORT || 3003;
 if (process.env.NODE_ENV !== 'test') {
     app.listen(PORT, () => {
         console.log(`Now running on port ${PORT}`);
