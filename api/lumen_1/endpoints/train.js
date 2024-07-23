@@ -2,7 +2,7 @@ const express = require('express');
 const trainRouter = express.Router();
 const axios = require('axios');
 
-const TRAINING_SERVICE_URL = 'https://lumen-0q0f.onrender.com/train';
+const TRAINING_SERVICE_URL = 'https://lumen-back-end-flask.onrender.com/train';
 
 // Middleware for logging requests to /train
 trainRouter.use((req, res, next) => {

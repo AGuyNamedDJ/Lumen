@@ -2,7 +2,7 @@ const express = require('express');
 const predictRouter = express.Router();
 const axios = require('axios');
 
-const PREDICTION_SERVICE_URL = 'https://lumen-0q0f.onrender.com/predict';
+const PREDICTION_SERVICE_URL = 'https://lumen-back-end-flask.onrender.com/predict';
 
 // Middleware for /predict
 predictRouter.use((req, res, next) => {

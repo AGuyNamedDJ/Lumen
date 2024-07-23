@@ -19,7 +19,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: AI_BACKEND_URL
-        value: https://lumen-0q0f.onrender.com
+        value: https://lumen-back-end-flask.onrender.com
       - key: FINNHUB_API_KEY
         value: your_finnhub_api_key
       - key: JWT_SECRET
