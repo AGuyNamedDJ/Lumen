@@ -49,7 +49,7 @@ async function startServer() {
     await importCSVData(); 
     await startWebSocket();
     console.log('Server initialization completed');
-}
+};
 
 // Import CSV Data and Start WebSocket on Server Start
 startServer();
