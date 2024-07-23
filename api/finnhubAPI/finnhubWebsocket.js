@@ -7,7 +7,7 @@ const API_KEY = process.env.FINNHUB_API_KEY;
 const SOCKET_URL = `wss://ws.finnhub.io?token=${API_KEY}`;
 
 const limiter = new Bottleneck({
-    minTime: 10000, // 10 seconds between requests
+    minTime: 3000, // 10 seconds between requests
     maxConcurrent: 1
 });
 

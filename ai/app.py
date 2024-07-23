@@ -30,6 +30,6 @@ def conversation():
 
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5002))
+    port = int(os.environ.get('PORT', 8000))  # Updated to 8000 for consistency
     logging.debug(f"Starting Flask app on port {port}")
     app.run(host='0.0.0.0', port=port)
