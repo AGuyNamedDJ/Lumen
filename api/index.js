@@ -89,13 +89,4 @@ apiRouter.use('/messages', messagesRouter);
 apiRouter.use('/signup', signupRouter);
 apiRouter.use('/user', userRouter);
 
-app.use('/api', apiRouter);
-
-// Port
-const PORT = process.env.PORT || 6000;
-if (process.env.NODE_ENV !== 'test') {
-    app.listen(PORT, () => {
-        console.log(`Now running on port ${PORT}`);
-    });
-}
 module.exports = { apiRouter };
