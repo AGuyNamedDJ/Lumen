@@ -3,7 +3,7 @@ from flask_cors import CORS
 from models.lumen_1.conversation import process_conversation
 import logging
 import os
-from urllib.parse import quote
+from urllib.parse import quote as url_quote
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all routes
