@@ -20,12 +20,16 @@ app = Flask(__name__)
 def classify_message(message):
     logging.debug(f"Classifying message: {message}")
     try:
+        content = (
+            "Is the following message related to stocks? Answer with 'True' or 'False'.\n"
+            "Message: " + message + "\nAnswer:"
+        )
+
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": f"Is the following message related to stocks? Answer with 'True' or 'False'.\nMessage: {
-                    message}\nAnswer:"}
+                {"role": "user", "content": content}
             ],
             max_tokens=1,
             temperature=0
