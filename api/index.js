@@ -3,6 +3,7 @@ const express = require("express");
 const morgan = require("morgan");
 const axios = require('axios'); // Import axios for making requests to the Flask server
 const jwt = require('jsonwebtoken');
+const cors = require('cors');
 const { getUserById } = require('../db/helperFunctions/user');
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -11,6 +12,16 @@ app.use(express.json()); // Ensure you can parse JSON bodies
 app.use(morgan('combined')); // Use morgan for logging
 
 const apiRouter = express.Router();
+
+apiRouter.use(cors({
+    origin: ['http://localhost:3000', 'https://lumen-0q0f.onrender.com', 'https://lumen-back-end-flask.onrender.com'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    preflightContinue: false,
+    optionsSuccessStatus: 204
+}));
+
 
 // JWT Middleware for authentication
 apiRouter.use(async (req, res, next) => {
