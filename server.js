@@ -13,12 +13,13 @@ const { handleWebSocket, restartWebSocket } = require('./api/finnhubAPI/finnhubW
 const importAllCSVFiles = require('./db/fetchS3Data');
 
 // Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-app.use(morgan('dev'));
 app.use(cors({
-    origin: ['http://localhost:3000', 'https://lumen-0q0f.onrender.com'],
-    credentials: true
+    origin: ['http://localhost:3000', 'https://lumen-0q0f.onrender.com', 'https://lumen-back-end-flask.onrender.com'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    preflightContinue: false,
+    optionsSuccessStatus: 204
 }));
 
 // Log the JWT_SECRET
