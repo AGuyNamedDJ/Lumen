@@ -149,8 +149,8 @@ async function createInitialUsers() {
     console.log("Creating initial users...");
     try {
         await createUser({
-            username: 'Owner1', 
-            password: 'SecurePass123!', 
+            username: 'AGNDJ', 
+            password: 'Dalron123!', 
             email: 'dalronj.robertson@gmail.com', 
             first_name: 'Dalron J.', 
             last_name: 'Robertson', 
