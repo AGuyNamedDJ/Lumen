@@ -2,6 +2,7 @@ import os
 import logging
 import openai
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -15,6 +16,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 # Initialize Flask app
 app = Flask(__name__)
+CORS(app)
 
 
 def classify_message(message):
