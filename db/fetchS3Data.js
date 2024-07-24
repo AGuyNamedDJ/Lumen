@@ -25,7 +25,7 @@ const removeCommas = str => str ? str.replace(/,/g, '') : '0';
  */
 async function importSpecificCSVFile(fileKey) {
     const params = {
-        Bucket: 'spx-data-bucket', // Name of the S3 bucket
+        Bucket: 'spy-data-bucket', // Name of the S3 bucket
         Key: fileKey // Key of the CSV file in the S3 bucket
     };
 
@@ -37,31 +37,15 @@ async function importSpecificCSVFile(fileKey) {
     // Parse the CSV file
     stream.pipe(csv.parse({ headers: true }))
         .on('data', row => {
-            let record;
-            // Check for the column names to handle different formats
-            if (row['Close/Last']) {
-                const [month, day, year] = row['Date'].split('/');
-                const formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-                record = [
-                    formattedDate,
-                    parseFloat(removeCommas(row['Open'])),
-                    parseFloat(removeCommas(row['High'])),
-                    parseFloat(removeCommas(row['Low'])),
-                    parseFloat(removeCommas(row['Close/Last'])),
-                    parseInt(removeCommas(row['Volume']), 10) || null
-                ];
-            } else {
-                const [month, day, year] = row['Date'].split('/');
-                const formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-                record = [
-                    formattedDate,
-                    parseFloat(removeCommas(row['Open'])),
-                    parseFloat(removeCommas(row['High'])),
-                    parseFloat(removeCommas(row['Low'])),
-                    parseFloat(removeCommas(row['Close'])),
-                    parseInt(removeCommas(row['Volume']), 10) || null
-                ];
-            }
+            const formattedDate = row['Date'];
+            const record = [
+                formattedDate,
+                parseFloat(removeCommas(row['Open'])),
+                parseFloat(removeCommas(row['High'])),
+                parseFloat(removeCommas(row['Low'])),
+                parseFloat(removeCommas(row['Close'])),
+                parseInt(removeCommas(row['Volume']), 10) || null
+            ];
 
             records.push(record);
             totalRecords++;
@@ -113,44 +97,8 @@ async function insertRecords(records, totalRecords, totalInserted) {
  */
 async function importAllCSVFiles() {
     const files = [
-        'HistoricalData_1713558856481.csv',
-        'SPX-Data-2024.csv', 
-        'SPX-Data-2013.csv', 
-        'SPX-Data-2012.csv',
-        'SPX-Data-2011.csv', 
-        'SPX-Data-2010.csv', 
-        'SPX-Data-2009.csv',
-        'SPX-Data-2008.csv', 
-        'SPX-Data-2007.csv', 
-        'SPX-Data-2006.csv',
-        'SPX-Data-2005.csv', 
-        'SPX-Data-2004.csv',
-        'SPX-Data-2003.csv',
-        'SPX-Data-2002.csv',
-        'SPX-Data-2001.csv',
-        'SPX-Data-2000.csv',
-        'SPX-Data-1999.csv',
-        'SPX-Data-1998.csv',
-        'SPX-Data-1997.csv',
-        'SPX-Data-1996.csv',
-        'SPX-Data-1995.csv',
-        'SPX-Data-1994.csv',
-        'SPX-Data-1993.csv',
-        'SPX-Data-1992.csv',
-        'SPX-Data-1991.csv',
-        'SPX-Data-1990.csv',
-        'SPX-Data-1989.csv',
-        'SPX-Data-1988.csv',
-        'SPX-Data-1987.csv',
-        'SPX-Data-1986.csv',
-        'SPX-Data-1985.csv',
-        'SPX-Data-1984.csv',
-        'SPX-Data-1983.csv',
-        'SPX-Data-1982.csv',
-        'SPX-Data-1981.csv',
-        'SPX-Data-1980.csv',
-        'SPX-Data-1979.csv',
-        'SPX-Data-1978.csv'
+        'SPY.csv'
+        // Add other CSV files as needed
     ];
 
     for (const file of files) {

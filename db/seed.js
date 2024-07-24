@@ -26,7 +26,6 @@ async function dropTables() {
             DROP TABLE IF EXISTS trades CASCADE;
             DROP TABLE IF EXISTS decision_rules;
             DROP TABLE IF EXISTS alerts CASCADE;
-            DROP TABLE IF EXISTS real_time_spx CASCADE;
             DROP TABLE IF EXISTS market_data CASCADE;
             DROP TABLE IF EXISTS audit_logs CASCADE;
             DROP TABLE IF EXISTS configurations CASCADE;
