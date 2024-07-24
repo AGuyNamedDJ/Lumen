@@ -1,6 +1,6 @@
 import os
-from openai import OpenAI
 import logging
+from openai import OpenAI
 from dotenv import load_dotenv
 
 # Load .env file
@@ -29,7 +29,6 @@ def get_openai_response(prompt, max_tokens=150):
             temperature=0.7
         )
         logging.debug(f"OpenAI response: {response}")
-        # Adjusted access to message content
         return response.choices[0].message.content.strip()
     except Exception as e:
         logging.error(f"Error in OpenAI response: {e}")
