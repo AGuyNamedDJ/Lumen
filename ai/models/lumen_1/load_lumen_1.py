@@ -1,6 +1,6 @@
 import os
-import json
-from openai import OpenAI
+import logging
+from tensorflow.keras.models import load_model
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -9,36 +9,36 @@ project_root = os.path.abspath(os.path.join(current_dir, '../../../'))
 dotenv_path = os.path.join(project_root, '.env')
 load_dotenv(dotenv_path)
 
-# Initialize OpenAI client
-api_key = os.getenv('OPENAI_API_KEY')
-
-if api_key:
-    client = OpenAI(api_key=api_key)
-else:
-    print("API key is not set. Please check the .env file.")
-    client = None
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
 
 
-def load_fine_tuned_model(model_path):
-    if client is None:
-        print("Client is not initialized. Exiting...")
-        return
-
+def load_lumen_model():
+    model_path = os.path.join(os.path.dirname(__file__), 'trained_model.keras')
     try:
-        # Load the saved model from file
-        with open(model_path, 'r') as f:
-            model = json.load(f)
-        print(f"Model loaded from {model_path}")
+        model = load_model(model_path)
+        logging.debug("Lumen model loaded successfully.")
         return model
     except Exception as e:
-        print(f"Unexpected error: {e}")
-        return None
+        logging.error(f"Error loading Lumen model: {e}")
+        raise e
 
 
-def main():
-    model_path = 'models/lumen_1/saved_model_lumen_1.json'
-    model = load_fine_tuned_model(model_path)
+def load_preprocessed_data():
+    data_path = os.path.join(os.path.dirname(
+        __file__), '../../data/lumen_1/processed/fine_tune_data.json')
+    try:
+        with open(data_path, 'r') as file:
+            data = json.load(file)
+        logging.debug("Preprocessed data loaded successfully.")
+        return data
+    except Exception as e:
+        logging.error(f"Error loading preprocessed data: {e}")
+        raise e
 
 
 if __name__ == "__main__":
-    main()
+    model = load_lumen_model()
+    data = load_preprocessed_data()
+    logging.debug(f"Loaded model: {model}")
+    logging.debug(f"Loaded preprocessed data: {data}")

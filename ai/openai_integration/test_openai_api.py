@@ -12,7 +12,7 @@ client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 def test_openai_api():
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "user", "content": "Hello, how are you?"}
             ]
