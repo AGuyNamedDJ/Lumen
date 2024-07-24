@@ -5,6 +5,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 
+
 # Load environment variables
 load_dotenv()
 
@@ -16,7 +17,8 @@ logging.basicConfig(level=logging.DEBUG)
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}},
+     supports_credentials=True)  # Enable CORS
 
 
 def classify_message(message):
