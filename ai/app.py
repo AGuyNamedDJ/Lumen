@@ -5,21 +5,20 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 
-
 # Load environment variables
 load_dotenv()
 
 # Initialize the OpenAI client
-client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 
+
 # Initialize Flask app
 app = Flask(__name__)
-
-# Enable CORS
-CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
+CORS(app, resources={r"/*": {"origins": ["http://localhost:3000",
+     "https://lumen-1.netlify.app/"]}}, supports_credentials=True)
 
 
 def classify_message(message):
@@ -30,7 +29,7 @@ def classify_message(message):
             "Message: " + message + "\nAnswer:"
         )
 
-        response = client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
@@ -105,6 +104,20 @@ def process_lumen_model(message, reference_price=None):
         return {"error": str(e)}
 
 
+@app.before_request
+def handle_preflight():
+    if request.method == 'OPTIONS':
+        response = app.make_default_options_response()
+        headers = response.headers
+
+        headers['Access-Control-Allow-Origin'] = '*'
+        headers['Access-Control-Allow-Methods'] = 'POST, GET, OPTIONS, PUT, DELETE'
+        headers['Access-Control-Allow-Credentials'] = 'true'
+        headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+
+        return response
+
+
 @app.route('/conversation', methods=['POST'])
 def conversation():
     request_data = request.get_json()
@@ -128,7 +141,7 @@ def conversation():
     else:
         logging.debug(f"Message is general, processing with ChatGPT-4o-mini")
         try:
-            response = client.chat.completions.create(
+            response = openai.ChatCompletion.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": message}],
                 max_tokens=150,
