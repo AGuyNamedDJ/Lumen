@@ -3,7 +3,7 @@ const conversationRouter = express.Router();
 const axios = require('axios');
 require('dotenv').config();
 
-const AI_BACKEND_URL = process.env.AI_BACKEND_URL || 'http://localhost:5000';  // URL to your Python backend
+const AI_BACKEND_URL = process.env.AI_BACKEND_URL || 'https://lumen-back-end-flask.onrender.com';  // URL to your Python backend
 
 // Middleware
 conversationRouter.use((req, res, next) => {
