@@ -17,8 +17,9 @@ logging.basicConfig(level=logging.DEBUG)
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}},
-     supports_credentials=True)  # Enable CORS
+
+# Enable CORS
+CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
 
 
 def classify_message(message):
