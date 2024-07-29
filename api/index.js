@@ -5,6 +5,7 @@ const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const { getUserById } = require('../db/helperFunctions/user');
+const { getSPXPrice } = require('./finnhubAPI/finnhubAPI');
 const JWT_SECRET = process.env.JWT_SECRET;
 
 const app = express();
@@ -83,6 +84,16 @@ apiRouter.use((error, req, res, next) => {
     res.status(500).send({ message: error.message });
 });
 
+// Endpoint to get current SPX price
+apiRouter.get('/spx-price', async (req, res) => {
+    try {
+        const price = await getSPXPrice();
+        res.json({ price });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch SPX price' });
+    }
+});
+
 // Importing and using routers
 const conversationsRouter = require('./helperFunctions/conversations');
 const finnhubRoutes = require('./finnhubAPI');
@@ -90,6 +101,7 @@ const loginRouter = require('./helperFunctions/login');
 const lumen1Router = require('./lumen_1');
 const messagesRouter = require('./helperFunctions/messages');
 const signupRouter = require('./helperFunctions/signup');
+const spxPriceRouter = require('./finnhubAPI/spxPriceRouter');
 const userRouter = require('./helperFunctions/user');
 apiRouter.use('/conversations', conversationsRouter);
 apiRouter.use('/finnhub', finnhubRoutes);
@@ -97,6 +109,7 @@ apiRouter.use('/login', loginRouter);
 apiRouter.use('/lumen_1', lumen1Router);
 apiRouter.use('/messages', messagesRouter);
 apiRouter.use('/signup', signupRouter);
+apiRouter.use('/spx-price', spxPriceRouter);
 apiRouter.use('/user', userRouter);
 
 module.exports = { apiRouter };
