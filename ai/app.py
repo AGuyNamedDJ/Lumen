@@ -37,7 +37,7 @@ def classify_message(message):
                                                       {"role": "system",
                                                           "content": "You are a helpful assistant."},
                                                       {"role": "user",
-                                                       "content": content}
+                                                          "content": content}
                                                   ],
                                                   max_tokens=1,
                                                   temperature=0)
@@ -102,7 +102,7 @@ def process_lumen_model(message, reference_price=None):
         return {"error": str(e)}
 
 
-@ app.before_request
+@app.before_request
 def handle_preflight():
     if request.method == 'OPTIONS':
         response = app.make_default_options_response()
@@ -114,7 +114,7 @@ def handle_preflight():
         return response
 
 
-@ app.route('/classify', methods=['POST'])
+@app.route('/classify', methods=['POST'])
 def classify():
     request_data = request.get_json()
     message = request_data.get('message')
@@ -124,7 +124,7 @@ def classify():
     return jsonify(result), 200
 
 
-@ app.route('/conversation', methods=['POST'])
+@app.route('/conversation', methods=['POST'])
 def conversation():
     request_data = request.get_json()
     message = request_data.get('message')
@@ -142,23 +142,29 @@ def conversation():
         logging.debug(f"Message is stock-related, processing with Lumen model")
         lumen_result = process_lumen_model(message, reference_price)
         if 'error' in lumen_result:
-            return jsonify({"error": lumen_result['error']}), 500
+            logging.debug(
+                f"Lumen model encountered an error, falling back to ChatGPT-4o-mini")
+            return fallback_to_gpt(message)
         return jsonify(lumen_result), 200
     else:
-        logging.debug(f"Message is general, processing with ChatGPT-4o-mini")
-        try:
-            response = client.chat.completions.create(model="gpt-4o-mini",
-                                                      messages=[
-                                                          {"role": "user", "content": message}],
-                                                      max_tokens=150,
-                                                      temperature=0.7)
-            ai_response = response.choices[0].message.content.strip()
-            logging.debug(f"AI response: {ai_response}")
-            return jsonify({"response": ai_response}), 200
-        except Exception as e:
-            logging.error(
-                f"Error processing conversation with ChatGPT-4o-mini: {e}")
-            return jsonify({"error": str(e)}), 500
+        return fallback_to_gpt(message)
+
+
+def fallback_to_gpt(message):
+    logging.debug(f"Falling back to ChatGPT-4o-mini")
+    try:
+        response = client.chat.completions.create(model="gpt-4o-mini",
+                                                  messages=[
+                                                      {"role": "user", "content": message}],
+                                                  max_tokens=150,
+                                                  temperature=0.7)
+        ai_response = response.choices[0].message.content.strip()
+        logging.debug(f"AI response: {ai_response}")
+        return jsonify({"response": ai_response}), 200
+    except Exception as e:
+        logging.error(
+            f"Error processing conversation with ChatGPT-4o-mini: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == '__main__':
