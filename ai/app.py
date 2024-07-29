@@ -82,21 +82,21 @@ def process_lumen_model(message, reference_price=None):
 
         logging.debug(f"Data with defaults: {data_dict}")
 
-        normalized_closing_price = 0.999
+        normalized_closing_price = 0.999  # This should come from the model
 
         if reference_price:
             predicted_price = normalized_closing_price * reference_price
             current_close = data_dict['close'] * reference_price
             percentage_change = (
                 (predicted_price - current_close) / current_close) * 100
+            predicted_price = round(predicted_price, 2)
         else:
-            predicted_price = normalized_closing_price
-            percentage_change = None
+            predicted_price = "Data not available"
+            percentage_change = "Data not available"
 
-        # Ensure the response has valid data
         return {
-            "predicted_closing_price": round(predicted_price, 2) if predicted_price is not None else 'Data not available',
-            "percentage_change": round(percentage_change, 2) if percentage_change is not None else 'Data not available'
+            "predicted_closing_price": predicted_price,
+            "percentage_change": round(percentage_change, 2) if percentage_change != "Data not available" else percentage_change
         }
     except Exception as e:
         logging.error(f"Error processing conversation with Lumen model: {e}")
