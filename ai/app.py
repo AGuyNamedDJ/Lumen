@@ -93,9 +93,10 @@ def process_lumen_model(message, reference_price=None):
             predicted_price = normalized_closing_price
             percentage_change = None
 
+        # Ensure the response has valid data
         return {
-            "predicted_closing_price": round(predicted_price, 2),
-            "percentage_change": round(percentage_change, 2) if percentage_change is not None else None
+            "predicted_closing_price": round(predicted_price, 2) if predicted_price is not None else 'Data not available',
+            "percentage_change": round(percentage_change, 2) if percentage_change is not None else 'Data not available'
         }
     except Exception as e:
         logging.error(f"Error processing conversation with Lumen model: {e}")
