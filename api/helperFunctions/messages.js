@@ -15,7 +15,7 @@ messagesRouter.post('/', async (req, res) => {
     }
 
     try {
-        const message = await createMessage({ conversation_id: conversationId, role, content });
+        const message = await createMessage({ conversationId, role, content });
         console.log("POST /messages - Message created:", message);
         res.status(201).json(message);
     } catch (error) {
