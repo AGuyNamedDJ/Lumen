@@ -1,6 +1,6 @@
 import os
 import logging
-import openai
+from openai import OpenAI
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -9,7 +9,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Initialize the OpenAI client
-openai.api_key = os.getenv("OPENAI_API_KEY")
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    raise ValueError("The OPENAI_API_KEY environment variable is not set")
+
+client = OpenAI(api_key=api_key)
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -17,7 +21,7 @@ logging.basicConfig(level=logging.DEBUG)
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": ["http://localhost:3000",
-     "https://lumen-1.netlify.app"]}}, supports_credentials=True)
+                                         "https://lumen-1.netlify.app/"]}}, supports_credentials=True)
 
 
 def classify_message(message):
@@ -28,15 +32,15 @@ def classify_message(message):
             "Message: " + message + "\nAnswer:"
         )
 
-        response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": content}
-            ],
-            max_tokens=1,
-            temperature=0
-        )
+        response = client.chat.completions.create(model="gpt-4o-mini",
+                                                  messages=[
+                                                      {"role": "system",
+                                                          "content": "You are a helpful assistant."},
+                                                      {"role": "user",
+                                                       "content": content}
+                                                  ],
+                                                  max_tokens=1,
+                                                  temperature=0)
         classification = response.choices[0].message.content.strip().lower()
         logging.debug(f"Classification response: {classification}")
         return {"is_stock_related": classification == 'true'}
@@ -98,21 +102,29 @@ def process_lumen_model(message, reference_price=None):
         return {"error": str(e)}
 
 
-@app.before_request
+@ app.before_request
 def handle_preflight():
     if request.method == 'OPTIONS':
         response = app.make_default_options_response()
         headers = response.headers
-
         headers['Access-Control-Allow-Origin'] = '*'
         headers['Access-Control-Allow-Methods'] = 'POST, GET, OPTIONS, PUT, DELETE'
         headers['Access-Control-Allow-Credentials'] = 'true'
         headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
-
         return response
 
 
-@app.route('/conversation', methods=['POST'])
+@ app.route('/classify', methods=['POST'])
+def classify():
+    request_data = request.get_json()
+    message = request_data.get('message')
+    if not message:
+        return jsonify({"error": "No message provided"}), 400
+    result = classify_message(message)
+    return jsonify(result), 200
+
+
+@ app.route('/conversation', methods=['POST'])
 def conversation():
     request_data = request.get_json()
     message = request_data.get('message')
@@ -135,12 +147,11 @@ def conversation():
     else:
         logging.debug(f"Message is general, processing with ChatGPT-4o-mini")
         try:
-            response = openai.ChatCompletion.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": message}],
-                max_tokens=150,
-                temperature=0.7
-            )
+            response = client.chat.completions.create(model="gpt-4o-mini",
+                                                      messages=[
+                                                          {"role": "user", "content": message}],
+                                                      max_tokens=150,
+                                                      temperature=0.7)
             ai_response = response.choices[0].message.content.strip()
             logging.debug(f"AI response: {ai_response}")
             return jsonify({"response": ai_response}), 200
