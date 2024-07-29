@@ -1,6 +1,5 @@
 const express = require('express');
 const { createConversation, getAllConversations, getConversationById, updateConversation, deleteConversation } = require('../../db/helperFunctions/conversations');
-const { createMessage, getMessagesByConversationId } = require('../../db/helperFunctions/messages');
 
 const conversationsRouter = express.Router();
 
@@ -9,6 +8,10 @@ conversationsRouter.post('/', async (req, res) => {
     console.log("POST /conversations - Request received");
     const { userId } = req.body;
     console.log("POST /conversations - userId:", userId);
+
+    if (!userId) {
+        return res.status(400).json({ message: 'userId is required' });
+    }
 
     try {
         const conversation = await createConversation({ userId });

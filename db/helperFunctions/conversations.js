@@ -1,91 +1,77 @@
-const express = require('express');
-const { createConversation, getAllConversations, getConversationById, updateConversation, deleteConversation } = require('../../db/helperFunctions/conversations');
-
-const conversationsRouter = express.Router();
+const { client } = require("../index");
 
 // Create Conversation
-conversationsRouter.post('/', async (req, res) => {
-    console.log("POST /conversations - Request received");
-    const { userId } = req.body;
-    console.log("POST /conversations - userId:", userId);
-
-    if (!userId) {
-        return res.status(400).json({ message: 'userId is required' });
-    }
-
+async function createConversation({ userId }) {
     try {
-        const conversation = await createConversation({ userId });
-        console.log("POST /conversations - Conversation created:", conversation);
-        res.status(201).json(conversation);
+        const result = await client.query(`
+            INSERT INTO conversations (user_id)
+            VALUES ($1)
+            RETURNING *;
+        `, [userId]);
+
+        return result.rows[0];
     } catch (error) {
-        console.error("POST /conversations - Error creating conversation:", error);
-        res.status(500).json({ message: 'Internal server error' });
+        console.error('Error creating conversation:', error);
+        throw error;
     }
-});
+}
 
 // Get All Conversations
-conversationsRouter.get('/', async (req, res) => {
-    console.log("GET /conversations - Request received");
-
+async function getAllConversations() {
     try {
-        const conversations = await getAllConversations();
-        console.log("GET /conversations - Conversations fetched:", conversations);
-        res.status(200).json(conversations);
+        const result = await client.query('SELECT * FROM conversations;');
+        return result.rows;
     } catch (error) {
-        console.error("GET /conversations - Error fetching conversations:", error);
-        res.status(500).json({ message: 'Internal server error' });
+        console.error('Error getting all conversations:', error);
+        throw error;
     }
-});
+}
 
-// Get Conversation by ID
-conversationsRouter.get('/:id', async (req, res) => {
-    const { id } = req.params;
-    console.log("GET /conversations/:id - Request received for id:", id);
-
+// Get Conversation By ID
+async function getConversationById(id) {
     try {
-        const conversation = await getConversationById(id);
-        if (conversation) {
-            console.log("GET /conversations/:id - Conversation fetched:", conversation);
-            res.status(200).json(conversation);
-        } else {
-            console.log("GET /conversations/:id - Conversation not found for id:", id);
-            res.status(404).json({ message: 'Conversation not found' });
-        }
+        const result = await client.query('SELECT * FROM conversations WHERE id = $1;', [id]);
+        return result.rows[0];
     } catch (error) {
-        console.error("GET /conversations/:id - Error fetching conversation:", error);
-        res.status(500).json({ message: 'Internal server error' });
+        console.error('Error getting conversation by ID:', error);
+        throw error;
     }
-});
+}
 
 // Update Conversation
-conversationsRouter.put('/:id', async (req, res) => {
-    const { id } = req.params;
-    const fields = req.body;
-    console.log("PUT /conversations/:id - Request received for id:", id, "with fields:", fields);
+async function updateConversation(id, fields = {}) {
+    const setString = Object.keys(fields).map((key, index) => `"${key}"=$${index + 1}`).join(', ');
 
     try {
-        const updatedConversation = await updateConversation(id, fields);
-        console.log("PUT /conversations/:id - Conversation updated:", updatedConversation);
-        res.status(200).json(updatedConversation);
+        const result = await client.query(`
+            UPDATE conversations
+            SET ${setString}
+            WHERE id = $${Object.keys(fields).length + 1}
+            RETURNING *;
+        `, [...Object.values(fields), id]);
+
+        return result.rows[0];
     } catch (error) {
-        console.error("PUT /conversations/:id - Error updating conversation:", error);
-        res.status(500).json({ message: 'Internal server error' });
+        console.error('Error updating conversation:', error);
+        throw error;
     }
-});
+}
 
 // Delete Conversation
-conversationsRouter.delete('/:id', async (req, res) => {
-    const { id } = req.params;
-    console.log("DELETE /conversations/:id - Request received for id:", id);
-
+async function deleteConversation(id) {
     try {
-        const deletedConversation = await deleteConversation(id);
-        console.log("DELETE /conversations/:id - Conversation deleted:", deletedConversation);
-        res.status(200).json(deletedConversation);
+        const result = await client.query('DELETE FROM conversations WHERE id = $1 RETURNING *;', [id]);
+        return result.rows[0];
     } catch (error) {
-        console.error("DELETE /conversations/:id - Error deleting conversation:", error);
-        res.status(500).json({ message: 'Internal server error' });
+        console.error('Error deleting conversation:', error);
+        throw error;
     }
-});
+}
 
-module.exports = conversationsRouter;
+module.exports = {
+    createConversation,
+    getAllConversations,
+    getConversationById,
+    updateConversation,
+    deleteConversation
+}
