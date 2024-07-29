@@ -5,6 +5,27 @@ const cors = require('cors');
 const cron = require('node-cron');
 const axios = require('axios');
 const app = express();
+const winston = require('winston');
+
+// Setup Winston logger
+const logger = winston.createLogger({
+    level: 'debug',
+    format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.printf(({ timestamp, level, message }) => {
+            return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+        })
+    ),
+    transports: [
+        new winston.transports.Console()
+    ],
+});
+
+// Import project dirs
+const { apiRouter } = require('./api/index');
+const { client } = require('./db/index');
+const { handleWebSocket, restartWebSocket } = require('./api/finnhubAPI/finnhubWebsocket');
+const importAllCSVFiles = require('./db/fetchS3Data');
 
 // Middleware
 app.use(cors({
@@ -15,25 +36,24 @@ app.use(cors({
     preflightContinue: false,
     optionsSuccessStatus: 204
 }));
-app.use(express.json());
-app.use(morgan('combined'));
 
-// Import project dirs
-const { apiRouter } = require('./api/index');
-const { client } = require('./db/index');
-const { handleWebSocket, restartWebSocket } = require('./api/finnhubAPI/finnhubWebsocket');
-const importAllCSVFiles = require('./db/fetchS3Data');
+app.use(express.json());
+app.use(morgan('combined', {
+    stream: {
+        write: (message) => logger.info(message.trim())
+    }
+}));
 
 // Log the JWT_SECRET
-console.log('JWT_SECRET:', process.env.JWT_SECRET);
+logger.debug('JWT_SECRET:', process.env.JWT_SECRET);
 
 // Function to start WebSocket
 async function startWebSocket() {
     try {
         handleWebSocket();
-        console.log('WebSocket connection started');
+        logger.info('WebSocket connection started');
     } catch (error) {
-        console.error('Error starting WebSocket:', error);
+        logger.error('Error starting WebSocket:', error);
     }
 }
 
@@ -41,9 +61,9 @@ async function startWebSocket() {
 async function importCSVData() {
     try {
         await importAllCSVFiles();
-        console.log('CSV import completed');
+        logger.info('CSV import completed');
     } catch (error) {
-        console.error('Error importing CSV data:', error);
+        logger.error('Error importing CSV data:', error);
     }
 }
 
@@ -51,15 +71,15 @@ async function importCSVData() {
 async function startServer() {
     await importCSVData(); 
     await startWebSocket();
-    console.log('Server initialization completed');
-};
+    logger.info('Server initialization completed');
+}
 
 // Import CSV Data and Start WebSocket on Server Start
 startServer();
 
 // Schedule WebSocket restart every 15 minutes
 cron.schedule('*/15 * * * *', () => {
-    console.log('Cron job triggered: Restarting WebSocket connection...');
+    logger.info('Cron job triggered: Restarting WebSocket connection...');
     restartWebSocket();
 });
 
@@ -67,13 +87,13 @@ cron.schedule('*/15 * * * *', () => {
 const URL = `https://lumen-0q0f.onrender.com`;
 
 cron.schedule('*/5 * * * *', () => {
-    console.log('Sending keep-alive request to the server');
+    logger.info('Sending keep-alive request to the server');
     axios.get(URL)
         .then(response => {
-            console.log('Keep-alive request successful:', response.status);
+            logger.info('Keep-alive request successful:', response.status);
         })
         .catch(error => {
-            console.error('Keep-alive request failed:', error);
+            logger.error('Keep-alive request failed:', error);
         });
 });
 
@@ -86,19 +106,20 @@ app.use('/test-login', require('./api/helperFunctions/login'));
 // Catch-all route handler
 app.get("/", (req, res) => {
     res.send("Server is Running!");
+    logger.info('Root path accessed');
 });
 
 // Router Handlers
 client.connect().then(() => {
-    console.log('Connected to the database');
+    logger.info('Connected to the database');
 }).catch(error => {
-    console.error("Unable to connect to database.", error);
+    logger.error("Unable to connect to database.", error);
     process.exit(1);
 });
 
 // Close the database connection when the server stops
 process.on('exit', () => {
-    console.log('Closing database connection');
+    logger.info('Closing database connection');
     client.end();
 });
 
@@ -106,7 +127,7 @@ process.on('exit', () => {
 const PORT = process.env.PORT || 3001;
 if (process.env.NODE_ENV !== 'test') {
     app.listen(PORT, () => {
-        console.log(`Now running on port ${PORT}`);
+        logger.info(`Now running on port ${PORT}`);
     });
 }
 
