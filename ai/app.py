@@ -1,5 +1,6 @@
 import os
 import logging
+import requests
 from openai import OpenAI
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -35,9 +36,9 @@ def classify_message(message):
         response = client.chat.completions.create(model="gpt-4o-mini",
                                                   messages=[
                                                       {"role": "system",
-                                                          "content": "You are a helpful assistant."},
+                                                       "content": "You are a helpful assistant."},
                                                       {"role": "user",
-                                                          "content": content}
+                                                       "content": content}
                                                   ],
                                                   max_tokens=1,
                                                   temperature=0)
@@ -47,6 +48,30 @@ def classify_message(message):
     except Exception as e:
         logging.error(f"Error in message classification: {e}")
         return {"is_stock_related": False, "error": str(e)}
+
+
+def get_spx_price():
+    try:
+        # Adjust URL as needed
+        response = requests.get('http://localhost:3001/api/spx-price')
+        response.raise_for_status()
+        data = response.json()
+        return data['price']
+    except requests.RequestException as e:
+        logging.error(f"Error fetching SPX price: {e}")
+        return None
+
+
+def get_current_spx_price():
+    try:
+        response = requests.get(
+            'https://lumen-0q0f.onrender.com/api/spx-price')
+        response.raise_for_status()  # Raise an error for bad status codes
+        data = response.json()
+        return data.get('price')
+    except requests.RequestException as e:
+        logging.error(f"Error fetching current SPX price: {e}")
+        return None
 
 
 def process_lumen_model(message, reference_price=None):
@@ -82,21 +107,20 @@ def process_lumen_model(message, reference_price=None):
 
         logging.debug(f"Data with defaults: {data_dict}")
 
-        normalized_closing_price = 0.999  # This should come from the model
+        normalized_closing_price = 0.999
 
         if reference_price:
             predicted_price = normalized_closing_price * reference_price
             current_close = data_dict['close'] * reference_price
             percentage_change = (
                 (predicted_price - current_close) / current_close) * 100
-            predicted_price = round(predicted_price, 2)
         else:
-            predicted_price = "Data not available"
-            percentage_change = "Data not available"
+            predicted_price = normalized_closing_price
+            percentage_change = None
 
         return {
-            "predicted_closing_price": predicted_price,
-            "percentage_change": round(percentage_change, 2) if percentage_change != "Data not available" else percentage_change
+            "predicted_closing_price": round(predicted_price, 2),
+            "percentage_change": round(percentage_change, 2) if percentage_change is not None else None
         }
     except Exception as e:
         logging.error(f"Error processing conversation with Lumen model: {e}")
@@ -136,12 +160,17 @@ def conversation():
     if not message:
         return jsonify({"error": "No message provided"}), 400
 
+    # Fetch the current SPX price
+    current_spx_price = get_current_spx_price()
+    if not current_spx_price:
+        return jsonify({"error": "Could not fetch current SPX price"}), 500
+
     classification_result = classify_message(message)
     logging.debug(f"Classification result: {classification_result}")
 
     if classification_result.get('is_stock_related'):
         logging.debug(f"Message is stock-related, processing with Lumen model")
-        lumen_result = process_lumen_model(message, reference_price)
+        lumen_result = process_lumen_model(message, current_spx_price)
         if 'error' in lumen_result:
             logging.debug(
                 f"Lumen model encountered an error, falling back to ChatGPT-4o-mini")
