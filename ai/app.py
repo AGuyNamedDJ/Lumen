@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.DEBUG)
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": ["http://localhost:3000",
-     "https://lumen-1.netlify.app/"]}}, supports_credentials=True)
+     "https://lumen-1.netlify.app"]}}, supports_credentials=True)
 
 
 def classify_message(message):
@@ -47,15 +47,12 @@ def classify_message(message):
 
 def process_lumen_model(message, reference_price=None):
     try:
-        # Remove 'Given the market data: ' part from the message
         data_part = message.split(": ", 1)[1]
-
-        # Splitting the message and creating a dictionary with proper conversion
         data_points = data_part.split(", ")
         data_dict = {}
         for dp in data_points:
             try:
-                if ':' in dp:  # Ensure it has the correct format
+                if ':' in dp:
                     key, value = dp.split(": ")
                     data_dict[key.lower()] = float(value)
                 else:
@@ -66,7 +63,6 @@ def process_lumen_model(message, reference_price=None):
 
         logging.debug(f"Extracted data: {data_dict}")
 
-        # Provide default values if any data points are missing
         default_values = {
             'open': 1.0,
             'high': 1.0,
@@ -82,8 +78,7 @@ def process_lumen_model(message, reference_price=None):
 
         logging.debug(f"Data with defaults: {data_dict}")
 
-        # Placeholder for the Lumen model prediction
-        normalized_closing_price = 0.999  # Placeholder normalized value
+        normalized_closing_price = 0.999
 
         if reference_price:
             predicted_price = normalized_closing_price * reference_price
@@ -91,7 +86,7 @@ def process_lumen_model(message, reference_price=None):
             percentage_change = (
                 (predicted_price - current_close) / current_close) * 100
         else:
-            predicted_price = normalized_closing_price  # Default to normalized value
+            predicted_price = normalized_closing_price
             percentage_change = None
 
         return {

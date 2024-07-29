@@ -1,15 +1,15 @@
 require("dotenv").config();
 const express = require("express");
 const morgan = require("morgan");
-const axios = require('axios'); // Import axios for making requests to the Flask server
+const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const { getUserById } = require('../db/helperFunctions/user');
 const JWT_SECRET = process.env.JWT_SECRET;
 
 const app = express();
-app.use(express.json()); // Ensure you can parse JSON bodies
-app.use(morgan('combined')); // Use morgan for logging
+app.use(express.json());
+app.use(morgan('combined'));
 
 const apiRouter = express.Router();
 
@@ -21,7 +21,6 @@ apiRouter.use(cors({
     preflightContinue: false,
     optionsSuccessStatus: 204
 }));
-
 
 // JWT Middleware for authentication
 apiRouter.use(async (req, res, next) => {

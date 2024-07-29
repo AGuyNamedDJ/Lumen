@@ -6,12 +6,6 @@ const cron = require('node-cron');
 const axios = require('axios');
 const app = express();
 
-// Import project dirs
-const { apiRouter } = require('./api/index');
-const { client } = require('./db/index');
-const { handleWebSocket, restartWebSocket } = require('./api/finnhubAPI/finnhubWebsocket');
-const importAllCSVFiles = require('./db/fetchS3Data');
-
 // Middleware
 app.use(cors({
     origin: ['http://localhost:3000', 'https://lumen-0q0f.onrender.com', 'https://lumen-back-end-flask.onrender.com'],
@@ -21,6 +15,14 @@ app.use(cors({
     preflightContinue: false,
     optionsSuccessStatus: 204
 }));
+app.use(express.json());
+app.use(morgan('combined'));
+
+// Import project dirs
+const { apiRouter } = require('./api/index');
+const { client } = require('./db/index');
+const { handleWebSocket, restartWebSocket } = require('./api/finnhubAPI/finnhubWebsocket');
+const importAllCSVFiles = require('./db/fetchS3Data');
 
 // Log the JWT_SECRET
 console.log('JWT_SECRET:', process.env.JWT_SECRET);
