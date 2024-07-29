@@ -9,3 +9,4 @@ python-dotenv
 scikit-learn
 sqlalchemy
 werkzeug
+requests
