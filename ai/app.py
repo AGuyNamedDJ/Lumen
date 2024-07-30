@@ -26,7 +26,7 @@ CORS(app, resources={r"/*": {"origins": ["http://localhost:3000",
 
 
 def classify_message(message):
-    logging.debug(f"Classifying message: {message}")
+    logging.debug("Classifying message: %s", message)
     try:
         content = (
             "Is the following message related to stocks? Answer with 'True' or 'False'.\n"
@@ -43,22 +43,21 @@ def classify_message(message):
                                                   max_tokens=1,
                                                   temperature=0)
         classification = response.choices[0].message.content.strip().lower()
-        logging.debug(f"Classification response: {classification}")
+        logging.debug("Classification response: %s", classification)
         return {"is_stock_related": classification == 'true'}
     except Exception as e:
-        logging.error(f"Error in message classification: {e}")
+        logging.error("Error in message classification: %s", e)
         return {"is_stock_related": False, "error": str(e)}
 
 
 def get_spx_price():
     try:
-        # Adjust URL as needed
         response = requests.get('http://localhost:3001/api/spx-price')
         response.raise_for_status()
         data = response.json()
         return data['price']
     except requests.RequestException as e:
-        logging.error(f"Error fetching SPX price: {e}")
+        logging.error("Error fetching SPX price: %s", e)
         return None
 
 
@@ -70,7 +69,7 @@ def get_current_spx_price():
         data = response.json()
         return data.get('price')
     except requests.RequestException as e:
-        logging.error(f"Error fetching current SPX price: {e}")
+        logging.error("Error fetching current SPX price: %s", e)
         return None
 
 
@@ -85,12 +84,12 @@ def process_lumen_model(message, reference_price=None):
                     key, value = dp.split(": ")
                     data_dict[key.lower()] = float(value)
                 else:
-                    logging.warning(f"Skipping non-data point: {dp}")
+                    logging.warning("Skipping non-data point: %s", dp)
             except ValueError as e:
-                logging.error(f"Error parsing data point '{dp}': {e}")
-                raise ValueError(f"Error parsing data point '{dp}': {e}")
+                logging.error("Error parsing data point '%s': %s", dp, e)
+                raise ValueError("Error parsing data point '%s': %s" % (dp, e))
 
-        logging.debug(f"Extracted data: {data_dict}")
+        logging.debug("Extracted data: %s", data_dict)
 
         default_values = {
             'open': 1.0,
@@ -105,7 +104,7 @@ def process_lumen_model(message, reference_price=None):
         for key, default_value in default_values.items():
             data_dict.setdefault(key, default_value)
 
-        logging.debug(f"Data with defaults: {data_dict}")
+        logging.debug("Data with defaults: %s", data_dict)
 
         normalized_closing_price = 0.999
 
@@ -123,7 +122,7 @@ def process_lumen_model(message, reference_price=None):
             "percentage_change": round(percentage_change, 2) if percentage_change is not None else None
         }
     except Exception as e:
-        logging.error(f"Error processing conversation with Lumen model: {e}")
+        logging.error("Error processing conversation with Lumen model: %s", e)
         return {"error": str(e)}
 
 
@@ -153,8 +152,8 @@ def classify():
 def conversation():
     request_data = request.get_json()
     message = request_data.get('message')
-    logging.debug(f"Received a request at /conversation endpoint")
-    logging.debug(f"Request JSON data: {request_data}")
+    logging.debug("Received a request at /conversation endpoint")
+    logging.debug("Request JSON data: %s", request_data)
 
     if not message:
         return jsonify({"error": "No message provided"}), 400
@@ -165,26 +164,26 @@ def conversation():
         return jsonify({"error": "Could not fetch current SPX price"}), 500
 
     classification_result = classify_message(message)
-    logging.debug(f"Classification result: {classification_result}")
+    logging.debug("Classification result: %s", classification_result)
 
     if classification_result.get('is_stock_related'):
-        logging.debug(f"Message is stock-related, processing with Lumen model")
+        logging.debug("Message is stock-related, processing with Lumen model")
         lumen_result = process_lumen_model(message, current_spx_price)
         if 'error' in lumen_result:
             logging.debug(
-                f"Lumen model encountered an error, falling back to ChatGPT-4o-mini")
+                "Lumen model encountered an error, falling back to ChatGPT-4o-mini")
             return fallback_to_gpt(message)
 
         # Convert dictionary response to a string
-        lumen_response_text = f"Predicted closing price: {
-            lumen_result['predicted_closing_price']}, Percentage change: {lumen_result['percentage_change']}"
+        lumen_response_text = "Predicted closing price: {}, Percentage change: {}".format(
+            lumen_result['predicted_closing_price'], lumen_result['percentage_change'])
         return jsonify({"response": lumen_response_text}), 200
     else:
         return fallback_to_gpt(message)
 
 
 def fallback_to_gpt(message):
-    logging.debug(f"Falling back to ChatGPT-4o-mini")
+    logging.debug("Falling back to ChatGPT-4o-mini")
     try:
         response = client.chat.completions.create(model="gpt-4o-mini",
                                                   messages=[
@@ -192,11 +191,11 @@ def fallback_to_gpt(message):
                                                   max_tokens=150,
                                                   temperature=0.7)
         ai_response = response.choices[0].message.content.strip()
-        logging.debug(f"AI response: {ai_response}")
+        logging.debug("AI response: %s", ai_response)
         return jsonify({"response": ai_response}), 200
     except Exception as e:
         logging.error(
-            f"Error processing conversation with ChatGPT-4o-mini: {e}")
+            "Error processing conversation with ChatGPT-4o-mini: %s", e)
         return jsonify({"error": str(e)}), 500
 
 
