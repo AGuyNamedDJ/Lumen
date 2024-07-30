@@ -6,7 +6,7 @@ openai
 pandas
 psycopg2-binary
 python-dotenv
+requests
 scikit-learn
 sqlalchemy
 werkzeug
-requests
