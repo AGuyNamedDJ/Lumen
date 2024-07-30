@@ -153,7 +153,6 @@ def classify():
 def conversation():
     request_data = request.get_json()
     message = request_data.get('message')
-    reference_price = request_data.get('reference_price')
     logging.debug(f"Received a request at /conversation endpoint")
     logging.debug(f"Request JSON data: {request_data}")
 
@@ -175,7 +174,11 @@ def conversation():
             logging.debug(
                 f"Lumen model encountered an error, falling back to ChatGPT-4o-mini")
             return fallback_to_gpt(message)
-        return jsonify(lumen_result), 200
+
+        # Convert dictionary response to a string
+        lumen_response_text = f"Predicted closing price: {
+            lumen_result['predicted_closing_price']}, Percentage change: {lumen_result['percentage_change']}"
+        return jsonify({"response": lumen_response_text}), 200
     else:
         return fallback_to_gpt(message)
 
