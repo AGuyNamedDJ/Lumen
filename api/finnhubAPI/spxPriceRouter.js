@@ -3,6 +3,7 @@ const { getRealTimeQuotes } = require('./finnhubAPI');
 
 const router = express.Router();
 
+// 
 router.get('/spx-price', (req, res) => {
     getRealTimeQuotes('SPY', (error, data) => {
         if (error) {
