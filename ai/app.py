@@ -188,7 +188,7 @@ def fallback_to_gpt(message):
         response = client.chat.completions.create(model="gpt-4o-mini",
                                                   messages=[
                                                       {"role": "user", "content": message}],
-                                                  max_tokens=150,
+                                                  max_tokens=800,
                                                   temperature=0.7)
         ai_response = response.choices[0].message.content.strip()
         logging.debug("AI response: %s", ai_response)
