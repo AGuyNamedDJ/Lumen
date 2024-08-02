@@ -19,7 +19,7 @@ client = OpenAI(api_key=api_key)
 logging.basicConfig(level=logging.DEBUG)
 
 
-def get_openai_response(prompt, max_tokens=150):
+def get_openai_response(prompt, max_tokens=800):
     logging.debug(f"Sending prompt to OpenAI: {prompt}")
     try:
         response = client.chat.completions.create(
