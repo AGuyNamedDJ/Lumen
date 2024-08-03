@@ -76,7 +76,7 @@ async function insertRecords(records, totalRecords, totalInserted) {
     try {
         await client.query('BEGIN');
         const query = `
-            INSERT INTO historical_spx (timestamp, open, high, low, close, volume)
+            INSERT INTO historical_spy (timestamp, open, high, low, close, volume)
             VALUES ($1, $2, $3, $4, $5, $6);
         `;
         for (const record of records) {
@@ -95,7 +95,7 @@ async function insertRecords(records, totalRecords, totalInserted) {
 /**
  * Function to import all CSV files from S3
  */
-async function importAllCSVFiles() {
+async function importAllSPYCSVFiles() {
     const files = [
         'SPY.csv'
         // Add other CSV files as needed
@@ -109,4 +109,4 @@ async function importAllCSVFiles() {
     console.log('Finished importing all CSV files.');
 }
 
-module.exports = importAllCSVFiles;
+module.exports = importAllSPYCSVFiles;

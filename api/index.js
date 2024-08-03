@@ -6,6 +6,8 @@ const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const { getUserById } = require('../db/helperFunctions/user');
 const { getSPXPrice } = require('./finnhubAPI/finnhubAPI');
+const { getCurrentDateTime } = require('../utils/getCurrentDataTime');
+
 const JWT_SECRET = process.env.JWT_SECRET;
 
 const app = express();
@@ -70,7 +72,10 @@ apiRouter.post('/openai', async (req, res) => {
     console.log("POST /openai - Request received with message:", message);
 
     try {
-        const response = await axios.post('https://lumen-back-end-flask.onrender.com/conversation', { message });
+        const currentDateTime = getCurrentDateTime();
+        const enhancedMessage = `Current Date and Time: ${currentDateTime}\nUser Query: ${message}`;
+
+        const response = await axios.post('https://lumen-back-end-flask.onrender.com/conversation', { message: enhancedMessage });
         console.log("POST /openai - OpenAI response:", response.data);
         res.status(200).json(response.data);
     } catch (error) {
@@ -100,6 +105,7 @@ const finnhubRoutes = require('./finnhubAPI');
 const loginRouter = require('./helperFunctions/login');
 const lumen1Router = require('./lumen_1');
 const messagesRouter = require('./helperFunctions/messages');
+const polygonRouter = require('./polygonApi/index');
 const signupRouter = require('./helperFunctions/signup');
 const spxPriceRouter = require('./finnhubAPI/spxPriceRouter');
 const userRouter = require('./helperFunctions/user');
@@ -108,6 +114,7 @@ apiRouter.use('/finnhub', finnhubRoutes);
 apiRouter.use('/login', loginRouter);
 apiRouter.use('/lumen_1', lumen1Router);
 apiRouter.use('/messages', messagesRouter);
+apiRouter.use('/polygon', polygonRouter);
 apiRouter.use('/signup', signupRouter);
 apiRouter.use('/spx-price', spxPriceRouter);
 apiRouter.use('/user', userRouter);

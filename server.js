@@ -25,7 +25,8 @@ const logger = winston.createLogger({
 const { apiRouter } = require('./api/index');
 const { client } = require('./db/index');
 const { handleWebSocket, restartWebSocket } = require('./api/finnhubAPI/finnhubWebsocket');
-const importAllCSVFiles = require('./db/fetchS3Data');
+const importAllSPXCSVFiles = require('./db/fetchS3DataForSPX');
+const importAllSPYCSVFiles = require('./db//fetchS3DataForSPY');
 
 // Middleware
 app.use(cors({
@@ -60,7 +61,8 @@ async function startWebSocket() {
 // Function to import CSV data
 async function importCSVData() {
     try {
-        await importAllCSVFiles();
+        await importAllSPXCSVFiles();
+        await importAllSPYCSVFiles();
         logger.info('CSV import completed');
     } catch (error) {
         logger.error('Error importing CSV data:', error);
