@@ -19,8 +19,8 @@ const handleWebSocket = () => {
 
     socket.on('open', () => {
         console.log('WebSocket connection opened');
-        socket.send(JSON.stringify({ 'type': 'subscribe', 'symbol': 'SPY' })); 
-        // Possible Symbols FXCM:SPX500, ^GSPC
+        socket.send(JSON.stringify({ 'type': 'subscribe', 'symbol': 'GSPC' })); 
+        // Possible Symbols FXCM:SPX500, ^GSPC SPY
         console.log('Subscribed to ^GSPC trade data');
     });
 

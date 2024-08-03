@@ -82,6 +82,15 @@ async function createTables() {
             close NUMERIC NOT NULL,
             volume BIGINT
         );
+        CREATE TABLE IF NOT EXISTS historical_spy (
+            id SERIAL PRIMARY KEY,
+            timestamp TIMESTAMP NOT NULL,
+            open NUMERIC NOT NULL,
+            high NUMERIC NOT NULL,
+            low NUMERIC NOT NULL,
+            close NUMERIC NOT NULL,
+            volume BIGINT
+        );
         CREATE TABLE IF NOT EXISTS strategies (
             id SERIAL PRIMARY KEY,
             name VARCHAR(255) UNIQUE NOT NULL,
@@ -130,7 +139,24 @@ async function createTables() {
             low NUMERIC,
             close NUMERIC
         );
+        CREATE TABLE IF NOT EXISTS real_time_spy (
+            id SERIAL PRIMARY KEY,
+            timestamp TIMESTAMP NOT NULL,
+            current_price NUMERIC NOT NULL,
+            volume BIGINT,
+            conditions TEXT,
+            open NUMERIC,
+            high NUMERIC,
+            low NUMERIC,
+            close NUMERIC
+        );
         CREATE TABLE IF NOT EXISTS detailed_historical_spx (
+            id SERIAL PRIMARY KEY,
+            timestamp TIMESTAMP NOT NULL,
+            price NUMERIC NOT NULL,
+            volume BIGINT
+        );
+        CREATE TABLE IF NOT EXISTS detailed_historical_spy (
             id SERIAL PRIMARY KEY,
             timestamp TIMESTAMP NOT NULL,
             price NUMERIC NOT NULL,
@@ -348,16 +374,16 @@ async function createInitialAlerts() {
     try {
         const alerts = [
             {
-                user_id: 1,  // Assuming user_id 1 exists
-                trade_id: 1,  // Assuming trade_id 1 exists
-                strategy_id: 1,  // Assuming strategy_id 1 exists
+                user_id: 1,
+                trade_id: 1,  
+                strategy_id: 1,  
                 message: 'Trade is available to take',
                 alert_type: 'trade_available'
             },
             {
-                user_id: 1,  // Assuming user_id 1 exists
-                trade_id: 2,  // Assuming trade_id 2 exists
-                strategy_id: 2,  // Assuming strategy_id 2 exists
+                user_id: 1,  
+                trade_id: 2,  
+                strategy_id: 2,  
                 message: 'Trade has hit optimal profit',
                 alert_type: 'optimal_profit'
             },
