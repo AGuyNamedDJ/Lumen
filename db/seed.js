@@ -16,6 +16,7 @@ const { createDetailedRecord, getAllDetailedRecords, getDetailedRecordById, upda
 const { createConversation, getAllConversations, getConversationById, getConversationsByUserId, updateConversation, deleteConversation } = require('./helperFunctions/conversations');
 const { createMessage, getAllMessages, getMessageById, getMessagesByConversationId, updateMessage, deleteMessage} = require('./helperFunctions/messages');
 const { storeEMAData, getAllEMAIndicators, getEMAIndicatorById, getEMAIndicatorsBySymbol, deleteEMAIndicator} = require('./indicators/emaIndicators');
+const { storeRSIData, getAllRSIIndicators, getRSIIndicatorById, getRSIIndicatorsBySymbol, deleteRSIIndicator} = require('./indicators/rsiIndicators');
 const { storeSMAData, getAllSMAIndicators, getSMAIndicatorById, getSMAIndicatorsBySymbol, deleteSMAIndicator} = require('./indicators/smaIndicators');
 
 // Methods: Drop Tables
@@ -27,6 +28,7 @@ async function dropTables() {
             DROP TABLE IF EXISTS strategies CASCADE;
             DROP TABLE IF EXISTS trades CASCADE;
             DROP TABLE IF EXISTS ema_indicators CASCADE;
+            DROP TABLE IF EXISTS rsi_indicators CASCADE;
             DROP TABLE IF EXISTS sma_indicators CASCADE;
             DROP TABLE IF EXISTS decision_rules;
             DROP TABLE IF EXISTS alerts CASCADE;
@@ -98,6 +100,17 @@ async function createTables() {
             volume BIGINT
         );
         CREATE TABLE IF NOT EXISTS ema_indicators (
+            id SERIAL PRIMARY KEY,
+            symbol TEXT NOT NULL,
+            period INT NOT NULL,
+            timespan TEXT NOT NULL,
+            timestamp BIGINT NOT NULL,
+            value FLOAT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (symbol, period, timespan, timestamp)
+        );
+        CREATE TABLE IF NOT EXISTS rsi_indicators (
             id SERIAL PRIMARY KEY,
             symbol TEXT NOT NULL,
             period INT NOT NULL,
