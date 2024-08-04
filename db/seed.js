@@ -15,6 +15,7 @@ const { createRealTimeSPXRecord, getAllRealTimeSPXRecords, getRealTimeSPXRecordB
 const { createDetailedRecord, getAllDetailedRecords, getDetailedRecordById, updateDetailedRecord, deleteDetailedRecord} = require('./helperFunctions/detailedHistoricalSPX');
 const { createConversation, getAllConversations, getConversationById, getConversationsByUserId, updateConversation, deleteConversation } = require('./helperFunctions/conversations');
 const { createMessage, getAllMessages, getMessageById, getMessagesByConversationId, updateMessage, deleteMessage} = require('./helperFunctions/messages');
+const { createSMAIndicator, getAllSMAIndicators, getSMAIndicatorById, getSMAIndicatorsBySymbol, deleteSMAIndicator} = require('./indicators/smaIndicators');
 
 // Methods: Drop Tables
 async function dropTables() {
@@ -24,14 +25,17 @@ async function dropTables() {
             DROP TABLE IF EXISTS users CASCADE;
             DROP TABLE IF EXISTS strategies CASCADE;
             DROP TABLE IF EXISTS trades CASCADE;
+            DROP TABLE IF EXISTS sma_indicators CASCADE;
             DROP TABLE IF EXISTS decision_rules;
             DROP TABLE IF EXISTS alerts CASCADE;
-            DROP TABLE IF EXISTS market_data CASCADE;
             DROP TABLE IF EXISTS audit_logs CASCADE;
-            DROP TABLE IF EXISTS configurations CASCADE;
+            DROP TABLE IF EXISTS conversations CASCADE;
+            DROP TABLE IF EXISTS messages CASCADE;
             DROP TABLE IF EXISTS historical_spx CASCADE;
+            DROP TABLE IF EXISTS historical_spy CASCADE;
             DROP TABLE IF EXISTS detailed_historical_spx CASCADE;
-            -- Note: Do not drop real_time_spx table
+            DROP TABLE IF EXISTS detailed_historical_spy CASCADE;
+            -- Note: Do not drop real_time_spx or real_time_spy table
         `);
         console.log("Finished dropping tables.")
     } catch (error) {
@@ -91,7 +95,18 @@ async function createTables() {
             close NUMERIC NOT NULL,
             volume BIGINT
         );
-        CREATE TABLE IF NOT EXISTS strategies (
+        CREATE TABLE IF NOT EXISTS sma_indicators (
+            id SERIAL PRIMARY KEY,
+            symbol TEXT NOT NULL,
+            period INT NOT NULL,
+            timespan TEXT NOT NULL,
+            timestamp BIGINT NOT NULL,
+            value FLOAT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (symbol, period, timespan, timestamp)
+        );
+    CREATE TABLE IF NOT EXISTS strategies (
             id SERIAL PRIMARY KEY,
             name VARCHAR(255) UNIQUE NOT NULL,
             description TEXT
