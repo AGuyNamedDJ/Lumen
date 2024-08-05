@@ -18,6 +18,7 @@ const { createMessage, getAllMessages, getMessageById, getMessagesByConversation
 const { storeEMAData, getAllEMAIndicators, getEMAIndicatorById, getEMAIndicatorsBySymbol, deleteEMAIndicator} = require('./indicators/emaIndicators');
 const { storeRSIData, getAllRSIIndicators, getRSIIndicatorById, getRSIIndicatorsBySymbol, deleteRSIIndicator} = require('./indicators/rsiIndicators');
 const { storeSMAData, getAllSMAIndicators, getSMAIndicatorById, getSMAIndicatorsBySymbol, deleteSMAIndicator} = require('./indicators/smaIndicators');
+const { storeMACDData, getAllMACDIndicators, getMACDIndicatorById, getMACDIndicatorsBySymbol, deleteMACDIndicator} = require('./indicators/macdIndicators');
 
 // Methods: Drop Tables
 async function dropTables() {
@@ -28,6 +29,7 @@ async function dropTables() {
             DROP TABLE IF EXISTS strategies CASCADE;
             DROP TABLE IF EXISTS trades CASCADE;
             DROP TABLE IF EXISTS ema_indicators CASCADE;
+            DROP TABLE IF EXISTS macd_indicators CASCADE;
             DROP TABLE IF EXISTS rsi_indicators CASCADE;
             DROP TABLE IF EXISTS sma_indicators CASCADE;
             DROP TABLE IF EXISTS decision_rules;
@@ -106,6 +108,19 @@ async function createTables() {
             timespan TEXT NOT NULL,
             timestamp BIGINT NOT NULL,
             value FLOAT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (symbol, period, timespan, timestamp)
+        );
+        CREATE TABLE IF NOT EXISTS macd_indicators (
+            id SERIAL PRIMARY KEY,
+            symbol TEXT NOT NULL,
+            period INT NOT NULL,
+            timespan TEXT NOT NULL,
+            timestamp BIGINT NOT NULL,
+            macd_line FLOAT NOT NULL,
+            signal_line FLOAT NOT NULL,
+            histogram FLOAT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE (symbol, period, timespan, timestamp)
