@@ -21,10 +21,10 @@ macdRouter.get('/live', async (req, res) => {
                 symbol,
                 period: window,
                 timespan,
-                timestamp: dataPoint.timestamp || dataPoint[0], // Adjust according to your actual data structure
-                macd_line: dataPoint.macd_line || dataPoint[1] || 0, // Adjust according to your actual data structure
-                signal_line: dataPoint.signal_line || dataPoint[2] || 0, // Adjust according to your actual data structure
-                histogram: dataPoint.histogram || dataPoint[3] || 0 // Adjust according to your actual data structure
+                timestamp: dataPoint.timestamp || dataPoint[0],
+                macd_line: dataPoint.macd_line || dataPoint[1] || 0, 
+                signal_line: dataPoint.signal_line || dataPoint[2] || 0, 
+                histogram: dataPoint.histogram || dataPoint[3] || 0
             }));
 
             await storeMACDData(formattedData);

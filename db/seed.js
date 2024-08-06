@@ -15,10 +15,12 @@ const { createRealTimeSPXRecord, getAllRealTimeSPXRecords, getRealTimeSPXRecordB
 const { createDetailedRecord, getAllDetailedRecords, getDetailedRecordById, updateDetailedRecord, deleteDetailedRecord} = require('./helperFunctions/detailedHistoricalSPX');
 const { createConversation, getAllConversations, getConversationById, getConversationsByUserId, updateConversation, deleteConversation } = require('./helperFunctions/conversations');
 const { createMessage, getAllMessages, getMessageById, getMessagesByConversationId, updateMessage, deleteMessage} = require('./helperFunctions/messages');
+const { storeAggregatesData, getAllAggregates, getAggregatesBySymbol, getAggregatesBySymbolAndTimespan, deleteAggregates} = require('./indicators/aggregates');
+const { storeBBData, getAllBBIndicators, getBBIndicatorById, getBBIndicatorsBySymbol, deleteBBIndicator } = require('./indicators/bbindicators');
 const { storeEMAData, getAllEMAIndicators, getEMAIndicatorById, getEMAIndicatorsBySymbol, deleteEMAIndicator} = require('./indicators/emaIndicators');
+const { storeMACDData, getAllMACDIndicators, getMACDIndicatorById, getMACDIndicatorsBySymbol, deleteMACDIndicator} = require('./indicators/macdIndicators');
 const { storeRSIData, getAllRSIIndicators, getRSIIndicatorById, getRSIIndicatorsBySymbol, deleteRSIIndicator} = require('./indicators/rsiIndicators');
 const { storeSMAData, getAllSMAIndicators, getSMAIndicatorById, getSMAIndicatorsBySymbol, deleteSMAIndicator} = require('./indicators/smaIndicators');
-const { storeMACDData, getAllMACDIndicators, getMACDIndicatorById, getMACDIndicatorsBySymbol, deleteMACDIndicator} = require('./indicators/macdIndicators');
 
 // Methods: Drop Tables
 async function dropTables() {
@@ -28,6 +30,8 @@ async function dropTables() {
             DROP TABLE IF EXISTS users CASCADE;
             DROP TABLE IF EXISTS strategies CASCADE;
             DROP TABLE IF EXISTS trades CASCADE;
+            DROP TABLE IF EXISTS aggregates CASCADE;
+            DROP TABLE IF EXISTS bb_indicators CASCADE;
             DROP TABLE IF EXISTS ema_indicators CASCADE;
             DROP TABLE IF EXISTS macd_indicators CASCADE;
             DROP TABLE IF EXISTS rsi_indicators CASCADE;
@@ -100,6 +104,34 @@ async function createTables() {
             low NUMERIC NOT NULL,
             close NUMERIC NOT NULL,
             volume BIGINT
+        );
+        CREATE TABLE IF NOT EXISTS aggregates (
+            id SERIAL PRIMARY KEY,
+            symbol TEXT NOT NULL,
+            multiplier INT NOT NULL,
+            timespan TEXT NOT NULL,
+            timestamp BIGINT NOT NULL,
+            open FLOAT,
+            high FLOAT,
+            low FLOAT,
+            close FLOAT,
+            volume BIGINT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (symbol, multiplier, timespan, timestamp)
+        );
+        CREATE TABLE IF NOT EXISTS bb_indicators (
+            id SERIAL PRIMARY KEY,
+            symbol TEXT NOT NULL,
+            period INT NOT NULL,
+            timespan TEXT NOT NULL,
+            timestamp BIGINT NOT NULL,
+            middle_band FLOAT NOT NULL,
+            upper_band FLOAT NOT NULL,
+            lower_band FLOAT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (symbol, period, timespan, timestamp)
         );
         CREATE TABLE IF NOT EXISTS ema_indicators (
             id SERIAL PRIMARY KEY,

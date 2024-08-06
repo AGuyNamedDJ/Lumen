@@ -4,9 +4,6 @@ require('dotenv').config();
 const apiKey = process.env.POLYGON_API_KEY;
 const BASE_URL = 'https://api.polygon.io';
 
-// Log the API key to verify it's being read correctly (remove this in production)
-console.log('Polygon API Key:', apiKey);
-
 const getStockQuote = async (symbol) => {
     try {
         const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
