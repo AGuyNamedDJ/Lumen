@@ -21,8 +21,8 @@ rsiRouter.get('/live', async (req, res) => {
                 symbol,
                 period: window,
                 timespan,
-                timestamp: dataPoint.timestamp || dataPoint[0], // Adjust according to your actual data structure
-                value: dataPoint.value || dataPoint[1] // Adjust according to your actual data structure
+                timestamp: dataPoint.timestamp || dataPoint[0], // Adjust according to data structure, same for rest
+                value: dataPoint.value || dataPoint[1] 
             }));
 
             await storeRSIData(formattedData);
