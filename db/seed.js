@@ -25,6 +25,7 @@ const { storeCPIData, getAllCPIData, getCPIDataByDate, updateCPIDataByDate, dele
 const { storePPIData, getAllPPIData, getPPIDataByDate, updatePPIDataByDate, deletePPIDataByDate,} = require ('./fredAPI/ppiData');
 const { storeUnemploymentRateData, getAllUnemploymentRateData, getUnemploymentRateDataByDate, updateUnemploymentRateDataByDate, deleteUnemploymentRateDataByDate} = require ('./fredAPI/unemploymentRateData');
 const { storeGDPData, getAllGDPData, getGDPDataByDate, updateGDPDataByDate, deleteGDPDataByDate,} = require ('./fredAPI/gdpData');
+const { storeInterestRateData, getAllInterestRateData, getInterestRateDataByDate, updateInterestRateDataByDate, deleteInterestRateDataByDate,} = require ('./fredAPI/interestRateData');
 
 // Methods: Drop Tables
 async function dropTables() {
@@ -42,6 +43,7 @@ async function dropTables() {
             DROP TABLE IF EXISTS sma_indicators CASCADE;
             DROP TABLE IF EXISTS cpi_data CASCADE;
             DROP TABLE IF EXISTS gdp_data CASCADE;
+            DROP TABLE IF EXISTS interest_rate_data CASCADE;
             DROP TABLE IF EXISTS ppi_data CASCADE;
             DROP TABLE IF EXISTS unemployment_rate_data CASCADE;
             DROP TABLE IF EXISTS decision_rules;
@@ -200,6 +202,15 @@ async function createTables() {
             value FLOAT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS interest_rate_data (
+            id SERIAL PRIMARY KEY,
+            date DATE NOT NULL,
+            series_id TEXT NOT NULL,
+            value FLOAT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (date, series_id)
         );
         CREATE TABLE IF NOT EXISTS ppi_data (
             id SERIAL PRIMARY KEY,
