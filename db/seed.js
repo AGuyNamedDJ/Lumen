@@ -16,13 +16,13 @@ const { createDetailedRecord, getAllDetailedRecords, getDetailedRecordById, upda
 const { createConversation, getAllConversations, getConversationById, getConversationsByUserId, updateConversation, deleteConversation } = require('./helperFunctions/conversations');
 const { createMessage, getAllMessages, getMessageById, getMessagesByConversationId, updateMessage, deleteMessage} = require('./helperFunctions/messages');
 const { storeAggregatesData, getAllAggregates, getAggregatesBySymbol, getAggregatesBySymbolAndTimespan, deleteAggregates} = require('./indicators/aggregates');
-const { storeBBData, getAllBBIndicators, getBBIndicatorById, getBBIndicatorsBySymbol, deleteBBIndicator } = require('./indicators/bbindicators');
+// const { storeBBData, getAllBBIndicators, getBBIndicatorById, getBBIndicatorsBySymbol, deleteBBIndicator } = require('./indicators/bbindicators');
 const { storeEMAData, getAllEMAIndicators, getEMAIndicatorById, getEMAIndicatorsBySymbol, deleteEMAIndicator} = require('./indicators/emaIndicators');
 const { storeMACDData, getAllMACDIndicators, getMACDIndicatorById, getMACDIndicatorsBySymbol, deleteMACDIndicator} = require('./indicators/macdIndicators');
 const { storeRSIData, getAllRSIIndicators, getRSIIndicatorById, getRSIIndicatorsBySymbol, deleteRSIIndicator} = require('./indicators/rsiIndicators');
 const { storeSMAData, getAllSMAIndicators, getSMAIndicatorById, getSMAIndicatorsBySymbol, deleteSMAIndicator} = require('./indicators/smaIndicators');
 const { storeCPIData, getAllCPIData, getCPIDataByDate, updateCPIDataByDate, deleteCPIDataByDate,} = require('./fredAPI/cpiData')
-
+const { storePPIData, getAllPPIData, getPPIDataByDate, updatePPIDataByDate, deletePPIDataByDate,} = require ('./fredAPI/ppiData');
 // Methods: Drop Tables
 async function dropTables() {
     try {
@@ -187,6 +187,12 @@ async function createTables() {
             value FLOAT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS ppi_data (
+            id SERIAL PRIMARY KEY,
+            date DATE UNIQUE NOT NULL,
+            value FLOAT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE IF NOT EXISTS strategies (
             id SERIAL PRIMARY KEY,
