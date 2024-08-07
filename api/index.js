@@ -101,22 +101,26 @@ apiRouter.get('/spx-price', async (req, res) => {
 
 // Importing and using routers
 const conversationsRouter = require('./helperFunctions/conversations');
-const finnhubRoutes = require('./finnhubAPI');
+const fredApiRouter = require('./fredAPI/index');
+const finnhubRouter = require('./finnhubAPI');
 const indicatorsRouter = require('./indicators/index');
 const loginRouter = require('./helperFunctions/login');
 const lumen1Router = require('./lumen_1');
 const messagesRouter = require('./helperFunctions/messages');
 const polygonRouter = require('./polygonApi/index');
+const scrapersRouter = require('./scrappers/index');
 const signupRouter = require('./helperFunctions/signup');
 const spxPriceRouter = require('./finnhubAPI/spxPriceRouter');
 const userRouter = require('./helperFunctions/user');
 apiRouter.use('/conversations', conversationsRouter);
-apiRouter.use('/finnhub', finnhubRoutes);
+apiRouter.use('/fred', fredApiRouter);
+apiRouter.use('/finnhub', finnhubRouter);
 apiRouter.use('/indicators', indicatorsRouter);
 apiRouter.use('/login', loginRouter);
 apiRouter.use('/lumen_1', lumen1Router);
 apiRouter.use('/messages', messagesRouter);
 apiRouter.use('/polygon', polygonRouter);
+apiRouter.use('/scrapers', scrapersRouter);
 apiRouter.use('/signup', signupRouter);
 apiRouter.use('/spx-price', spxPriceRouter);
 apiRouter.use('/user', userRouter);

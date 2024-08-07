@@ -21,6 +21,7 @@ const { storeEMAData, getAllEMAIndicators, getEMAIndicatorById, getEMAIndicators
 const { storeMACDData, getAllMACDIndicators, getMACDIndicatorById, getMACDIndicatorsBySymbol, deleteMACDIndicator} = require('./indicators/macdIndicators');
 const { storeRSIData, getAllRSIIndicators, getRSIIndicatorById, getRSIIndicatorsBySymbol, deleteRSIIndicator} = require('./indicators/rsiIndicators');
 const { storeSMAData, getAllSMAIndicators, getSMAIndicatorById, getSMAIndicatorsBySymbol, deleteSMAIndicator} = require('./indicators/smaIndicators');
+const { storeCPIData, getAllCPIData, getCPIDataByDate, updateCPIDataByDate, deleteCPIDataByDate,} = require('./fredAPI/cpiData')
 
 // Methods: Drop Tables
 async function dropTables() {
@@ -36,6 +37,7 @@ async function dropTables() {
             DROP TABLE IF EXISTS macd_indicators CASCADE;
             DROP TABLE IF EXISTS rsi_indicators CASCADE;
             DROP TABLE IF EXISTS sma_indicators CASCADE;
+            DROP TABLE IF EXISTS cpi_data CASCADE;
             DROP TABLE IF EXISTS decision_rules;
             DROP TABLE IF EXISTS alerts CASCADE;
             DROP TABLE IF EXISTS audit_logs CASCADE;
@@ -179,7 +181,14 @@ async function createTables() {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE (symbol, period, timespan, timestamp)
         );
-    CREATE TABLE IF NOT EXISTS strategies (
+        CREATE TABLE IF NOT EXISTS cpi_data (
+            id SERIAL PRIMARY KEY,
+            date DATE UNIQUE NOT NULL,
+            value FLOAT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS strategies (
             id SERIAL PRIMARY KEY,
             name VARCHAR(255) UNIQUE NOT NULL,
             description TEXT
@@ -252,11 +261,21 @@ async function createTables() {
         );
     `);
     console.log('Finished building tables.');
+
+    // Print all the tables
+    const tables = await client.query(`
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+    `);
+    console.log('Tables in the database:');
+    tables.rows.forEach(row => console.log(row.table_name));
+
     } catch (error) {
         console.error('Error building tables!');
         console.log(error);
     }
-};
+}
 
 // createInitialUsers
 async function createInitialUsers() {
@@ -304,6 +323,66 @@ async function createInitialConversations() {
         console.log("Finished creating initial conversations.");
     } catch (error) {
         console.error("Error creating initial conversations!");
+        console.error(error);
+    }
+};
+// Function to check if the table exists
+async function checkTableExists(tableName) {
+    try {
+        const res = await client.query(`
+            SELECT EXISTS (
+                SELECT FROM pg_tables 
+                WHERE schemaname = 'public' 
+                AND tablename = $1
+            );
+        `, [tableName]);
+        return res.rows[0].exists;
+    } catch (error) {
+        console.error(`Error checking if table ${tableName} exists:`, error);
+        throw error;
+    }
+};
+
+// Function to create the CPI table if it does not exist
+async function createCPITableIfNotExists() {
+    try {
+        const tableExists = await checkTableExists('cpi_data');
+        if (!tableExists) {
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS cpi_data (
+                    id SERIAL PRIMARY KEY,
+                    date DATE UNIQUE NOT NULL,
+                    value FLOAT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+            console.log('cpi_data table created.');
+        } else {
+            console.log('cpi_data table already exists.');
+        }
+    } catch (error) {
+        console.error('Error creating cpi_data table:', error);
+        throw error;
+    }
+};
+
+// createInitialCPIData
+async function createInitialCPIData() {
+    console.log("Creating initial CPI data...");
+    try {
+        const cpiDataEntries = [
+            { date: '2021-01-01', value: 260.474 }
+            // Add more CPI data as needed
+        ];
+
+        for (const entry of cpiDataEntries) {
+            console.log(`Storing CPI Data: Date - ${entry.date}, Value - ${entry.value}`);
+            await storeCPIData(entry);
+        }
+
+        console.log("Finished creating initial CPI data.");
+    } catch (error) {
+        console.error("Error creating initial CPI data!");
         console.error(error);
     }
 };
@@ -572,6 +651,9 @@ async function rebuildDB() {
         await createTables();
         await createInitialUsers();
         await createInitialConversations();
+        await checkTableExists();
+        await createCPITableIfNotExists();
+        await createInitialCPIData();
         // await createInitialHistoricalSPX();
         await createInitialStrategies();
         await createInitialTrades();
@@ -788,6 +870,38 @@ async function testDB() {
         //     const deletedDecisionRule = await deleteDecisionRule(allDecisionRules[0].id);
         //     console.log("Deleted decision rule", deletedDecisionRule);
         // };
+
+        console.log("Starting to test CPI data functions...");
+
+        // Create a new CPI data entry
+        console.log("Calling storeCPIData to create a new entry...");
+        const newCPIData = await storeCPIData({ date: '2024-01-01', value: 260.474 });
+        console.log("New CPI data entry", newCPIData);
+
+        // Get all CPI data entries
+        console.log("Calling getAllCPIData...");
+        const allCPIData = await getAllCPIData();
+        console.log("All CPI data entries", allCPIData);
+
+        // Assuming at least one CPI data entry is created successfully
+        if (allCPIData.length > 0) {
+            // Get CPI data by date
+            console.log("Calling getCPIDataByDate for the first entry...");
+            const cpiDataByDate = await getCPIDataByDate(allCPIData[0].date);
+            console.log("CPI data by date", cpiDataByDate);
+
+            // Update CPI data
+            console.log("Updating first CPI data entry's value...");
+            const updatedCPIData = await updateCPIDataByDate(allCPIData[0].date, 261.474);
+            console.log("Updated CPI data entry", updatedCPIData);
+
+            // Delete CPI data
+            console.log("Deleting the first CPI data entry...");
+            const deletedCPIData = await deleteCPIDataByDate(allCPIData[0].date);
+            console.log("Deleted CPI data entry", deletedCPIData);
+        }
+
+
 
         // // Test Alerts Helper FNs
         // console.log("Starting to test alerts...");
