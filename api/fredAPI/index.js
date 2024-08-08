@@ -2,6 +2,7 @@ const express = require('express');
 const fredAPIRouter = express.Router();
 
 const averageHourlyEarningsRouter = require('./averageHourlyEarningsData');
+const consumerSentimentRouter = require('./consumerSentimentData');
 const coreInflationRouter = require('./coreInflationData');
 const cpiRouter = require('./fredCPIData');
 const gdpRouter = require('./gdpData');
@@ -12,6 +13,7 @@ const pceRouter = require('./pceData');
 const ppiRouter = require('./ppiData');
 const unemploymentRateRouter = require('./unemploymentRateData');
 fredAPIRouter.use('/average-hourly-earnings', averageHourlyEarningsRouter);
+fredAPIRouter.use('/consumer-sentiment', consumerSentimentRouter);
 fredAPIRouter.use('/core-inflation', coreInflationRouter);
 fredAPIRouter.use('/cpi', cpiRouter);
 fredAPIRouter.use('/gdp', gdpRouter);
