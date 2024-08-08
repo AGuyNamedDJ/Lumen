@@ -31,6 +31,7 @@ const { storeAverageHourlyEarningsData, getAllAverageHourlyEarningsData, getAver
 const { storeLaborForceParticipationData, getAllLaborForceParticipationData, getLaborForceParticipationDataByDate, updateLaborForceParticipationDataByDate, deleteLaborForceParticipationDataByDate} = require('./fredAPI/laborForceParticipationRateData');
 const { storePCEData, getAllPCEData, getPCEDataByDate, updatePCEDataByDate, deletePCEDataByDate,} = require('./fredAPI/pceData');
 const { storeCoreInflationData, getAllCoreInflationData, getCoreInflationDataByDate, updateCoreInflationDataByDate, deleteCoreInflationDataByDate} = require('./fredAPI/coreInflationData');
+const { storeConsumerSentimentData, getAllConsumerSentimentData, getConsumerSentimentDataByDate, updateConsumerSentimentDataByDate, deleteConsumerSentimentDataByDate,} = require('./fredAPI/consumerSentimentData');
 
 // Methods: Drop Tables
 async function dropTables() {
@@ -206,6 +207,12 @@ async function createTables() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );        
+        CREATE TABLE IF NOT EXISTS consumer_sentiment_data (
+            id SERIAL PRIMARY KEY,
+            date DATE UNIQUE NOT NULL,
+            value FLOAT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
         CREATE TABLE IF NOT EXISTS core_inflation_data (
             id SERIAL PRIMARY KEY,
             date DATE UNIQUE NOT NULL,
