@@ -26,6 +26,9 @@ const { storePPIData, getAllPPIData, getPPIDataByDate, updatePPIDataByDate, dele
 const { storeUnemploymentRateData, getAllUnemploymentRateData, getUnemploymentRateDataByDate, updateUnemploymentRateDataByDate, deleteUnemploymentRateDataByDate} = require ('./fredAPI/unemploymentRateData');
 const { storeGDPData, getAllGDPData, getGDPDataByDate, updateGDPDataByDate, deleteGDPDataByDate,} = require ('./fredAPI/gdpData');
 const { storeInterestRateData, getAllInterestRateData, getInterestRateDataByDate, updateInterestRateDataByDate, deleteInterestRateDataByDate,} = require ('./fredAPI/interestRateData');
+const { storeNonfarmPayrollEmploymentData, getAllNonfarmPayrollEmploymentData, getNonfarmPayrollEmploymentDataByDate, updateNonfarmPayrollEmploymentDataByDate, deleteNonfarmPayrollEmploymentDataByDate } = require ('./fredAPI/nonfarmPayrollEmploymentData');
+const { storeAverageHourlyEarningsData, getAllAverageHourlyEarningsData, getAverageHourlyEarningsDataByDate, updateAverageHourlyEarningsDataByDate, deleteAverageHourlyEarningsDataByDate} = require('./fredAPI/averageHourlyEarningsData');
+const { storeLaborForceParticipationData, getAllLaborForceParticipationData, getLaborForceParticipationDataByDate, updateLaborForceParticipationDataByDate, deleteLaborForceParticipationDataByDate} = require('./fredAPI/laborForceParticipationRateData');
 
 // Methods: Drop Tables
 async function dropTables() {
@@ -41,9 +44,12 @@ async function dropTables() {
             DROP TABLE IF EXISTS macd_indicators CASCADE;
             DROP TABLE IF EXISTS rsi_indicators CASCADE;
             DROP TABLE IF EXISTS sma_indicators CASCADE;
+            DROP TABLE IF EXISTS average_hourly_earnings_data CASCADE;
             DROP TABLE IF EXISTS cpi_data CASCADE;
             DROP TABLE IF EXISTS gdp_data CASCADE;
             DROP TABLE IF EXISTS interest_rate_data CASCADE;
+            DROP TABLE IF EXISTS labor_force_participation_rate_data CASCADE;
+            DROP TABLE IF EXISTS nonfarm_payroll_employment_data CASCADE;
             DROP TABLE IF EXISTS ppi_data CASCADE;
             DROP TABLE IF EXISTS unemployment_rate_data CASCADE;
             DROP TABLE IF EXISTS decision_rules;
@@ -189,6 +195,13 @@ async function createTables() {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE (symbol, period, timespan, timestamp)
         );
+        CREATE TABLE IF NOT EXISTS average_hourly_earnings_data (
+            id SERIAL PRIMARY KEY,
+            date DATE UNIQUE NOT NULL,
+            value FLOAT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );        
         CREATE TABLE IF NOT EXISTS cpi_data (
             id SERIAL PRIMARY KEY,
             date DATE UNIQUE NOT NULL,
@@ -212,6 +225,20 @@ async function createTables() {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE (date, series_id)
         );
+        CREATE TABLE IF NOT EXISTS labor_force_participation_rate_data (
+            id SERIAL PRIMARY KEY,
+            date DATE UNIQUE NOT NULL,
+            value FLOAT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS nonfarm_payroll_employment_data (
+            id SERIAL PRIMARY KEY,
+            date DATE UNIQUE NOT NULL,
+            value FLOAT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );        
         CREATE TABLE IF NOT EXISTS ppi_data (
             id SERIAL PRIMARY KEY,
             date DATE UNIQUE NOT NULL,
