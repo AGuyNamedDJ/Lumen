@@ -97,7 +97,7 @@ async function insertRecords(records, totalRecords, totalInserted) {
  */
 async function importAllSPYCSVFiles() {
     const files = [
-        'SPY.csv'
+        'SPY.csv', 'SPY-2.csv'
         // Add other CSV files as needed
     ];
 

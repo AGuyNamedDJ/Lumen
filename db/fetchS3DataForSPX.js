@@ -113,6 +113,7 @@ async function importAllSPXCSVFiles() {
         'SPX-2019.csv', 'SPX-2020.csv',
         'SPX-2021.csv', 'SPX-2022.csv',
         'SPX-2023.csv', 'SPX-2024.csv',
+        'SPX-2024-8.csv',
     ];
 
     for (const file of files) {
