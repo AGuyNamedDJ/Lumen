@@ -32,6 +32,8 @@ const { storeLaborForceParticipationData, getAllLaborForceParticipationData, get
 const { storePCEData, getAllPCEData, getPCEDataByDate, updatePCEDataByDate, deletePCEDataByDate,} = require('./fredAPI/pceData');
 const { storeCoreInflationData, getAllCoreInflationData, getCoreInflationDataByDate, updateCoreInflationDataByDate, deleteCoreInflationDataByDate} = require('./fredAPI/coreInflationData');
 const { storeConsumerSentimentData, getAllConsumerSentimentData, getConsumerSentimentDataByDate, updateConsumerSentimentDataByDate, deleteConsumerSentimentDataByDate,} = require('./fredAPI/consumerSentimentData');
+const { storeIndustrialProductionData, getAllIndustrialProductionData, getIndustrialProductionDataByDate, updateIndustrialProductionDataByDate, deleteIndustrialProductionDataByDate} = require('./fredAPI/industrialProductionData'); 
+const { storeConsumerConfidenceData, getAllConsumerConfidenceData, getConsumerConfidenceDataByDate, updateConsumerConfidenceDataByDate, deleteConsumerConfidenceDataByDate} = require('./fredAPI/consumerConfidenceData');
 
 // Methods: Drop Tables
 async function dropTables() {
@@ -48,9 +50,12 @@ async function dropTables() {
             DROP TABLE IF EXISTS rsi_indicators CASCADE;
             DROP TABLE IF EXISTS sma_indicators CASCADE;
             DROP TABLE IF EXISTS average_hourly_earnings_data CASCADE;
+            DROP TABLE IF EXISTS consumer_confidence_data CASCADE;
+            DROP TABLE IF EXISTS consumer_sentiment_data CASCADE;
             DROP TABLE IF EXISTS core_inflation_data CASCADE;
             DROP TABLE IF EXISTS cpi_data CASCADE;
             DROP TABLE IF EXISTS gdp_data CASCADE;
+            DROP TABLE IF EXISTS industrial_production_data CASCADE;
             DROP TABLE IF EXISTS interest_rate_data CASCADE;
             DROP TABLE IF EXISTS labor_force_participation_rate_data CASCADE;
             DROP TABLE IF EXISTS nonfarm_payroll_employment_data CASCADE;
@@ -207,6 +212,12 @@ async function createTables() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );        
+        CREATE TABLE IF NOT EXISTS consumer_confidence_data (
+            id SERIAL PRIMARY KEY,
+            date DATE UNIQUE NOT NULL,
+            value FLOAT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
         CREATE TABLE IF NOT EXISTS consumer_sentiment_data (
             id SERIAL PRIMARY KEY,
             date DATE UNIQUE NOT NULL,
@@ -232,6 +243,12 @@ async function createTables() {
             value FLOAT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS industrial_production_data (
+            id SERIAL PRIMARY KEY,
+            date DATE UNIQUE NOT NULL,
+            value FLOAT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE IF NOT EXISTS interest_rate_data (
             id SERIAL PRIMARY KEY,
