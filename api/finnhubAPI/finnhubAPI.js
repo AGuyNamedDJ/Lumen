@@ -17,8 +17,8 @@ function getRealTimeQuotes(symbol, callback) {
     });
 }
 
-// New function to get SPX price
-async function getSPXPrice() {
+// Function to get SPY price
+async function getSPYPrice() {
     return new Promise((resolve, reject) => {
         getRealTimeQuotes('SPY', (error, data) => {
             if (error) {
@@ -29,7 +29,20 @@ async function getSPXPrice() {
     });
 }
 
+// Function to get SPX price
+async function getSPXPrice() {
+    return new Promise((resolve, reject) => {
+        getRealTimeQuotes('^GSPC', (error, data) => {
+            if (error) {
+                return reject(error);
+            }
+            resolve(data.c); // 'c' is the current price
+        });
+    });
+}
+
 module.exports = {
     getRealTimeQuotes,
+    getSPYPrice,
     getSPXPrice
 };

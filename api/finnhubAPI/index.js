@@ -1,9 +1,9 @@
 const express = require('express');
-const router = express.Router();
+const finnhubRouter = express.Router();
 const { getRealTimeQuotes } = require('./finnhubAPI');
 
 // Ex
-router.get('/quote/:symbol', (req, res) => {
+finnhubRouter.get('/quote/:symbol', (req, res) => {
     const symbol = req.params.symbol;
     getRealTimeQuotes(symbol, (error, data) => {
         if (error) {
@@ -13,4 +13,4 @@ router.get('/quote/:symbol', (req, res) => {
     });
 });
 
-module.exports = router;
+module.exports = finnhubRouter;
