@@ -121,6 +121,10 @@ async function importLiveFredAPIData() {
 
 importLiveFredAPIData();
 
+// Import Live VIX Data
+const { scheduleVIXUpdates } = require('./dataFetching/yahooFinance/scheduleVIXData');
+scheduleVIXUpdates();
+
 // Start WebSocket on Server Start
 startServer();
 

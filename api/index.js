@@ -112,6 +112,7 @@ const scrapersRouter = require('./scrappers/index');
 const signupRouter = require('./helperFunctions/signup');
 const spxPriceRouter = require('./finnhubAPI/spxPriceRouter');
 const userRouter = require('./helperFunctions/user');
+const yahooFinanceRouter = require('./yahooFinance/index');
 apiRouter.use('/conversations', conversationsRouter);
 apiRouter.use('/fred', fredApiRouter);
 apiRouter.use('/finnhub', finnhubRouter);
@@ -124,5 +125,6 @@ apiRouter.use('/scrapers', scrapersRouter);
 apiRouter.use('/signup', signupRouter);
 apiRouter.use('/spx-price', spxPriceRouter);
 apiRouter.use('/user', userRouter);
+apiRouter.use ('/yahoo-finance', yahooFinanceRouter)
 
 module.exports = { apiRouter };
