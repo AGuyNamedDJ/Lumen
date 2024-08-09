@@ -34,6 +34,8 @@ const { storeCoreInflationData, getAllCoreInflationData, getCoreInflationDataByD
 const { storeConsumerSentimentData, getAllConsumerSentimentData, getConsumerSentimentDataByDate, updateConsumerSentimentDataByDate, deleteConsumerSentimentDataByDate,} = require('./fredAPI/consumerSentimentData');
 const { storeIndustrialProductionData, getAllIndustrialProductionData, getIndustrialProductionDataByDate, updateIndustrialProductionDataByDate, deleteIndustrialProductionDataByDate} = require('./fredAPI/industrialProductionData'); 
 const { storeConsumerConfidenceData, getAllConsumerConfidenceData, getConsumerConfidenceDataByDate, updateConsumerConfidenceDataByDate, deleteConsumerConfidenceDataByDate} = require('./fredAPI/consumerConfidenceData');
+const { createHistoricalVIXRecord,  getAllHistoricalVIXRecords,  getHistoricalVIXRecordById,  updateHistoricalVIXRecord,  deleteHistoricalVIXRecord} = require('./helperFunctions/historicalVIX');
+const { createRealTimeVIXRecord, getAllRealTimeVIXRecords, getRealTimeVIXRecordById, updateRealTimeVIXRecord, deleteRealTimeVIXRecord} = require('./helperFunctions/realTimeVIX');
 
 // Methods: Drop Tables
 async function dropTables() {
@@ -69,6 +71,7 @@ async function dropTables() {
             DROP TABLE IF EXISTS messages CASCADE;
             DROP TABLE IF EXISTS historical_spx CASCADE;
             DROP TABLE IF EXISTS historical_spy CASCADE;
+            DROP TABLE IF EXISTS historical_vix CASCADE;
             DROP TABLE IF EXISTS detailed_historical_spx CASCADE;
             DROP TABLE IF EXISTS detailed_historical_spy CASCADE;
             -- Note: Do not drop real_time_spx or real_time_spy table
@@ -123,6 +126,15 @@ async function createTables() {
             volume BIGINT
         );
         CREATE TABLE IF NOT EXISTS historical_spy (
+            id SERIAL PRIMARY KEY,
+            timestamp TIMESTAMP NOT NULL,
+            open NUMERIC NOT NULL,
+            high NUMERIC NOT NULL,
+            low NUMERIC NOT NULL,
+            close NUMERIC NOT NULL,
+            volume BIGINT
+        );
+        CREATE TABLE IF NOT EXISTS historical_vix (
             id SERIAL PRIMARY KEY,
             timestamp TIMESTAMP NOT NULL,
             open NUMERIC NOT NULL,
@@ -340,6 +352,17 @@ async function createTables() {
             close NUMERIC
         );
         CREATE TABLE IF NOT EXISTS real_time_spy (
+            id SERIAL PRIMARY KEY,
+            timestamp TIMESTAMP NOT NULL,
+            current_price NUMERIC NOT NULL,
+            volume BIGINT,
+            conditions TEXT,
+            open NUMERIC,
+            high NUMERIC,
+            low NUMERIC,
+            close NUMERIC
+        );
+        CREATE TABLE IF NOT EXISTS real_time_vix (
             id SERIAL PRIMARY KEY,
             timestamp TIMESTAMP NOT NULL,
             current_price NUMERIC NOT NULL,
