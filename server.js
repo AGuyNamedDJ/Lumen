@@ -90,8 +90,12 @@ const {scheduleCoreInflationUpdates} = require('./dataFetching/fredAPI/live/live
 const {scheduleCPIUpdates} = require('./dataFetching/fredAPI/live/liveCPIData');
 const {scheduleGDPUpdates} = require('./dataFetching/fredAPI/live/liveGDPData');
 const {scheduleIndustrialProductionUpdates} = require('./dataFetching/fredAPI/live/liveIndustrialProductionData');
-const  {scheduleInterestRateUpdates} = require ('./dataFetching/fredAPI/live/liveInterestRateData');
-
+const {scheduleInterestRateUpdates} = require ('./dataFetching/fredAPI/live/liveInterestRateData');
+const {scheduleLaborForceParticipationRateUpdates} = require('./dataFetching/fredAPI/live/liveLaborForceParticipationRateData');
+const {scheduleNonfarmPayrollEmploymentUpdates} = require('./dataFetching/fredAPI/live/liveNonFarmPayrollEmploymentData');
+const {schedulePCEUpdates} = require('./dataFetching/fredAPI/live/livePCEData');
+const {schedulePPIUpdates} = require('./dataFetching/fredAPI/live/livePPIData');
+const {scheduleUnemploymentRateUpdates} = require('./dataFetching/fredAPI/live/liveUnemploymentRateData');
 
 async function importLiveFredAPIData() {
     try {
@@ -103,8 +107,13 @@ async function importLiveFredAPIData() {
         scheduleGDPUpdates();
         scheduleIndustrialProductionUpdates();
         scheduleInterestRateUpdates();
-        logger.info('fredAPI Data import completed.');
+        scheduleLaborForceParticipationRateUpdates();
+        scheduleNonfarmPayrollEmploymentUpdates();
+        schedulePCEUpdates();
+        schedulePPIUpdates();
+        scheduleUnemploymentRateUpdates();
 
+        logger.info('fredAPI Data import completed.');
     } catch (error) {
         logger.error ('Error importing fredAPI data!');
     }

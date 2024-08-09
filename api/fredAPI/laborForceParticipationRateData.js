@@ -10,32 +10,6 @@ const {
 } = require('../../db/fredAPI/laborForceParticipationRateData');
 const axios = require('axios');
 
-// Series ID for Labor Force Participation Rate
-const seriesID = 'CIVPART';
-
-// Fetch and store Labor Force Participation data from FRED API
-const fetchLaborForceParticipationData = async () => {
-    try {
-        const response = await axios.get('https://api.stlouisfed.org/fred/series/observations', {
-            params: {
-                api_key: process.env.FRED_API_KEY,
-                series_id: seriesID,
-                file_type: 'json'
-            }
-        });
-
-        const data = response.data.observations;
-        for (const entry of data) {
-            const date = entry.date;
-            const value = parseFloat(entry.value);
-
-            await storeLaborForceParticipationData({ date, value });
-        }
-    } catch (error) {
-        console.error('Error fetching Labor Force Participation data:', error);
-    }
-};
-
 // Route to fetch Labor Force Participation data from FRED and store in DB
 laborForceParticipationRouter.get('/fetch-labor-force-participation', async (req, res) => {
     try {

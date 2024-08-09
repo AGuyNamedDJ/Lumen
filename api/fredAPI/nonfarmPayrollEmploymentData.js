@@ -10,32 +10,6 @@ const {
 } = require('../../db/fredAPI/nonfarmPayrollEmploymentData');
 const axios = require('axios');
 
-// Series ID for Nonfarm Payroll Employment
-const seriesID = 'PAYEMS';
-
-// Fetch and store Nonfarm Payroll Employment data from FRED API
-const fetchNonfarmPayrollEmploymentData = async () => {
-    try {
-        const response = await axios.get('https://api.stlouisfed.org/fred/series/observations', {
-            params: {
-                api_key: process.env.FRED_API_KEY,
-                series_id: seriesID,
-                file_type: 'json'
-            }
-        });
-
-        const data = response.data.observations;
-        for (const entry of data) {
-            const date = entry.date;
-            const value = parseFloat(entry.value);
-
-            await storeNonfarmPayrollEmploymentData({ date, value });
-        }
-    } catch (error) {
-        console.error('Error fetching Nonfarm Payroll Employment data:', error);
-    }
-};
-
 // Route to fetch Nonfarm Payroll Employment data from FRED and store in DB
 nonfarmPayrollEmploymentRouter.get('/fetch-nonfarm-payroll-employment', async (req, res) => {
     try {

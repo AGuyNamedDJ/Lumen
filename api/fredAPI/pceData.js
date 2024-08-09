@@ -10,29 +10,6 @@ const {
 } = require('../../db/fredAPI/pceData');
 const axios = require('axios');
 
-// Fetch and store PCE data from FRED API
-const fetchPCEData = async () => {
-    try {
-        const response = await axios.get('https://api.stlouisfed.org/fred/series/observations', {
-            params: {
-                api_key: process.env.FRED_API_KEY,
-                series_id: 'PCE',
-                file_type: 'json'
-            }
-        });
-
-        const data = response.data.observations;
-        for (const entry of data) {
-            const date = entry.date;
-            const value = parseFloat(entry.value);
-
-            await storePCEData({ date, value });
-        }
-    } catch (error) {
-        console.error('Error fetching PCE data:', error);
-    }
-};
-
 // Route to fetch PCE data from FRED and store in DB
 pceRouter.get('/fetch-pce', async (req, res) => {
     try {
