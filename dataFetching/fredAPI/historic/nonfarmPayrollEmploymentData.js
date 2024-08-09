@@ -12,8 +12,8 @@ const fetchNonfarmPayrollEmploymentData = async () => {
                 api_key: process.env.FRED_API_KEY,
                 series_id: seriesID,
                 file_type: 'json',
-                observation_start: '1940-01-01',  // Start from the earliest available data
-                observation_end: new Date().toISOString().split('T')[0]  // Fetch data up until today
+                observation_start: '1940-01-01',  
+                observation_end: new Date().toISOString().split('T')[0]  
             }
         });
 

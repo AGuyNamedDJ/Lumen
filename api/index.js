@@ -125,6 +125,6 @@ apiRouter.use('/scrapers', scrapersRouter);
 apiRouter.use('/signup', signupRouter);
 apiRouter.use('/spx-price', spxPriceRouter);
 apiRouter.use('/user', userRouter);
-apiRouter.use ('/yahoo-finance', yahooFinanceRouter)
+apiRouter.use ('/yahoo-finance', yahooFinanceRouter);
 
 module.exports = { apiRouter };
