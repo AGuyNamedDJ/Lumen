@@ -10,29 +10,6 @@ const {
 } = require('../../db/fredAPI/coreInflationData');
 const axios = require('axios');
 
-// Fetch and store Core Inflation data from FRED API
-const fetchCoreInflationData = async () => {
-    try {
-        const response = await axios.get('https://api.stlouisfed.org/fred/series/observations', {
-            params: {
-                api_key: process.env.FRED_API_KEY,
-                series_id: 'CPILFESL', // Core Inflation Series ID
-                file_type: 'json'
-            }
-        });
-
-        const data = response.data.observations;
-        for (const entry of data) {
-            const date = entry.date;
-            const value = parseFloat(entry.value);
-
-            await storeCoreInflationData({ date, value });
-        }
-    } catch (error) {
-        console.error('Error fetching Core Inflation data:', error);
-    }
-};
-
 // Route to fetch Core Inflation data from FRED and store in DB
 coreInflationRouter.get('/fetch-core-inflation', async (req, res) => {
     try {

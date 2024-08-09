@@ -1,18 +1,15 @@
 const axios = require('axios');
-const { storeConsumerSentimentData } = require('../../../db/fredAPI/consumerSentimentData');
+const { storeCPIData } = require('../../../db/fredAPI/cpiData');
 
-// Series ID for Consumer Sentiment
-const seriesID = 'UMCSENT';
+// Series ID for Core Inflation
+const seriesID = 'CPIAUCSL';
 
-// Fetch and store Consumer Sentiment data from FRED API
-const fetchConsumerSentimentData = async () => {
+// Fetch and store CPI data from FRED API
+const fetchCPIData = async () => {
     try {
-        // Get today's date
         const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
-
-        // Optional: Specify a start date if you only want to fetch data from a certain point in time
-        const startDate = '2000-01-01';
-
+        const startDate = '1947-01-01'; // Fetching data from January 1st, 1947
+        
         const response = await axios.get('https://api.stlouisfed.org/fred/series/observations', {
             params: {
                 api_key: process.env.FRED_API_KEY,
@@ -27,12 +24,12 @@ const fetchConsumerSentimentData = async () => {
         for (const entry of data) {
             const date = entry.date;
             const value = parseFloat(entry.value);
-
-            await storeConsumerSentimentData({ date, value });
+            await storeCPIData({ date, value });
         }
+        console.log('CPI data fetched and stored successfully.');
     } catch (error) {
-        console.error('Error fetching Consumer Sentiment data:', error);
+        console.error('Error fetching CPI data:', error);
     }
 };
 
-module.exports = { fetchConsumerSentimentData };
+module.exports = { fetchCPIData };

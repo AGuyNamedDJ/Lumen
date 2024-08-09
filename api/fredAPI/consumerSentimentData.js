@@ -10,29 +10,6 @@ const {
 } = require('../../db/fredAPI/consumerSentimentData');
 const axios = require('axios');
 
-// Fetch and store Consumer Sentiment data from FRED API
-const fetchConsumerSentimentData = async () => {
-    try {
-        const response = await axios.get('https://api.stlouisfed.org/fred/series/observations', {
-            params: {
-                api_key: process.env.FRED_API_KEY,
-                series_id: 'UMCSENT',
-                file_type: 'json'
-            }
-        });
-
-        const data = response.data.observations;
-        for (const entry of data) {
-            const date = entry.date;
-            const value = parseFloat(entry.value);
-
-            await storeConsumerSentimentData({ date, value });
-        }
-    } catch (error) {
-        console.error('Error fetching Consumer Sentiment data:', error);
-    }
-};
-
 // Route to fetch Consumer Sentiment data from FRED and store in DB
 consumerSentimentRouter.get('/fetch-consumer-sentiment', async (req, res) => {
     try {
