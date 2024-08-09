@@ -10,29 +10,6 @@ const {
 } = require('../../db/fredAPI/consumerConfidenceData');
 const axios = require('axios');
 
-// Fetch and store Consumer Confidence data from FRED API
-const fetchConsumerConfidenceData = async () => {
-    try {
-        const response = await axios.get('https://api.stlouisfed.org/fred/series/observations', {
-            params: {
-                api_key: process.env.FRED_API_KEY,
-                series_id: 'CSCICP03USM665S',
-                file_type: 'json'
-            }
-        });
-
-        const data = response.data.observations;
-        for (const entry of data) {
-            const date = entry.date;
-            const value = parseFloat(entry.value);
-
-            await storeConsumerConfidenceData({ date, value });
-        }
-    } catch (error) {
-        console.error('Error fetching Consumer Confidence data:', error);
-    }
-};
-
 // Route to fetch Consumer Confidence data from FRED and store in DB
 consumerConfidenceRouter.get('/fetch-consumer-confidence', async (req, res) => {
     try {

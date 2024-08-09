@@ -26,7 +26,8 @@ const { apiRouter } = require('./api/index');
 const { client } = require('./db/index');
 const { handleWebSocket, restartWebSocket } = require('./api/finnhubAPI/finnhubWebsocket');
 const importAllSPXCSVFiles = require('./db/fetchS3DataForSPX');
-const importAllSPYCSVFiles = require('./db//fetchS3DataForSPY');
+const importAllSPYCSVFiles = require('./db/fetchS3DataForSPY');
+const importAllVIXCSVFiles = require('./db/fetchS3DataForVIX');
 
 // Middleware
 app.use(cors({
@@ -63,9 +64,10 @@ async function importCSVData() {
     try {
         await importAllSPXCSVFiles();
         await importAllSPYCSVFiles();
+        await importAllVIXCSVFiles();
         logger.info('CSV import completed');
     } catch (error) {
-        logger.error('Error importing CSV data:', error);
+        logger.error('Error importing CSV data.', error);
     }
 }
 
@@ -73,10 +75,31 @@ async function importCSVData() {
 async function startServer() {
     await importCSVData(); 
     await startWebSocket();
-    logger.info('Server initialization completed');
+    logger.info('Server initialization completed.');
 }
 
-// Import CSV Data and Start WebSocket on Server Start
+// Import Historic fredAPI Data
+const { fetchAllHistoricFredAPIData } = require('./dataFetching/fredAPI/historic');
+fetchAllHistoricFredAPIData();
+
+// Import Live fredAPI Data
+const {scheduleAverageHourlyEarningsUpdates} = require('./dataFetching/fredAPI/live/liveAverageHourlyEarningsData');
+const {scheduleConsumerConfidenceUpdates} = require('./dataFetching/fredAPI/live/liveConsumerConfidenceData');
+
+async function importLiveFredAPIData() {
+    try {
+        scheduleAverageHourlyEarningsUpdates();
+        scheduleConsumerConfidenceUpdates();
+        logger.info('fredAPI Data import completed');
+
+    } catch (error) {
+        logger.error ('Error importing fredAPI data!');
+    }
+}
+
+importLiveFredAPIData();
+
+// Start WebSocket on Server Start
 startServer();
 
 // Schedule WebSocket restart every 15 minutes

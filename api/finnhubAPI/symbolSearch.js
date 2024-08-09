@@ -12,8 +12,8 @@ async function getSymbolsByExchange(exchange) {
         if (response.data) {
             console.log('Symbols:', response.data);
             response.data.forEach(symbol => {
-                if (symbol.description.includes('S&P 500')) {
-                    console.log('Potential S&P 500 Symbol:', symbol);
+                if (symbol.description.includes('VIX')) {
+                    console.log('Potential VIX Symbol:', symbol);
                 }
             });
         } else {

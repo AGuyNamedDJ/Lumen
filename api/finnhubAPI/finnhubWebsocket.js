@@ -3,13 +3,14 @@ require('dotenv').config();
 const moment = require('moment-timezone');
 const { createRealTimeSPXRecord } = require('../../db/helperFunctions/realTimeSPX');
 const { createRealTimeSPYRecord } = require('../../db/helperFunctions/realTimeSPY');
+const { createRealTimeVIXRecord } = require('../../db/helperFunctions/realTimeVIX'); 
 const Bottleneck = require('bottleneck');
 
 const API_KEY = process.env.FINNHUB_API_KEY;
 const SOCKET_URL = `wss://ws.finnhub.io?token=${API_KEY}`;
 
 const limiter = new Bottleneck({
-    minTime: 1000, // 1 seconds between requests
+    minTime: 1000, // 1 second between requests
     maxConcurrent: 1
 });
 
@@ -22,7 +23,8 @@ const handleWebSocket = () => {
         console.log('WebSocket connection opened');
         socket.send(JSON.stringify({ 'type': 'subscribe', 'symbol': '^GSPC' })); 
         socket.send(JSON.stringify({ 'type': 'subscribe', 'symbol': 'SPY' })); 
-        console.log('Subscribed to ^GSPC and SPY trade data.');
+        socket.send(JSON.stringify({ 'type': 'subscribe', 'symbol': '^VIX' })); 
+        console.log('Subscribed to ^GSPC, SPY, and ^VIX trade data.');
     });
 
     socket.on('message', async (data) => {
@@ -46,6 +48,8 @@ const handleWebSocket = () => {
                             await createRealTimeSPYRecord({ timestamp: centralTime, current_price, volume, conditions });
                         } else if (symbol === 'GSPC' || symbol === '^GSPC' || symbol === 'OANDA:SPX500_USD') {
                             await createRealTimeSPXRecord({ timestamp: centralTime, current_price, volume, conditions });
+                        } else if (symbol === '^VIX') {
+                            await createRealTimeVIXRecord({ timestamp: centralTime, current_price, volume, conditions }); // New handler for VIX
                         }
                         console.log('Data point stored successfully');
                     });

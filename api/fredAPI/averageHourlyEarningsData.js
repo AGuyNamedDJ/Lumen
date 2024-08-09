@@ -7,34 +7,11 @@ const {
     getAverageHourlyEarningsDataByDate,
     updateAverageHourlyEarningsDataByDate,
     deleteAverageHourlyEarningsDataByDate,
-} = require('../../db/fredAPI/laborForceParticipationRateData');
+} = require('../../db/fredAPI/averageHourlyEarningsData');
 const axios = require('axios');
 
 // Series ID for Average Hourly Earnings
 const seriesID = 'CES0500000003';
-
-// Fetch and store Average Hourly Earnings data from FRED API
-const fetchAverageHourlyEarningsData = async () => {
-    try {
-        const response = await axios.get('https://api.stlouisfed.org/fred/series/observations', {
-            params: {
-                api_key: process.env.FRED_API_KEY,
-                series_id: seriesID,
-                file_type: 'json'
-            }
-        });
-
-        const data = response.data.observations;
-        for (const entry of data) {
-            const date = entry.date;
-            const value = parseFloat(entry.value);
-
-            await storeAverageHourlyEarningsData({ date, value });
-        }
-    } catch (error) {
-        console.error('Error fetching Average Hourly Earnings data:', error);
-    }
-};
 
 // Route to fetch Average Hourly Earnings data from FRED and store in DB
 averageHourlyEarningsRouter.get('/fetch-average-hourly-earnings', async (req, res) => {
