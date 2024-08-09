@@ -7,8 +7,8 @@ const seriesID = 'GDP';
 // Fetch and store GDP data from FRED API
 const fetchGDPData = async () => {
     try {
-        const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
-        const startDate = '1947-01-01'; // Fetching data from January 1st, 1947
+        const today = new Date().toISOString().split('T')[0]; 
+        const startDate = '1947-01-01';
         
         const response = await axios.get('https://api.stlouisfed.org/fred/series/observations', {
             params: {

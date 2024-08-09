@@ -8,10 +8,8 @@ const seriesID = 'CPILFESL';
 const fetchCoreInflationData = async () => {
     try {
         // Get today's date
-        const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
-
-        // Optional: Specify a start date if you only want to fetch data from a certain point in time
-        const startDate = '2000-01-01'; // Example: start fetching from January 1st, 2000
+        const today = new Date().toISOString().split('T')[0];
+        const startDate = '2000-01-01';
 
         const response = await axios.get('https://api.stlouisfed.org/fred/series/observations', {
             params: {

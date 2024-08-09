@@ -8,11 +8,16 @@ const fetchInterestRateData = async (series_id) => {
     try {
         if (!series_id) throw new Error('Series ID is undefined');
 
+        // Get today's date
+        const today = new Date().toISOString().split('T')[0];
+
         const response = await axios.get('https://api.stlouisfed.org/fred/series/observations', {
             params: {
                 api_key: process.env.FRED_API_KEY,
                 series_id: series_id,
-                file_type: 'json'
+                file_type: 'json',
+                observation_start: '1776-01-01', 
+                observation_end: today 
             }
         });
 

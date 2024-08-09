@@ -6,6 +6,11 @@ const { fetchCPIData } = require('./cpiData');
 const { fetchGDPData } = require('./gdpData');
 const { fetchIndustrialProductionData } = require('./industrialProductionData');
 const { fetchAllInterestRateData } = require('./interestRateData');
+const {fetchLaborForceParticipationRateData} = require('./laborForceParticipationRateData');
+const {fetchNonfarmPayrollEmploymentData} = require('./nonfarmPayrollEmploymentData');
+const {fetchPCEData} = require('./pceData')
+const {fetchPPIData} = require('./ppiData')
+const{fetchUnemploymentRateData} = require('./unemploymentRateData');
 
 async function fetchAllHistoricFredAPIData() {
     await fetchAverageHourlyEarningsData();
@@ -16,7 +21,11 @@ async function fetchAllHistoricFredAPIData() {
     await fetchGDPData();
     await fetchIndustrialProductionData();
     await fetchAllInterestRateData();
-    // Call other fetch functions for different data points
+    await fetchLaborForceParticipationRateData();
+    await fetchNonfarmPayrollEmploymentData();
+    await fetchPCEData();
+    await fetchPPIData();
+    await fetchUnemploymentRateData();
 }
 
 module.exports = { fetchAllHistoricFredAPIData };

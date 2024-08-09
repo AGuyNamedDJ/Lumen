@@ -10,29 +10,6 @@ const {
 } = require('../../db/fredAPI/unemploymentRateData');
 const axios = require('axios');
 
-// Fetch and store Unemployment Rate data from FRED API
-const fetchUnemploymentRateData = async () => {
-    try {
-        const response = await axios.get('https://api.stlouisfed.org/fred/series/observations', {
-            params: {
-                api_key: process.env.FRED_API_KEY,
-                series_id: 'UNRATE',
-                file_type: 'json'
-            }
-        });
-
-        const data = response.data.observations;
-        for (const entry of data) {
-            const date = entry.date;
-            const value = parseFloat(entry.value);
-
-            await storeUnemploymentRateData({ date, value });
-        }
-    } catch (error) {
-        console.error('Error fetching Unemployment Rate data:', error);
-    }
-};
-
 // Route to fetch Unemployment Rate data from FRED and store in DB
 unemploymentRateRouter.get('/fetch-unemployment-rate', async (req, res) => {
     try {

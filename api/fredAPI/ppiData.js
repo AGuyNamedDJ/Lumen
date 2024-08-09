@@ -10,28 +10,6 @@ const {
 } = require('../../db/fredAPI/ppiData');
 const axios = require('axios');
 
-// Fetch and store PPI data from FRED API
-const fetchPPIData = async () => {
-    try {
-        const response = await axios.get('https://api.stlouisfed.org/fred/series/observations', {
-            params: {
-                api_key: process.env.FRED_API_KEY,
-                series_id: 'PPIACO',
-                file_type: 'json'
-            }
-        });
-
-        const data = response.data.observations;
-        for (const entry of data) {
-            const date = entry.date;
-            const value = parseFloat(entry.value);
-            await storePPIData({ date, value });
-        }
-    } catch (error) {
-        console.error('Error fetching PPI data:', error);
-    }
-};
-
 // Route to fetch PPI data from FRED and store in DB
 ppiRouter.get('/fetch-ppi', async (req, res) => {
     try {
