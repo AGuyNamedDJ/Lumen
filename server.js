@@ -85,12 +85,21 @@ fetchAllHistoricFredAPIData();
 // Import Live fredAPI Data
 const {scheduleAverageHourlyEarningsUpdates} = require('./dataFetching/fredAPI/live/liveAverageHourlyEarningsData');
 const {scheduleConsumerConfidenceUpdates} = require('./dataFetching/fredAPI/live/liveConsumerConfidenceData');
+const {scheduleConsumerSentimentUpdates} = require('./dataFetching/fredAPI/live/liveConsumerSentimentData');
+const {scheduleCoreInflationUpdates} = require('./dataFetching/fredAPI/live/liveCoreInflationData');
+const {scheduleCPIUpdates} = require('./dataFetching/fredAPI/live/liveCPIData');
+
+
+
 
 async function importLiveFredAPIData() {
     try {
         scheduleAverageHourlyEarningsUpdates();
         scheduleConsumerConfidenceUpdates();
-        logger.info('fredAPI Data import completed');
+        scheduleConsumerSentimentUpdates();
+        scheduleCoreInflationUpdates();
+        scheduleCPIUpdates();
+        logger.info('fredAPI Data import completed.');
 
     } catch (error) {
         logger.error ('Error importing fredAPI data!');

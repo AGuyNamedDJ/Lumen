@@ -2,7 +2,7 @@ const axios = require('axios');
 const { storeConsumerConfidenceData } = require('../../../db/fredAPI/consumerConfidenceData');
 
 // Series ID for Average Hourly Earnings
-const seriesID = 'CES0500000003';
+const seriesID = 'CSCICP03USM665S';
 
 // Fetch and store Consumer Confidence data from FRED API
 const fetchConsumerConfidenceData = async () => {

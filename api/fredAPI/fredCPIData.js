@@ -10,28 +10,6 @@ const {
 } = require('../../db/fredAPI/cpiData');
 const axios = require('axios');
 
-// Fetch and store CPI data from FRED API
-const fetchCPIData = async () => {
-    try {
-        const response = await axios.get('https://api.stlouisfed.org/fred/series/observations', {
-            params: {
-                api_key: process.env.FRED_API_KEY,
-                series_id: 'CPIAUCSL',
-                file_type: 'json'
-            }
-        });
-
-        const data = response.data.observations;
-        for (const entry of data) {
-            const date = entry.date;
-            const value = parseFloat(entry.value);
-            await storeCPIData({ date, value });
-        }
-    } catch (error) {
-        console.error('Error fetching CPI data:', error);
-    }
-};
-
 // Route to fetch CPI data from FRED and store in DB
 cpiRouter.get('/fetch-cpi', async (req, res) => {
     try {
