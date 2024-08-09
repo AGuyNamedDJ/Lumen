@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const { fetchAverageHourlyEarningsData } = require('../../../api/fredAPI/averageHourlyEarningsData');
+const { fetchAverageHourlyEarningsData } = require('../historic/averageHourlyEarningsData');
 
 function scheduleAverageHourlyEarningsUpdates() {
     cron.schedule('0 18 1-7 * 5', async () => {

@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const { fetchConsumerConfidenceData } = require('../../../api/fredAPI/consumerConfidenceData');
+const { fetchConsumerConfidenceData } = require('../historic/consumerConfidenceData');
 
 function scheduleConsumerConfidenceUpdates() {
     cron.schedule('0 11 * * 2', async () => {

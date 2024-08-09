@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const { fetchCoreInflationData } = require('../../../api/fredAPI/coreInflationData');
+const { fetchCoreInflationData } = require('../historic/coreInflationData');
 
 function scheduleCoreInflationUpdates() {
     cron.schedule('0 11 15 * *', async () => {

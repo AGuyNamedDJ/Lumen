@@ -10,29 +10,6 @@ const {
 } = require('../../db/fredAPI/gdpData');
 const axios = require('axios');
 
-// Fetch and store GDP data from FRED API
-const fetchGDPData = async () => {
-    try {
-        const response = await axios.get('https://api.stlouisfed.org/fred/series/observations', {
-            params: {
-                api_key: process.env.FRED_API_KEY,
-                series_id: 'GDP',
-                file_type: 'json'
-            }
-        });
-
-        const data = response.data.observations;
-        for (const entry of data) {
-            const date = entry.date;
-            const value = parseFloat(entry.value);
-
-            await storeGDPData({ date, value });
-        }
-    } catch (error) {
-        console.error('Error fetching GDP data:', error);
-    }
-};
-
 // Route to fetch GDP data from FRED and store in DB
 gdpRouter.get('/fetch-gdp', async (req, res) => {
     try {
