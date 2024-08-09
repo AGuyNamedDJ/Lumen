@@ -7,7 +7,7 @@ const seriesID = 'CSCICP03USM665S';
 // Fetch and store Consumer Confidence data from FRED API
 const fetchConsumerConfidenceData = async () => {
     try {
-        const today = new Date().toISOString().split('T')[0]; // Today's date in YYYY-MM-DD format
+        const today = new Date().toISOString().split('T')[0];
         const startDate = '2000-01-01'; 
 
         const response = await axios.get('https://api.stlouisfed.org/fred/series/observations', {
