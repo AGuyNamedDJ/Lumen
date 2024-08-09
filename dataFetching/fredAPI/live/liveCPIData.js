@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const { fetchCPIData } = require('../../../api/fredAPI/fredCPIData');
+const { fetchCPIData } = require('../historic/cpiData');
 
 function scheduleCPIUpdates() {
     cron.schedule('59 23 15 * *', async () => {

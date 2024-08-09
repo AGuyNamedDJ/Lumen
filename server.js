@@ -88,8 +88,9 @@ const {scheduleConsumerConfidenceUpdates} = require('./dataFetching/fredAPI/live
 const {scheduleConsumerSentimentUpdates} = require('./dataFetching/fredAPI/live/liveConsumerSentimentData');
 const {scheduleCoreInflationUpdates} = require('./dataFetching/fredAPI/live/liveCoreInflationData');
 const {scheduleCPIUpdates} = require('./dataFetching/fredAPI/live/liveCPIData');
-
-
+const {scheduleGDPUpdates} = require('./dataFetching/fredAPI/live/liveGDPData');
+const {scheduleIndustrialProductionUpdates} = require('./dataFetching/fredAPI/live/liveIndustrialProductionData');
+const  {scheduleInterestRateUpdates} = require ('./dataFetching/fredAPI/live/liveInterestRateData');
 
 
 async function importLiveFredAPIData() {
@@ -99,6 +100,9 @@ async function importLiveFredAPIData() {
         scheduleConsumerSentimentUpdates();
         scheduleCoreInflationUpdates();
         scheduleCPIUpdates();
+        scheduleGDPUpdates();
+        scheduleIndustrialProductionUpdates();
+        scheduleInterestRateUpdates();
         logger.info('fredAPI Data import completed.');
 
     } catch (error) {

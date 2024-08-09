@@ -10,32 +10,6 @@ const {
 } = require('../../db/fredAPI/interestRateData');
 const axios = require('axios');
 
-// Series IDs for different interest rates
-const seriesIDs = ['FEDFUNDS', 'DPRIME', 'GS10', 'TB3MS', 'GS1', 'MORTGAGE30US', 'GS30'];
-
-// Fetch and store Interest Rate data from FRED API
-const fetchInterestRateData = async (series_id) => {
-    try {
-        const response = await axios.get('https://api.stlouisfed.org/fred/series/observations', {
-            params: {
-                api_key: process.env.FRED_API_KEY,
-                series_id: series_id,
-                file_type: 'json'
-            }
-        });
-
-        const data = response.data.observations;
-        for (const entry of data) {
-            const date = entry.date;
-            const value = parseFloat(entry.value);
-
-            await storeInterestRateData({ date, series_id, value });
-        }
-    } catch (error) {
-        console.error(`Error fetching Interest Rate data for ${series_id}:`, error);
-    }
-};
-
 // Route to fetch Interest Rate data from FRED and store in DB
 interestRateRouter.get('/fetch-interest-rates', async (req, res) => {
     try {
