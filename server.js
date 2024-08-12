@@ -57,7 +57,7 @@ async function startWebSocket() {
     } catch (error) {
         logger.error('Error starting WebSocket:', error);
     }
-}
+};
 
 // Function to import CSV data
 async function importCSVData() {
@@ -69,14 +69,14 @@ async function importCSVData() {
     } catch (error) {
         logger.error('Error importing CSV data.', error);
     }
-}
+};
 
 // Sequentially run CSV import and then WebSocket
 async function startServer() {
     await importCSVData(); 
     await startWebSocket();
     logger.info('Server initialization completed.');
-}
+};
 
 // Import Historic fredAPI Data
 const { fetchAllHistoricFredAPIData } = require('./dataFetching/fredAPI/historic');
@@ -117,13 +117,34 @@ async function importLiveFredAPIData() {
     } catch (error) {
         logger.error ('Error importing fredAPI data!');
     }
-}
+};
 
 importLiveFredAPIData();
 
 // Import Live VIX Data
 const { scheduleVIXUpdates } = require('./dataFetching/yahooFinance/scheduleVIXData');
 scheduleVIXUpdates();
+
+// Import Indicators
+const {scheduleAggregatesDataUpdates} = require('./dataFetching/indicators/schedule/aggregates');
+const {scheduleEMAUpdates} = require('./dataFetching/indicators/schedule/emaIndicators');
+const {scheduleMACDUpdates} = require('./dataFetching/indicators/schedule/macdIndicators');
+const {scheduleRSIUpdates} = require('./dataFetching/indicators/schedule/rsiIndicators');
+const {scheduleSMAUpdates} = require('./dataFetching/indicators/schedule/smaIndicators');
+async function importIndicators() {
+    try {
+        scheduleAggregatesDataUpdates();
+        scheduleEMAUpdates();
+        scheduleMACDUpdates();
+        scheduleRSIUpdates();
+        scheduleSMAUpdates();
+        logger.info('Indicator imports completed.');
+    } catch (error) {
+        logger.error ('Error importing fredAPI data!');
+    }
+};
+
+importIndicators();
 
 // Start WebSocket on Server Start
 startServer();
