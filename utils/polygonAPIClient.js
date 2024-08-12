@@ -1,4 +1,3 @@
-// utils/polygonApiClient.js
 const axios = require('axios');
 const Bottleneck = require('bottleneck');
 
