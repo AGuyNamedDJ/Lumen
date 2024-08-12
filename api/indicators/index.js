@@ -1,7 +1,7 @@
 const express = require('express');
 const indicatorsRouter = express.Router();
 
-const aggregatesRouter = require('.//aggregates');
+const aggregatesRouter = require('./aggregates');
 // const bbRouter = require('./bbIndicators');
 const emaRouter = require('./emaIndicators');
 const macd_indicators = require('./macdIndicators');
