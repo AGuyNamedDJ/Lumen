@@ -79,6 +79,27 @@ def clean_consumer_confidence_data(df):
 
     return df
 
+# Data Cleaning: consumer_confidence_data
+
+
+def clean_consumer_sentiment_data(df):
+    # Handle missing values
+    if df['value'].isnull().sum() > 0:
+        df = df.dropna(subset=['value'])
+
+    # Convert 'date' to datetime format
+    df['date'] = pd.to_datetime(df['date'])
+
+    # Remove duplicates
+    df = df.drop_duplicates(subset=['date'])
+
+    # Handle outliers
+    upper_bound = df['value'].mean() + 3 * df['value'].std()
+    lower_bound = df['value'].mean() - 3 * df['value'].std()
+    df = df[(df['value'] >= lower_bound) & (df['value'] <= upper_bound)]
+
+    return df
+
 # Features
 # Features: Average Hourly Earnings Data
 
@@ -204,6 +225,37 @@ def create_features_for_consumer_confidence_data(df):
 
     return df
 
+# Features: Create Features for Cosumer Sentiment Data
+
+
+def create_features_for_consumer_sentiment_data(df):
+    # Convert index to datetime if not already done
+    if not pd.api.types.is_datetime64_any_dtype(df.index):
+        df = df.set_index('date')
+
+    # Monthly and Annual Percentage Change
+    df['Monthly_Percentage_Change'] = df['value'].pct_change()
+    df['Annual_Percentage_Change'] = df['value'].pct_change(periods=12)
+
+    # Rolling Average
+    df['Rolling_3M_Average'] = df['value'].rolling(window=3).mean()
+    df['Rolling_6M_Average'] = df['value'].rolling(window=6).mean()
+    df['Rolling_12M_Average'] = df['value'].rolling(window=12).mean()
+
+    # MACD
+    short_ema = df['value'].ewm(span=12, adjust=False).mean()
+    long_ema = df['value'].ewm(span=26, adjust=False).mean()
+    df['MACD'] = short_ema - long_ema
+
+    # RSI
+    delta = df['value'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    return df
+
 
 def normalize_data(df):
     # Separate datetime columns from the rest
@@ -249,10 +301,10 @@ def preprocess_data(query, table_name):
 TABLE_CLEANING_FUNCTIONS = {
     "average_hourly_earnings_data": clean_average_hourly_earnings_data,
     "consumer_confidence_data": clean_consumer_confidence_data,
-    # Add additional table and function mappings here...
+    "consumer_sentiment_data": clean_consumer_sentiment_data,
 }
 
-
+# Main
 if __name__ == "__main__":
     # Set the correct path for saving the processed data
     test_dir = os.path.join(os.getcwd(), 'data', 'lumen_2', 'test')
@@ -275,9 +327,20 @@ if __name__ == "__main__":
         elif table_name == "consumer_confidence_data":
             feature_df = create_features_for_consumer_confidence_data(
                 cleaned_df)
-        # Add more conditions for other tables here...
+        elif table_name == "consumer_sentiment_data":
+            feature_df = create_features_for_consumer_sentiment_data(
+                cleaned_df)
+        else:
+            feature_df = cleaned_df  # In case the table does not have a specific feature function
 
-        # Normalize the data
+        # Log the DataFrame to check if it is empty
+        print(f"Feature DataFrame for {table_name}:\n{feature_df.head()}")
+
+        if feature_df.empty:
+            print(f"Warning: The feature DataFrame for {
+                  table_name} is empty. Skipping normalization and saving.")
+            continue
+
         normalized_df, scaler = normalize_data(feature_df)
 
         # Save the cleaned data to the test directory
@@ -285,12 +348,6 @@ if __name__ == "__main__":
             test_dir, f"test_processed_{table_name}.csv")
         print(f"Saving file to {output_path}")  # Log file path
         normalized_df.to_csv(output_path, index=False)
-
         # Check if file exists
-        file_exists = os.path.exists(output_path)
-        print(f"File exists: {file_exists}")
-
-        if file_exists:
-            print(f"{table_name} processing completed and saved to {output_path}")
-        else:
-            print(f"Failed to save {table_name} data to {output_path}")
+        print(f"File exists: {os.path.exists(output_path)}")
+        print(f"{table_name} processing completed and saved to {output_path}")
