@@ -224,6 +224,68 @@ def clean_labor_force_participation_rate_data(df):
 
     return df
 
+# Data Cleaning: Nonfarm Payroll Employment Data
+
+
+def clean_nonfarm_payroll_employment_data(df):
+    # Convert 'date' to datetime format
+    df['date'] = pd.to_datetime(df['date'])
+
+    # Remove any duplicates based on 'date' and 'value'
+    df = df.drop_duplicates(subset=['date', 'value'])
+
+    # Handle missing values
+    df = df.dropna(subset=['value'])
+
+    return df
+
+# Data Cleaning: Personal Consumption Expenditures Data
+
+
+def clean_personal_consumption_expenditures_data(df):
+    # Convert 'date' column to datetime format
+    df['date'] = pd.to_datetime(df['date'])
+
+    # Remove duplicates based on 'date'
+    df = df.drop_duplicates(subset=['date'])
+
+    # Handle missing values in the 'value' column
+    if df['value'].isnull().sum() > 0:
+        df = df.dropna(subset=['value'])
+
+    return df
+
+# Data Cleaning: PPI Data
+
+
+def clean_ppi_data(df):
+    # Convert 'date' column to datetime format
+    df['date'] = pd.to_datetime(df['date'])
+
+    # Remove duplicates based on 'date'
+    df = df.drop_duplicates(subset=['date'])
+
+    # Handle missing values in the 'value' column
+    if df['value'].isnull().sum() > 0:
+        df = df.dropna(subset=['value'])
+
+    return df
+
+# Data Cleaning: Unemployment Rate Data
+
+
+def clean_unemployment_rate_data(df):
+    # Convert 'date' column to datetime format
+    df['date'] = pd.to_datetime(df['date'])
+
+    # Remove duplicates based on 'date'
+    df = df.drop_duplicates(subset=['date'])
+
+    # Handle missing values in the 'value' column
+    if df['value'].isnull().sum() > 0:
+        df = df.dropna(subset=['value'])
+
+    return df
 
 # Features
 # Features: Average Hourly Earnings Data
@@ -756,6 +818,205 @@ def create_features_for_labor_force_participation_rate_data(df):
 
     return df
 
+# Features: Nonfarm Payroll Employment Data
+
+
+def create_features_for_nonfarm_payroll_employment_data(df):
+    # Ensure 'date' is set as index for easier time series operations
+    if not pd.api.types.is_datetime64_any_dtype(df.index):
+        df = df.set_index('date')
+
+    # Lag Features: Useful to understand changes over time
+    df['Lag_1'] = df['value'].shift(1)
+    df['Lag_3'] = df['value'].shift(3)
+    df['Lag_12'] = df['value'].shift(12)
+
+    # Rolling Statistics: Moving averages and standard deviations
+    df['Rolling_Mean_3M'] = df['value'].rolling(window=3).mean()
+    df['Rolling_Mean_6M'] = df['value'].rolling(window=6).mean()
+    df['Rolling_Mean_12M'] = df['value'].rolling(window=12).mean()
+    df['Rolling_Std_3M'] = df['value'].rolling(window=3).std()
+    df['Rolling_Std_6M'] = df['value'].rolling(window=6).std()
+    df['Rolling_Std_12M'] = df['value'].rolling(window=12).std()
+
+    # Percentage Change: Month-over-Month and Year-over-Year
+    df['MoM_Percentage_Change'] = df['value'].pct_change()
+    df['YoY_Percentage_Change'] = df['value'].pct_change(periods=12)
+
+    # Cumulative Sum and Product
+    df['Cumulative_Sum'] = df['value'].cumsum()
+    df['Cumulative_Product'] = (1 + df['value'].pct_change()).cumprod()
+
+    # Exponential Moving Average (EMA)
+    df['EMA_12'] = df['value'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['value'].ewm(span=26, adjust=False).mean()
+    df['EMA_50'] = df['value'].ewm(span=50, adjust=False).mean()
+
+    # Rate of Change (ROC)
+    df['ROC'] = df['value'].diff(12) / df['value'].shift(12)
+
+    # Z-Score: Normalizing the values based on mean and standard deviation
+    df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
+
+    # Seasonal Decomposition: Decompose the series into trend, seasonal, and residual components
+    decomposition = seasonal_decompose(
+        df['value'], model='multiplicative', period=12)
+    df['Trend'] = decomposition.trend
+    df['Seasonal'] = decomposition.seasonal
+    df['Residual'] = decomposition.resid
+
+    # Days Since Last Peak/Trough: Time since the last highest/lowest value
+    peak_idx = df['value'].expanding().apply(
+        lambda x: x.idxmax().timestamp(), raw=False)
+    trough_idx = df['value'].expanding().apply(
+        lambda x: x.idxmin().timestamp(), raw=False)
+    df['Days_Since_Peak'] = (df.index.map(
+        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Trough'] = (df.index.map(
+        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+
+    # RSI (Relative Strength Index)
+    delta = df['value'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    return df
+
+# Features: Personal Consumption Expenditures Data
+
+
+def create_features_for_personal_consumption_expenditures(df):
+    # Ensure 'date' is set as index for easier time series operations
+    if not pd.api.types.is_datetime64_any_dtype(df.index):
+        df = df.set_index('date')
+
+    # Lag Features
+    df['Lag_1'] = df['value'].shift(1)
+    df['Lag_3'] = df['value'].shift(3)
+    df['Lag_12'] = df['value'].shift(12)
+
+    # Rolling Statistics
+    df['Rolling_Mean_3M'] = df['value'].rolling(window=3).mean()
+    df['Rolling_Mean_6M'] = df['value'].rolling(window=6).mean()
+    df['Rolling_Mean_12M'] = df['value'].rolling(window=12).mean()
+    df['Rolling_Std_3M'] = df['value'].rolling(window=3).std()
+    df['Rolling_Std_6M'] = df['value'].rolling(window=6).std()
+    df['Rolling_Std_12M'] = df['value'].rolling(window=12).std()
+
+    # Percentage Change
+    df['MoM_Percentage_Change'] = df['value'].pct_change()
+    df['YoY_Percentage_Change'] = df['value'].pct_change(periods=12)
+
+    # Cumulative Sum and Product
+    df['Cumulative_Sum'] = df['value'].cumsum()
+    df['Cumulative_Product'] = (1 + df['value'].pct_change()).cumprod()
+
+    # Exponential Moving Average (EMA)
+    df['EMA_12'] = df['value'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['value'].ewm(span=26, adjust=False).mean()
+    df['EMA_50'] = df['value'].ewm(span=50, adjust=False).mean()
+
+    # Rate of Change (ROC)
+    df['ROC'] = df['value'].diff(12) / df['value'].shift(12)
+
+    # Z-Score
+    df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
+
+    # Seasonal Decomposition
+    decomposition = seasonal_decompose(
+        df['value'], model='multiplicative', period=12)
+    df['Trend'] = decomposition.trend
+    df['Seasonal'] = decomposition.seasonal
+    df['Residual'] = decomposition.resid
+
+    # Days Since Last Peak/Trough
+    peak_idx = df['value'].expanding().apply(
+        lambda x: x.idxmax().timestamp(), raw=False)
+    trough_idx = df['value'].expanding().apply(
+        lambda x: x.idxmin().timestamp(), raw=False)
+    df['Days_Since_Peak'] = (df.index.map(
+        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Trough'] = (df.index.map(
+        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+
+    # RSI (Relative Strength Index)
+    delta = df['value'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    return df
+
+# Features: PPI Data
+
+
+def create_features_for_ppi_data(df):
+    # Ensure 'date' is set as index for easier time series operations
+    if not pd.api.types.is_datetime64_any_dtype(df.index):
+        df = df.set_index('date')
+
+    # Lag Features
+    df['Lag_1'] = df['value'].shift(1)
+    df['Lag_3'] = df['value'].shift(3)
+    df['Lag_12'] = df['value'].shift(12)
+
+    # Rolling Statistics
+    df['Rolling_Mean_3M'] = df['value'].rolling(window=3).mean()
+    df['Rolling_Mean_6M'] = df['value'].rolling(window=6).mean()
+    df['Rolling_Mean_12M'] = df['value'].rolling(window=12).mean()
+    df['Rolling_Std_3M'] = df['value'].rolling(window=3).std()
+    df['Rolling_Std_6M'] = df['value'].rolling(window=6).std()
+    df['Rolling_Std_12M'] = df['value'].rolling(window=12).std()
+
+    # Percentage Change
+    df['MoM_Percentage_Change'] = df['value'].pct_change()
+    df['YoY_Percentage_Change'] = df['value'].pct_change(periods=12)
+
+    # Cumulative Sum and Product
+    df['Cumulative_Sum'] = df['value'].cumsum()
+    df['Cumulative_Product'] = (1 + df['value'].pct_change()).cumprod()
+
+    # Exponential Moving Average (EMA)
+    df['EMA_12'] = df['value'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['value'].ewm(span=26, adjust=False).mean()
+    df['EMA_50'] = df['value'].ewm(span=50, adjust=False).mean()
+
+    # Rate of Change (ROC)
+    df['ROC'] = df['value'].diff(12) / df['value'].shift(12)
+
+    # Z-Score
+    df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
+
+    # Seasonal Decomposition
+    decomposition = seasonal_decompose(
+        df['value'], model='multiplicative', period=12)
+    df['Trend'] = decomposition.trend
+    df['Seasonal'] = decomposition.seasonal
+    df['Residual'] = decomposition.resid
+
+    # Days Since Last Peak/Trough
+    peak_idx = df['value'].expanding().apply(
+        lambda x: x.idxmax().timestamp(), raw=False)
+    trough_idx = df['value'].expanding().apply(
+        lambda x: x.idxmin().timestamp(), raw=False)
+    df['Days_Since_Peak'] = (df.index.map(
+        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Trough'] = (df.index.map(
+        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+
+    # RSI (Relative Strength Index)
+    delta = df['value'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    return df
+
+
 # Normalize Data
 
 
@@ -781,6 +1042,73 @@ def normalize_data(df):
         [df[datetime_columns], df[non_numeric_columns], scaled_numeric_df], axis=1)
 
     return final_df, scaler
+
+# Features: Unemployment Rate Data
+
+
+def create_features_for_unemployment_rate_data(df):
+    # Ensure 'date' is set as index for easier time series operations
+    if not pd.api.types.is_datetime64_any_dtype(df.index):
+        df = df.set_index('date')
+
+    # Lag Features
+    df['Lag_1'] = df['value'].shift(1)
+    df['Lag_3'] = df['value'].shift(3)
+    df['Lag_12'] = df['value'].shift(12)
+
+    # Rolling Statistics
+    df['Rolling_Mean_3M'] = df['value'].rolling(window=3).mean()
+    df['Rolling_Mean_6M'] = df['value'].rolling(window=6).mean()
+    df['Rolling_Mean_12M'] = df['value'].rolling(window=12).mean()
+    df['Rolling_Std_3M'] = df['value'].rolling(window=3).std()
+    df['Rolling_Std_6M'] = df['value'].rolling(window=6).std()
+    df['Rolling_Std_12M'] = df['value'].rolling(window=12).std()
+
+    # Percentage Change
+    df['MoM_Percentage_Change'] = df['value'].pct_change()
+    df['YoY_Percentage_Change'] = df['value'].pct_change(periods=12)
+
+    # Cumulative Sum and Product
+    df['Cumulative_Sum'] = df['value'].cumsum()
+    df['Cumulative_Product'] = (1 + df['value'].pct_change()).cumprod()
+
+    # Exponential Moving Average (EMA)
+    df['EMA_12'] = df['value'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['value'].ewm(span=26, adjust=False).mean()
+    df['EMA_50'] = df['value'].ewm(span=50, adjust=False).mean()
+
+    # Rate of Change (ROC)
+    df['ROC'] = df['value'].diff(12) / df['value'].shift(12)
+
+    # Z-Score
+    df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
+
+    # Seasonal Decomposition
+    decomposition = seasonal_decompose(
+        df['value'], model='multiplicative', period=12)
+    df['Trend'] = decomposition.trend
+    df['Seasonal'] = decomposition.seasonal
+    df['Residual'] = decomposition.resid
+
+    # Days Since Last Peak/Trough
+    peak_idx = df['value'].expanding().apply(
+        lambda x: x.idxmax().timestamp(), raw=False)
+    trough_idx = df['value'].expanding().apply(
+        lambda x: x.idxmin().timestamp(), raw=False)
+    df['Days_Since_Peak'] = (df.index.map(
+        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Trough'] = (df.index.map(
+        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+
+    # RSI (Relative Strength Index)
+    delta = df['value'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    return df
+
 
 # Preprocess Data
 
@@ -814,6 +1142,10 @@ TABLE_CLEANING_FUNCTIONS = {
     "industrial_production_data": clean_industrial_production_data,
     "interest_rate_data": clean_interest_rate_data,
     "labor_force_participation_rate_data": clean_labor_force_participation_rate_data,
+    "nonfarm_payroll_employment_data": clean_nonfarm_payroll_employment_data,
+    "personal_consumption_expenditures": clean_personal_consumption_expenditures_data,
+    "ppi_data": clean_ppi_data,
+    "unemployment_rate_data": clean_unemployment_rate_data,
 
 }
 
@@ -857,6 +1189,15 @@ if __name__ == "__main__":
         elif table_name == "labor_force_participation_rate_data":
             feature_df = create_features_for_labor_force_participation_rate_data(
                 cleaned_df)
+        elif table_name == "nonfarm_payroll_employment_data":
+            feature_df = clean_nonfarm_payroll_employment_data(cleaned_df)
+        elif table_name == "personal_consumption_expenditures":
+            feature_df = create_features_for_personal_consumption_expenditures(
+                cleaned_df)
+        elif table_name == "ppi_data":
+            feature_df = create_features_for_ppi_data(cleaned_df)
+        elif table_name == "unemployment_rate_data":
+            feature_df = create_features_for_unemployment_rate_data(cleaned_df)
 
         else:
             feature_df = cleaned_df  # In case the table does not have a specific feature function
