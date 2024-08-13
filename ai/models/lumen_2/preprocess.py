@@ -1545,8 +1545,47 @@ def preprocess_data(query, table_name):
     # Create features based on the table
     if table_name == "average_hourly_earnings_data":
         df = create_features_for_average_hourly_earnings(df)
-    # Add more conditions for other tables here...
+    elif table_name == "consumer_confidence_data":
+        df = create_features_for_consumer_confidence_data(df)
+    elif table_name == "consumer_sentiment_data":
+        df = create_features_for_consumer_sentiment_data(df)
+    elif table_name == "core_inflation_data":
+        df = create_features_for_core_inflation_data(df)
+    elif table_name == "cpi_data":
+        df = create_features_for_cpi_data(df)
+    elif table_name == "gdp_data":
+        df = create_features_for_gdp_data(df)
+    elif table_name == "industrial_production_data":
+        df = create_features_for_industrial_production_data(df)
+    elif table_name == "interest_rate_data":
+        df = create_features_for_interest_rate_data(df)
+    elif table_name == "labor_force_participation_rate_data":
+        df = create_features_for_labor_force_participation_rate_data(df)
+    elif table_name == "nonfarm_payroll_employment_data":
+        df = create_features_for_nonfarm_payroll_employment_data(df)
+    elif table_name == "personal_consumption_expenditures":
+        df = create_features_for_personal_consumption_expenditures(df)
+    elif table_name == "ppi_data":
+        df = create_features_for_ppi_data(df)
+    elif table_name == "unemployment_rate_data":
+        df = create_features_for_unemployment_rate_data(df)
+    elif table_name == "historical_spx":
+        df = create_features_for_historical_spx(df)
+    elif table_name == "historical_spy":
+        df = create_features_for_historical_spy(df)
+    elif table_name == "historical_vix":
+        df = create_features_for_historical_vix(df)
+    elif table_name == "real_time_spx":
+        df = create_features_for_real_time_spx(df)
+    elif table_name == "real_time_spy":
+        df = create_features_for_real_time_spy(df)
+    elif table_name == "real_time_vix":
+        df = create_features_for_real_time_vix(df)
+    else:
+        print(f"No specific feature function found for table: {
+              table_name}. Skipping feature creation.")
 
+    # Normalize the data
     df, scaler = normalize_data(df)
 
     return df
@@ -1579,8 +1618,8 @@ TABLE_CLEANING_FUNCTIONS = {
 # Main
 if __name__ == "__main__":
     # Set the correct path for saving the processed data
-    test_dir = os.path.join(os.getcwd(), 'data', 'lumen_2', 'test')
-    os.makedirs(test_dir, exist_ok=True)
+    processed_dir = os.path.join(os.getcwd(), 'data', 'lumen_2', 'processed')
+    os.makedirs(processed_dir, exist_ok=True)
 
     for table_name, cleaning_function in TABLE_CLEANING_FUNCTIONS.items():
         print(f"Processing table: {table_name}")
@@ -1589,73 +1628,18 @@ if __name__ == "__main__":
         query = f"SELECT * FROM {table_name}"
 
         # Load, clean, and process the data
-        df = load_data(query)
-        cleaned_df = cleaning_function(df)
+        processed_df = preprocess_data(query, table_name)
 
-        # Create features based on the table
-        if table_name == "average_hourly_earnings_data":
-            feature_df = create_features_for_average_hourly_earnings(
-                cleaned_df)
-        elif table_name == "consumer_confidence_data":
-            feature_df = create_features_for_consumer_confidence_data(
-                cleaned_df)
-        elif table_name == "consumer_sentiment_data":
-            feature_df = create_features_for_consumer_sentiment_data(
-                cleaned_df)
-        elif table_name == "core_inflation_data":
-            feature_df = create_features_for_core_inflation_data(cleaned_df)
-        elif table_name == "cpi_data":
-            feature_df = create_features_for_cpi_data(cleaned_df)
-        elif table_name == "gdp_data":
-            feature_df = create_features_for_gdp_data(cleaned_df)
-        elif table_name == "industrial_production_data":
-            feature_df = create_features_for_industrial_production_data(
-                cleaned_df)
-        elif table_name == "interest_rate_data":
-            feature_df = create_features_for_interest_rate_data(cleaned_df)
-        elif table_name == "labor_force_participation_rate_data":
-            feature_df = create_features_for_labor_force_participation_rate_data(
-                cleaned_df)
-        elif table_name == "nonfarm_payroll_employment_data":
-            feature_df = clean_nonfarm_payroll_employment_data(cleaned_df)
-        elif table_name == "personal_consumption_expenditures":
-            feature_df = create_features_for_personal_consumption_expenditures(
-                cleaned_df)
-        elif table_name == "ppi_data":
-            feature_df = create_features_for_ppi_data(cleaned_df)
-        elif table_name == "unemployment_rate_data":
-            feature_df = create_features_for_unemployment_rate_data(cleaned_df)
-        elif table_name == "historical_spx":
-            feature_df = create_features_for_historical_spx(cleaned_df)
-        elif table_name == "historical_spy":
-            feature_df = create_features_for_historical_spy(cleaned_df)
-        elif table_name == "historical_vix":
-            feature_df = create_features_for_historical_vix(cleaned_df)
-        elif table_name == "real_time_spx":
-            feature_df = create_features_for_real_time_spx(cleaned_df)
-        elif table_name == "real_time_spy":
-            feature_df = create_features_for_real_time_spy(cleaned_df)
-        elif table_name == "real_time_vix":
-            feature_df = create_features_for_real_time_vix(cleaned_df)
-
-        else:
-            feature_df = cleaned_df  # In case the table does not have a specific feature function
-
-        # Log the DataFrame to check if it is empty
-        print(f"Feature DataFrame for {table_name}:\n{feature_df.head()}")
-
-        if feature_df.empty:
+        if processed_df.empty:
             print(f"Warning: The feature DataFrame for {
                   table_name} is empty. Skipping normalization and saving.")
             continue
 
-        normalized_df, scaler = normalize_data(feature_df)
-
-        # Save the cleaned data to the test directory
+        # Save the cleaned data to the processed directory
         output_path = os.path.join(
-            test_dir, f"test_processed_{table_name}.csv")
+            processed_dir, f"processed_{table_name}.csv")
         print(f"Saving file to {output_path}")  # Log file path
-        normalized_df.to_csv(output_path, index=False)
+        processed_df.to_csv(output_path, index=False)
         # Check if file exists
         print(f"File exists: {os.path.exists(output_path)}")
         print(f"{table_name} processing completed and saved to {output_path}")
