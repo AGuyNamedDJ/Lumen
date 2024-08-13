@@ -325,8 +325,6 @@ def clean_historical_spy_data(df):
     # Remove duplicates
     df = df.drop_duplicates(subset=['timestamp'])
 
-    # Handle outliers if necessary (optional)
-
     return df
 
 # Data Cleaning: Historical VIX
@@ -576,9 +574,15 @@ def create_features_for_consumer_sentiment_data(df):
 
 
 def create_features_for_core_inflation_data(df):
-    # Convert index to datetime if not already done
-    if not pd.api.types.is_datetime64_any_dtype(df.index):
-        df = df.set_index('date')
+    # Ensure 'date' is in datetime format and set it as index
+    if not pd.api.types.is_datetime64_any_dtype(df['date']):
+        df['date'] = pd.to_datetime(df['date'])
+    df = df.set_index('date')
+
+    # Check for missing values
+    if df['value'].isnull().sum() > 0:
+        print("Warning: Missing values found in 'value' column. Filling missing values.")
+        df['value'].fillna(method='ffill', inplace=True)
 
     # Monthly and Annual Percentage Change
     df['Monthly_Percentage_Change'] = df['value'].pct_change()
@@ -598,11 +602,17 @@ def create_features_for_core_inflation_data(df):
     df['MACD'] = short_ema - long_ema
 
     # Seasonal Decomposition
-    decomposition = seasonal_decompose(
-        df['value'], model='additive', period=12)
-    df['Trend'] = decomposition.trend
-    df['Seasonal'] = decomposition.seasonal
-    df['Residual'] = decomposition.resid
+    try:
+        decomposition = seasonal_decompose(
+            df['value'], model='additive', period=12)
+        df['Trend'] = decomposition.trend
+        df['Seasonal'] = decomposition.seasonal
+        df['Residual'] = decomposition.resid
+    except Exception as e:
+        print(f"Error during seasonal decomposition: {e}")
+        df['Trend'] = None
+        df['Seasonal'] = None
+        df['Residual'] = None
 
     # Relative Strength Index (RSI)
     delta = df['value'].diff(1)
@@ -636,7 +646,6 @@ def create_features_for_core_inflation_data(df):
         pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
 
     return df
-
 # Features: CPI Data
 
 
@@ -1342,7 +1351,7 @@ def create_features_for_historical_vix(df):
 
     # Debug: Print the DataFrame after loading
     print("Loaded DataFrame from DB:")
-    print(df.head())  # Print first few rows to verify data loading
+    print(df.head())
 
     # Drop rows with NaN in 'close' to ensure valid data for indicators
     df = df.dropna(subset=['close'])
@@ -1638,8 +1647,7 @@ if __name__ == "__main__":
         # Save the cleaned data to the processed directory
         output_path = os.path.join(
             processed_dir, f"processed_{table_name}.csv")
-        print(f"Saving file to {output_path}")  # Log file path
+        print(f"Saving file to {output_path}")
         processed_df.to_csv(output_path, index=False)
-        # Check if file exists
         print(f"File exists: {os.path.exists(output_path)}")
         print(f"{table_name} processing completed and saved to {output_path}")
