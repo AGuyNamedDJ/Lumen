@@ -100,6 +100,41 @@ def clean_consumer_sentiment_data(df):
 
     return df
 
+
+# Data Cleaning: core_inflation_data
+
+
+def clean_core_inflation_data(df):
+    # Convert 'date' to datetime format
+    df['date'] = pd.to_datetime(df['date'])
+    print("Converted 'date' column to datetime format.")
+
+    # Remove duplicates based on the 'date' column
+    before_dedup = len(df)
+    df = df.drop_duplicates(subset=['date'])
+    after_dedup = len(df)
+    print(f"Removed {before_dedup - after_dedup} duplicate rows.")
+
+    # Handle missing values by dropping rows where 'value' is NaN
+    missing_values = df['value'].isnull().sum()
+    if missing_values > 0:
+        df = df.dropna(subset=['value'])
+        print(f"Removed {missing_values} rows with missing 'value'.")
+
+    # Handle outliers by filtering out values outside 3 standard deviations
+    mean_value = df['value'].mean()
+    std_value = df['value'].std()
+    upper_bound = mean_value + 3 * std_value
+    lower_bound = mean_value - 3 * std_value
+    before_outlier_removal = len(df)
+    df = df[(df['value'] >= lower_bound) & (df['value'] <= upper_bound)]
+    after_outlier_removal = len(df)
+    print(f"Removed {before_outlier_removal -
+          after_outlier_removal} outlier rows.")
+
+    return df
+
+
 # Features
 # Features: Average Hourly Earnings Data
 
@@ -256,7 +291,73 @@ def create_features_for_consumer_sentiment_data(df):
 
     return df
 
+# Features: Core Inflation Data
 
+
+def create_features_for_core_inflation_data(df):
+    # Convert index to datetime if not already done
+    if not pd.api.types.is_datetime64_any_dtype(df.index):
+        df = df.set_index('date')
+
+    # Monthly and Annual Percentage Change
+    df['Monthly_Percentage_Change'] = df['value'].pct_change()
+    df['Annual_Percentage_Change'] = df['value'].pct_change(periods=12)
+
+    # Cumulative Sum of Core Inflation
+    df['Cumulative_Sum'] = df['value'].cumsum()
+
+    # Rolling Averages
+    df['Rolling_3M_Average'] = df['value'].rolling(window=3).mean()
+    df['Rolling_6M_Average'] = df['value'].rolling(window=6).mean()
+    df['Rolling_12M_Average'] = df['value'].rolling(window=12).mean()
+
+    # Moving Average Convergence Divergence (MACD)
+    short_ema = df['value'].ewm(span=12, adjust=False).mean()
+    long_ema = df['value'].ewm(span=26, adjust=False).mean()
+    df['MACD'] = short_ema - long_ema
+
+    # Seasonal Decomposition
+    decomposition = seasonal_decompose(
+        df['value'], model='additive', period=12)
+    df['Trend'] = decomposition.trend
+    df['Seasonal'] = decomposition.seasonal
+    df['Residual'] = decomposition.resid
+
+    # Relative Strength Index (RSI)
+    delta = df['value'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    # Rolling Standard Deviation (Volatility)
+    df['Rolling_3M_StdDev'] = df['value'].rolling(window=3).std()
+    df['Rolling_6M_StdDev'] = df['value'].rolling(window=6).std()
+    df['Rolling_12M_StdDev'] = df['value'].rolling(window=12).std()
+
+    # Inflation Momentum
+    df['Momentum_3M'] = df['value'] - df['value'].shift(3)
+    df['Momentum_6M'] = df['value'] - df['value'].shift(6)
+    df['Momentum_12M'] = df['value'] - df['value'].shift(12)
+
+    # Z-Scores
+    df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
+
+    # Days Since Last Peak/Trough
+    peak_idx = df['value'].expanding().apply(
+        lambda x: x.idxmax().timestamp(), raw=False)
+    trough_idx = df['value'].expanding().apply(
+        lambda x: x.idxmin().timestamp(), raw=False)
+
+    df['Days_Since_Peak'] = (df.index.map(
+        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Trough'] = (df.index.map(
+        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+
+    return df
+
+
+# Normalize Data
 def normalize_data(df):
     # Separate datetime columns from the rest
     datetime_columns = df.select_dtypes(include=['datetime64']).columns
@@ -275,6 +376,7 @@ def normalize_data(df):
     return final_df, scaler
 
 
+# Preprocess Data
 def preprocess_data(query, table_name):
     df = load_data(query)
 
@@ -302,6 +404,7 @@ TABLE_CLEANING_FUNCTIONS = {
     "average_hourly_earnings_data": clean_average_hourly_earnings_data,
     "consumer_confidence_data": clean_consumer_confidence_data,
     "consumer_sentiment_data": clean_consumer_sentiment_data,
+    "core_inflation_data": clean_core_inflation_data,
 }
 
 # Main
@@ -330,6 +433,8 @@ if __name__ == "__main__":
         elif table_name == "consumer_sentiment_data":
             feature_df = create_features_for_consumer_sentiment_data(
                 cleaned_df)
+        elif table_name == "core_inflation_data":
+            feature_df = create_features_for_core_inflation_data(cleaned_df)
         else:
             feature_df = cleaned_df  # In case the table does not have a specific feature function
 
