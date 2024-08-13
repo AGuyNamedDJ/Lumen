@@ -1,7 +1,9 @@
 const axios = require('axios');
 const { storeEMAData } = require('../../../db/indicators/emaIndicators');
 const POLYGON_API_KEY = process.env.POLYGON_API_KEY;
-const { polygonApiRequest } = require('../../../utils/polygonApiClient');
+
+console.log("Loading emaIndicators.js...");
+console.log("Current Directory:", __dirname);
 
 async function fetchEMAData(symbol, window, series_type) {
     try {
@@ -17,10 +19,11 @@ async function fetchEMAData(symbol, window, series_type) {
         // Log the request parameters
         console.log(`Fetching EMA data with parameters: ${JSON.stringify(params)}`);
 
-        // Make the API request
-        const indicatorData = await polygonApiRequest(endpoint, params);
+        // Make the API request directly using axios
+        const response = await axios.get(`https://api.polygon.io${endpoint}`, { params });
 
         // Log the received data
+        const indicatorData = response.data;
         console.log('Received data from Polygon API:', JSON.stringify(indicatorData, null, 2));
 
         // Check if the response format is correct

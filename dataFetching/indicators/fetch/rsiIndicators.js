@@ -1,7 +1,6 @@
 const axios = require('axios');
 const { storeRSIData } = require('../../../db/indicators/rsiIndicators');
 const POLYGON_API_KEY = process.env.POLYGON_API_KEY;
-const { polygonApiRequest } = require('../../../utils/polygonApiClient');
 
 async function fetchAndStoreRSIData(symbol, window, series_type) {
     try {
@@ -17,7 +16,10 @@ async function fetchAndStoreRSIData(symbol, window, series_type) {
 
         console.log(`Fetching RSI data with parameters:`, params);
 
-        const indicatorData = await polygonApiRequest(endpoint, params);
+        // Make the API request directly using axios
+        const response = await axios.get(`https://api.polygon.io${endpoint}`, { params });
+
+        const indicatorData = response.data;
 
         if (indicatorData && Array.isArray(indicatorData.results)) {
             const formattedData = indicatorData.results.map(dataPoint => ({
