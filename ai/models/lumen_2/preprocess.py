@@ -209,6 +209,21 @@ def clean_interest_rate_data(df):
 
     return df
 
+# Data Cleaning: Labor Forcec Participation Rate Data
+
+
+def clean_labor_force_participation_rate_data(df):
+    # Convert 'date' column to datetime format
+    df['date'] = pd.to_datetime(df['date'])
+
+    # Remove any duplicates based on 'date'
+    df = df.drop_duplicates(subset=['date'])
+
+    # Handle missing values if any
+    df = df.dropna(subset=['value'])
+
+    return df
+
 
 # Features
 # Features: Average Hourly Earnings Data
@@ -675,6 +690,72 @@ def create_features_for_interest_rate_data(df):
 
     return df
 
+# Feature: Labor Force Participation Data
+
+
+def create_features_for_labor_force_participation_rate_data(df):
+    # Ensure 'date' is set as index for easier time series operations
+    if not pd.api.types.is_datetime64_any_dtype(df.index):
+        df = df.set_index('date')
+
+    # Lag Features
+    df['Lag_1'] = df['value'].shift(1)
+    df['Lag_3'] = df['value'].shift(3)
+    df['Lag_12'] = df['value'].shift(12)
+
+    # Rolling Statistics
+    df['Rolling_Mean_3M'] = df['value'].rolling(window=3).mean()
+    df['Rolling_Mean_6M'] = df['value'].rolling(window=6).mean()
+    df['Rolling_Mean_12M'] = df['value'].rolling(window=12).mean()
+    df['Rolling_Std_3M'] = df['value'].rolling(window=3).std()
+    df['Rolling_Std_6M'] = df['value'].rolling(window=6).std()
+    df['Rolling_Std_12M'] = df['value'].rolling(window=12).std()
+
+    # Percentage Change
+    df['MoM_Percentage_Change'] = df['value'].pct_change()
+    df['YoY_Percentage_Change'] = df['value'].pct_change(periods=12)
+
+    # Cumulative Sum and Product
+    df['Cumulative_Sum'] = df['value'].cumsum()
+    df['Cumulative_Product'] = (1 + df['value'].pct_change()).cumprod()
+
+    # Seasonal Decomposition
+    decomposition = seasonal_decompose(
+        df['value'], model='multiplicative', period=12)
+    df['Trend'] = decomposition.trend
+    df['Seasonal'] = decomposition.seasonal
+    df['Residual'] = decomposition.resid
+
+    # Exponential Moving Average (EMA)
+    df['EMA_12'] = df['value'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['value'].ewm(span=26, adjust=False).mean()
+    df['EMA_50'] = df['value'].ewm(span=50, adjust=False).mean()
+
+    # Rate of Change (ROC)
+    df['ROC'] = df['value'].diff(12) / df['value'].shift(12)
+
+    # Relative Strength Index (RSI)
+    delta = df['value'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    # Z-Score
+    df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
+
+    # Days Since Last Peak/Trough
+    peak_idx = df['value'].expanding().apply(
+        lambda x: x.idxmax().timestamp(), raw=False)
+    trough_idx = df['value'].expanding().apply(
+        lambda x: x.idxmin().timestamp(), raw=False)
+    df['Days_Since_Peak'] = (df.index.map(
+        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Trough'] = (df.index.map(
+        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+
+    return df
+
 # Normalize Data
 
 
@@ -732,6 +813,7 @@ TABLE_CLEANING_FUNCTIONS = {
     "gdp_data": clean_gdp_data,
     "industrial_production_data": clean_industrial_production_data,
     "interest_rate_data": clean_interest_rate_data,
+    "labor_force_participation_rate_data": clean_labor_force_participation_rate_data,
 
 }
 
@@ -772,6 +854,10 @@ if __name__ == "__main__":
                 cleaned_df)
         elif table_name == "interest_rate_data":
             feature_df = create_features_for_interest_rate_data(cleaned_df)
+        elif table_name == "labor_force_participation_rate_data":
+            feature_df = create_features_for_labor_force_participation_rate_data(
+                cleaned_df)
+
         else:
             feature_df = cleaned_df  # In case the table does not have a specific feature function
 
