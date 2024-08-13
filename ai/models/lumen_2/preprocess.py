@@ -51,6 +51,34 @@ def clean_average_hourly_earnings_data(df):
 
     return df
 
+# Data Cleaning: consumer_confidence_data
+
+
+def clean_consumer_confidence_data(df):
+    # Handle missing values in 'value' column
+    if df['value'].isnull().sum() > 0:
+        df = df.dropna(subset=['value'])
+        print("Dropped rows with missing 'value'.")
+
+    # Convert 'date' to datetime format
+    df['date'] = pd.to_datetime(df['date'])
+    print("Converted 'date' column to datetime format.")
+
+    # Remove duplicates based on 'date' column
+    before_duplicates = df.shape[0]
+    df = df.drop_duplicates(subset=['date'])
+    after_duplicates = df.shape[0]
+    print(f"Removed {before_duplicates - after_duplicates} duplicate rows.")
+
+    # Handle outliers in the 'value' column
+    upper_bound = df['value'].mean() + 3 * df['value'].std()
+    lower_bound = df['value'].mean() - 3 * df['value'].std()
+    outliers = df[(df['value'] < lower_bound) | (df['value'] > upper_bound)]
+    df = df[(df['value'] >= lower_bound) & (df['value'] <= upper_bound)]
+    print(f"Removed {outliers.shape[0]} outliers from 'value' column.")
+
+    return df
+
 # Features
 # Features: Average Hourly Earnings Data
 
@@ -110,6 +138,72 @@ def create_features_for_average_hourly_earnings(df):
 
     return df
 
+# Features: Average Hourly Earnings Data
+
+
+def create_features_for_consumer_confidence_data(df):
+    # Ensure 'date' is set as index for easier time series operations
+    if not pd.api.types.is_datetime64_any_dtype(df.index):
+        df = df.set_index('date')
+
+    # Lag Features
+    df['Lag_1'] = df['value'].shift(1)
+    df['Lag_3'] = df['value'].shift(3)
+    df['Lag_12'] = df['value'].shift(12)
+
+    # Rolling Statistics
+    df['Rolling_Mean_3M'] = df['value'].rolling(window=3).mean()
+    df['Rolling_Mean_6M'] = df['value'].rolling(window=6).mean()
+    df['Rolling_Mean_12M'] = df['value'].rolling(window=12).mean()
+    df['Rolling_Std_3M'] = df['value'].rolling(window=3).std()
+    df['Rolling_Std_6M'] = df['value'].rolling(window=6).std()
+    df['Rolling_Std_12M'] = df['value'].rolling(window=12).std()
+
+    # Percentage Change
+    df['MoM_Percentage_Change'] = df['value'].pct_change()
+    df['YoY_Percentage_Change'] = df['value'].pct_change(periods=12)
+
+    # Cumulative Sum and Product
+    df['Cumulative_Sum'] = df['value'].cumsum()
+    df['Cumulative_Product'] = (1 + df['value'].pct_change()).cumprod()
+
+    # Seasonal Decomposition
+    decomposition = seasonal_decompose(
+        df['value'], model='multiplicative', period=12)
+    df['Trend'] = decomposition.trend
+    df['Seasonal'] = decomposition.seasonal
+    df['Residual'] = decomposition.resid
+
+    # Exponential Moving Average (EMA)
+    df['EMA_12'] = df['value'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['value'].ewm(span=26, adjust=False).mean()
+    df['EMA_50'] = df['value'].ewm(span=50, adjust=False).mean()
+
+    # Rate of Change (ROC)
+    df['ROC'] = df['value'].diff(12) / df['value'].shift(12)
+
+    # Relative Strength Index (RSI)
+    delta = df['value'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    # Z-Score
+    df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
+
+    # Days Since Last Peak/Trough
+    peak_idx = df['value'].expanding().apply(
+        lambda x: x.idxmax().timestamp(), raw=False)
+    trough_idx = df['value'].expanding().apply(
+        lambda x: x.idxmin().timestamp(), raw=False)
+    df['Days_Since_Peak'] = (df.index.map(
+        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Trough'] = (df.index.map(
+        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+
+    return df
+
 
 def normalize_data(df):
     # Separate datetime columns from the rest
@@ -154,7 +248,7 @@ def preprocess_data(query, table_name):
 # Dictionary mapping table names to their respective cleaning functions
 TABLE_CLEANING_FUNCTIONS = {
     "average_hourly_earnings_data": clean_average_hourly_earnings_data,
-    # "consumer_confidence_data": clean_consumer_confidence_data,
+    "consumer_confidence_data": clean_consumer_confidence_data,
     # Add additional table and function mappings here...
 }
 
@@ -178,7 +272,12 @@ if __name__ == "__main__":
         if table_name == "average_hourly_earnings_data":
             feature_df = create_features_for_average_hourly_earnings(
                 cleaned_df)
+        elif table_name == "consumer_confidence_data":
+            feature_df = create_features_for_consumer_confidence_data(
+                cleaned_df)
+        # Add more conditions for other tables here...
 
+        # Normalize the data
         normalized_df, scaler = normalize_data(feature_df)
 
         # Save the cleaned data to the test directory
@@ -186,6 +285,12 @@ if __name__ == "__main__":
             test_dir, f"test_processed_{table_name}.csv")
         print(f"Saving file to {output_path}")  # Log file path
         normalized_df.to_csv(output_path, index=False)
+
         # Check if file exists
-        print(f"File exists: {os.path.exists(output_path)}")
-        print(f"{table_name} processing completed and saved to {output_path}")
+        file_exists = os.path.exists(output_path)
+        print(f"File exists: {file_exists}")
+
+        if file_exists:
+            print(f"{table_name} processing completed and saved to {output_path}")
+        else:
+            print(f"Failed to save {table_name} data to {output_path}")
