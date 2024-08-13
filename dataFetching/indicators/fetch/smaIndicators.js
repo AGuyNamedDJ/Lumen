@@ -1,7 +1,6 @@
 const axios = require('axios');
 const { storeSMAData } = require('../../../db/indicators/smaIndicators');
 const POLYGON_API_KEY = process.env.POLYGON_API_KEY;
-const { polygonApiRequest } = require('../../../utils/polygonApiClient');
 
 async function fetchAndStoreSMAData(symbol, window, series_type) {
     try {
@@ -15,7 +14,13 @@ async function fetchAndStoreSMAData(symbol, window, series_type) {
             apiKey: POLYGON_API_KEY
         };
 
-        const indicatorData = await polygonApiRequest(endpoint, params);
+        // Log the request parameters
+        console.log(`Fetching SMA data with parameters:`, params);
+
+        // Make the API request directly using axios
+        const response = await axios.get(`https://api.polygon.io${endpoint}`, { params });
+
+        const indicatorData = response.data;
 
         if (indicatorData && Array.isArray(indicatorData.results)) {
             const formattedData = indicatorData.results.map(dataPoint => ({

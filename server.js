@@ -126,14 +126,14 @@ const { scheduleVIXUpdates } = require('./dataFetching/yahooFinance/scheduleVIXD
 scheduleVIXUpdates();
 
 // Import Indicators
-const {scheduleAggregatesDataUpdates} = require('./dataFetching/indicators/schedule/aggregates');
+// const {scheduleAggregatesDataUpdates} = require('./dataFetching/indicators/schedule/aggregates');
 const {scheduleEMAUpdates} = require('./dataFetching/indicators/schedule/emaIndicators');
 const {scheduleMACDUpdates} = require('./dataFetching/indicators/schedule/macdIndicators');
 const {scheduleRSIUpdates} = require('./dataFetching/indicators/schedule/rsiIndicators');
 const {scheduleSMAUpdates} = require('./dataFetching/indicators/schedule/smaIndicators');
 async function importIndicators() {
     try {
-        scheduleAggregatesDataUpdates();
+        // scheduleAggregatesDataUpdates();
         scheduleEMAUpdates();
         scheduleMACDUpdates();
         scheduleRSIUpdates();

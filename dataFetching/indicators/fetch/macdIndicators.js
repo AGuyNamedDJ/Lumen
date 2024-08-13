@@ -1,7 +1,6 @@
 const axios = require('axios');
 const { storeMACDData } = require('../../../db/indicators/macdIndicators');
 const POLYGON_API_KEY = process.env.POLYGON_API_KEY;
-const { polygonApiRequest } = require('../../../utils/polygonApiClient');
 
 async function fetchMACDData(symbol, timespan, series_type, fast_period, slow_period, signal_period) {
     try {
@@ -23,7 +22,10 @@ async function fetchMACDData(symbol, timespan, series_type, fast_period, slow_pe
             apiKey: POLYGON_API_KEY
         };
 
-        const indicatorData = await polygonApiRequest(endpoint, params);
+        // Make the API request directly using axios
+        const response = await axios.get(`https://api.polygon.io${endpoint}`, { params });
+
+        const indicatorData = response.data;
 
         if (indicatorData && Array.isArray(indicatorData.results)) {
             const formattedData = indicatorData.results.map(dataPoint => ({
