@@ -25,4 +25,4 @@ async function polygonApiRequest(endpoint, params) {
     }
 }
 
-module.exports = { polygonApiRequest };
+module.exports = polygonApiRequest;
