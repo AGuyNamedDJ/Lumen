@@ -287,6 +287,72 @@ def clean_unemployment_rate_data(df):
 
     return df
 
+# Data Cleaning: Historical SPX
+
+
+def clean_historical_spx_data(df):
+    # Handle missing values
+    df.dropna(inplace=True)
+
+    # Convert 'timestamp' to datetime format
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+
+    # Remove duplicates based on 'timestamp'
+    df.drop_duplicates(subset=['timestamp'], inplace=True)
+
+    # Handle outliers in price data
+    for column in ['open', 'high', 'low', 'close']:
+        upper_bound = df[column].mean() + 3 * df[column].std()
+        lower_bound = df[column].mean() - 3 * df[column].std()
+        df = df[(df[column] >= lower_bound) & (df[column] <= upper_bound)]
+
+    # Ensure volume is a positive integer
+    df = df[df['volume'] > 0]
+
+    return df
+
+# Data Cleaning: Historical SPY
+
+
+def clean_historical_spy_data(df):
+    # Handle missing values
+    if df.isnull().sum().sum() > 0:
+        df = df.dropna()
+
+    # Convert 'timestamp' to datetime format
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+
+    # Remove duplicates
+    df = df.drop_duplicates(subset=['timestamp'])
+
+    # Handle outliers if necessary (optional)
+
+    return df
+
+# Data Cleaning: Historical VIX
+
+
+def clean_historical_vix_data(df):
+    # Convert 'timestamp' to datetime format
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+
+    # Remove duplicates
+    df = df.drop_duplicates(subset=['timestamp'])
+
+    # Handle missing values more carefully
+    # If the entire row is NaN for critical columns, drop it
+    df = df.dropna(subset=['open', 'high', 'low',
+                   'close', 'volume'], how='all')
+
+    # Forward fill NaN values to handle missing data points in critical columns
+    df = df.fillna(method='ffill')
+
+    # Re-check for NaNs after filling
+    if df.isnull().sum().sum() > 0:
+        print("Warning: Some NaN values remain after filling. They may affect feature generation.")
+
+    return df
+
 # Features
 # Features: Average Hourly Earnings Data
 
@@ -1109,6 +1175,159 @@ def create_features_for_unemployment_rate_data(df):
 
     return df
 
+# Features: Historical SPX
+
+
+def create_features_for_historical_spx(df):
+    # Ensure 'timestamp' is set as index for easier time series operations
+    if not pd.api.types.is_datetime64_any_dtype(df.index):
+        df = df.set_index('timestamp')
+
+    # Simple Moving Averages (SMA)
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_100'] = df['close'].rolling(window=100).mean()
+
+    # Exponential Moving Averages (EMA)
+    df['EMA_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['close'].ewm(span=26, adjust=False).mean()
+
+    # Bollinger Bands
+    df['Bollinger_Upper'] = df['SMA_20'] + 2 * \
+        df['close'].rolling(window=20).std()
+    df['Bollinger_Lower'] = df['SMA_20'] - 2 * \
+        df['close'].rolling(window=20).std()
+
+    # Relative Strength Index (RSI)
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    # Moving Average Convergence Divergence (MACD)
+    df['MACD'] = df['EMA_12'] - df['EMA_26']
+    df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+
+    # ATR (Average True Range)
+    df['ATR'] = df['high'].combine(
+        df['low'], max) - df['low'].combine(df['close'].shift(1), min)
+    df['ATR_14'] = df['ATR'].rolling(window=14).mean()
+
+    # On-Balance Volume (OBV)
+    df['OBV'] = (np.sign(df['close'].diff()) * df['volume']).fillna(0).cumsum()
+
+    # Stochastic Oscillator
+    low_min = df['low'].rolling(window=14).min()
+    high_max = df['high'].rolling(window=14).max()
+    df['Stochastic_Oscillator'] = 100 * \
+        ((df['close'] - low_min) / (high_max - low_min))
+
+    return df
+
+# Features: Historical SPY
+
+
+def create_features_for_historical_spy(df):
+    # Ensure 'timestamp' is set as index for easier time series operations
+    if not pd.api.types.is_datetime64_any_dtype(df.index):
+        df = df.set_index('timestamp')
+
+    # Simple Moving Averages (SMA)
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['SMA_50'] = df['close'].rolling(window=50).mean()
+    df['SMA_100'] = df['close'].rolling(window=100).mean()
+
+    # Exponential Moving Averages (EMA)
+    df['EMA_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['close'].ewm(span=26, adjust=False).mean()
+
+    # Bollinger Bands
+    df['Bollinger_Upper'] = df['SMA_20'] + 2 * \
+        df['close'].rolling(window=20).std()
+    df['Bollinger_Lower'] = df['SMA_20'] - 2 * \
+        df['close'].rolling(window=20).std()
+
+    # Relative Strength Index (RSI)
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    # Moving Average Convergence Divergence (MACD)
+    df['MACD'] = df['EMA_12'] - df['EMA_26']
+    df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+
+    # ATR (Average True Range)
+    df['ATR'] = df['high'].combine(
+        df['low'], max) - df['low'].combine(df['close'].shift(1), min)
+    df['ATR_14'] = df['ATR'].rolling(window=14).mean()
+
+    # On-Balance Volume (OBV)
+    df['OBV'] = (np.sign(df['close'].diff()) * df['volume']).fillna(0).cumsum()
+
+    # Stochastic Oscillator
+    low_min = df['low'].rolling(window=14).min()
+    high_max = df['high'].rolling(window=14).max()
+    df['Stochastic_Oscillator'] = 100 * \
+        ((df['close'] - low_min) / (high_max - low_min))
+
+    return df
+
+# Features: Historical VIX
+
+
+def create_features_for_historical_vix(df):
+    # Ensure 'timestamp' is set as index for easier time series operations
+    if not pd.api.types.is_datetime64_any_dtype(df.index):
+        df = df.set_index('timestamp')
+
+    # Debug: Print the DataFrame after loading
+    print("Loaded DataFrame from DB:")
+    print(df.head())  # Print first few rows to verify data loading
+
+    # Drop rows with NaN in 'close' to ensure valid data for indicators
+    df = df.dropna(subset=['close'])
+    print(f"DataFrame after dropping NaNs in 'close' column: {
+          df.shape[0]} rows")
+
+    if df.empty:
+        print("Warning: DataFrame is empty after dropping NaNs. Exiting function.")
+        return df  # Exit if DataFrame is empty
+
+    # Exponential Moving Averages (EMA)
+    df['EMA_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['close'].ewm(span=26, adjust=False).mean()
+
+    # Relative Strength Index (RSI)
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    # Moving Average Convergence Divergence (MACD)
+    df['MACD'] = df['EMA_12'] - df['EMA_26']
+    df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+
+    # Average True Range (ATR)
+    high_low = df['high'] - df['low']
+    high_close = (df['high'] - df['close'].shift()).abs()
+    low_close = (df['low'] - df['close'].shift()).abs()
+    df['ATR'] = high_low.combine(high_close, max).combine(
+        low_close, max).rolling(window=14).mean()
+
+    # Drop columns we no longer need
+    df = df.drop(columns=['open', 'high', 'low', 'volume'], errors='ignore')
+
+    # Forward fill to handle any NaN values that could be present
+    df = df.ffill()
+
+    # Debug: Print final DataFrame
+    print(f"Final DataFrame after processing: {df.head()}")
+
+    return df
 
 # Preprocess Data
 
@@ -1146,6 +1365,9 @@ TABLE_CLEANING_FUNCTIONS = {
     "personal_consumption_expenditures": clean_personal_consumption_expenditures_data,
     "ppi_data": clean_ppi_data,
     "unemployment_rate_data": clean_unemployment_rate_data,
+    "historical_spx": clean_historical_spx_data,
+    "historical_spy": clean_historical_spy_data,
+    "historical_vix": clean_historical_vix_data,
 
 }
 
@@ -1198,6 +1420,12 @@ if __name__ == "__main__":
             feature_df = create_features_for_ppi_data(cleaned_df)
         elif table_name == "unemployment_rate_data":
             feature_df = create_features_for_unemployment_rate_data(cleaned_df)
+        elif table_name == "historical_spx":
+            feature_df = create_features_for_historical_spx(cleaned_df)
+        elif table_name == "historical_spy":
+            feature_df = create_features_for_historical_spy(cleaned_df)
+        elif table_name == "historical_vix":
+            feature_df = create_features_for_historical_vix(cleaned_df)
 
         else:
             feature_df = cleaned_df  # In case the table does not have a specific feature function
