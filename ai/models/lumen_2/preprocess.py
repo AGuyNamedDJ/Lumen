@@ -719,10 +719,6 @@ def preprocess_data(query, table_name):
 
     df, scaler = normalize_data(df)
 
-    # You can save the scaler for later use (e.g., inverse transforming predictions)
-    # with open(f'{table_name}_scaler.pkl', 'wb') as f:
-    #     pickle.dump(scaler, f)
-
     return df
 
 
