@@ -467,7 +467,7 @@ def create_features_for_average_hourly_earnings(df):
 
     return df
 
-# Features: Average Hourly Earnings Data
+# Features: Consumer Confidence Data
 
 
 def create_features_for_consumer_confidence_data(df):
@@ -1148,33 +1148,6 @@ def create_features_for_ppi_data(df):
 
     return df
 
-
-# Normalize Data
-
-
-def normalize_data(df):
-    # Separate datetime columns and non-numeric columns from the rest
-    datetime_columns = df.select_dtypes(include=['datetime64']).columns
-    non_numeric_columns = df.select_dtypes(exclude=[np.number]).columns
-
-    # Remove overlaps by treating 'created_at' and 'updated_at' as datetime only
-    non_numeric_columns = non_numeric_columns.difference(datetime_columns)
-
-    numeric_df = df.drop(columns=datetime_columns.union(non_numeric_columns))
-
-    # Initialize the scaler
-    scaler = MinMaxScaler(feature_range=(0, 1))
-
-    # Scale the numeric data
-    scaled_numeric_df = pd.DataFrame(scaler.fit_transform(
-        numeric_df), columns=numeric_df.columns, index=numeric_df.index)
-
-    # Reattach the datetime and non-numeric columns without scaling
-    final_df = pd.concat(
-        [df[datetime_columns], df[non_numeric_columns], scaled_numeric_df], axis=1)
-
-    return final_df, scaler
-
 # Features: Unemployment Rate Data
 
 
@@ -1539,6 +1512,32 @@ def create_features_for_real_time_vix(df):
     print(df.head(), df.info())
 
     return df
+
+# Normalize Data
+
+
+def normalize_data(df):
+    # Separate datetime columns and non-numeric columns from the rest
+    datetime_columns = df.select_dtypes(include=['datetime64']).columns
+    non_numeric_columns = df.select_dtypes(exclude=[np.number]).columns
+
+    # Remove overlaps by treating 'created_at' and 'updated_at' as datetime only
+    non_numeric_columns = non_numeric_columns.difference(datetime_columns)
+
+    numeric_df = df.drop(columns=datetime_columns.union(non_numeric_columns))
+
+    # Initialize the scaler
+    scaler = MinMaxScaler(feature_range=(0, 1))
+
+    # Scale the numeric data
+    scaled_numeric_df = pd.DataFrame(scaler.fit_transform(
+        numeric_df), columns=numeric_df.columns, index=numeric_df.index)
+
+    # Reattach the datetime and non-numeric columns without scaling
+    final_df = pd.concat(
+        [df[datetime_columns], df[non_numeric_columns], scaled_numeric_df], axis=1)
+
+    return final_df, scaler
 
 # Preprocess Data
 
