@@ -34,12 +34,19 @@ def load_data(query):
 # Data Cleaning
 # Data Cleaning: average_hourly_earnings_data
 def clean_average_hourly_earnings_data(df):
-    # Handle missing values
-    if df['value'].isnull().sum() > 0:
-        df = df.dropna(subset=['value'])
+    # Ensure the 'date' column exists and is named correctly
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
 
     # Convert 'date' to datetime format
     df['date'] = pd.to_datetime(df['date'])
+
+    # Keep only the relevant columns
+    df = df[['id', 'date', 'value']]
+
+    # Handle missing values
+    if df['value'].isnull().sum() > 0:
+        df = df.dropna(subset=['value'])
 
     # Remove duplicates
     df = df.drop_duplicates(subset=['date'])
@@ -50,6 +57,7 @@ def clean_average_hourly_earnings_data(df):
     df = df[(df['value'] >= lower_bound) & (df['value'] <= upper_bound)]
 
     return df
+
 
 # Data Cleaning: consumer_confidence_data
 
@@ -413,9 +421,12 @@ def clean_real_time_vix_data(df):
 
 
 def create_features_for_average_hourly_earnings(df):
-    # Convert index to datetime if not already done
-    if not pd.api.types.is_datetime64_any_dtype(df.index):
+    # Set 'date' as the index
+    if 'date' in df.columns:
         df = df.set_index('date')
+
+    # Ensure the index is a datetime type
+    df.index = pd.to_datetime(df.index)
 
     # Annualized Growth Rate
     df['CAGR_12'] = (df['value'] / df['value'].shift(12)) ** (1/1) - 1
@@ -466,6 +477,7 @@ def create_features_for_average_hourly_earnings(df):
     df['RSI'] = 100 - (100 / (1 + rs))
 
     return df
+
 
 # Features: Consumer Confidence Data
 
@@ -1545,10 +1557,19 @@ def normalize_data(df):
 def preprocess_data(query, table_name):
     df = load_data(query)
 
+    # Check if the 'date' column exists
+    if 'date' not in df.columns:
+        raise KeyError(f"The 'date' column is missing from the {
+                       table_name} data. Please ensure it is included in the query.")
+
     # Clean the data based on the table
     cleaning_function = TABLE_CLEANING_FUNCTIONS.get(table_name)
     if cleaning_function:
         df = cleaning_function(df)
+
+    # Convert 'date' column to datetime and set as index
+    df['date'] = pd.to_datetime(df['date'])
+    df.set_index('date', inplace=True)
 
     # Create features based on the table
     if table_name == "average_hourly_earnings_data":
@@ -1646,6 +1667,12 @@ if __name__ == "__main__":
         # Save the cleaned data to the processed directory
         output_path = os.path.join(
             processed_dir, f"processed_{table_name}.csv")
+
+        # Delete the file if it already exists
+        if os.path.exists(output_path):
+            os.remove(output_path)
+            print(f"Deleted existing file: {output_path}")
+
         print(f"Saving file to {output_path}")
         processed_df.to_csv(output_path, index=False)
         print(f"File exists: {os.path.exists(output_path)}")
