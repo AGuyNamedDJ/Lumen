@@ -207,8 +207,49 @@ def recompute_indicators(df, tf, has_close=True):
     return df.dropna()  # Drop rows with NaNs after recalculating indicators
 
 # Correlations
-# Calculate Correlations for Indicators
 
+
+def average_hourly_earnings_correlation(data_dict):
+    # Extract the relevant data
+    average_hourly_earnings = data_dict['average_hourly_earnings_data']
+    spx_data = data_dict['historical_spx']
+    spy_data = data_dict['historical_spy']
+
+    # Truncate to the shortest length to avoid length mismatch
+    min_length = min(len(average_hourly_earnings),
+                     len(spx_data), len(spy_data))
+
+    # Truncate datasets
+    average_hourly_earnings = average_hourly_earnings.iloc[:min_length]
+    spx_data = spx_data.iloc[:min_length]
+    spy_data = spy_data.iloc[:min_length]
+
+    # Calculate correlations
+    spx_corr = average_hourly_earnings['value'].corr(spx_data['close'])
+    spy_corr = average_hourly_earnings['value'].corr(spy_data['close'])
+
+    return spx_corr, spy_corr
+
+
+def perform_average_hourly_earnings_analysis(data_dict):
+    spx_corr, spy_corr = average_hourly_earnings_correlation(data_dict)
+
+    # Print out correlations
+    print(f"Average Hourly Earnings - SPX Correlation: {spx_corr}")
+    print(f"Average Hourly Earnings - SPY Correlation: {spy_corr}")
+
+    # Create a heatmap to visualize the correlations
+    correlations = pd.DataFrame({
+        'SPX': [spx_corr],
+        'SPY': [spy_corr],
+    }, index=['Average Hourly Earnings'])
+
+    sns.heatmap(correlations, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+    plt.title('Average Hourly Earnings - Price Correlations')
+    plt.show()
+
+
+# Calculate Correlations for Indicators
 
 def indicator_correlation(df, target='close'):
     # Select columns that are indicators (you may need to adjust this based on your indicators)
@@ -266,37 +307,50 @@ def perform_volume_correlation_analysis(data_dict):
     real_time_vix = data_dict['real_time_vix']
 
     # Calculate correlations
-    spx_correlation = volume_price_correlation(historical_spx)
-    spy_correlation = volume_price_correlation(historical_spy)
-    vix_correlation = volume_price_correlation(historical_vix)
+    spx_correlation = volume_price_correlation(
+        historical_spx) if 'volume' in historical_spx.columns else None
+    spy_correlation = volume_price_correlation(
+        historical_spy) if 'volume' in historical_spy.columns else None
+    # Skipping volume correlation for VIX as it doesn't have a volume column
+    vix_correlation = None
 
     spx_real_time_correlation = volume_price_correlation(
-        real_time_spx, price_column='current_price')
+        real_time_spx, price_column='current_price') if 'volume' in real_time_spx.columns else None
     spy_real_time_correlation = volume_price_correlation(
-        real_time_spy, price_column='current_price')
-    vix_real_time_correlation = volume_price_correlation(real_time_vix)
+        real_time_spy, price_column='current_price') if 'volume' in real_time_spy.columns else None
+    # Skipping volume correlation for real-time VIX as well
+    vix_real_time_correlation = None
 
     # Print out correlations
-    print(f"SPX Volume-Price Correlation: {spx_correlation}")
-    print(f"SPY Volume-Price Correlation: {spy_correlation}")
-    print(f"VIX Volume-Price Correlation: {vix_correlation}")
-    print(
-        f"Real-Time SPX Volume-Price Correlation: {spx_real_time_correlation}")
-    print(
-        f"Real-Time SPY Volume-Price Correlation: {spy_real_time_correlation}")
-    print(
-        f"Real-Time VIX Volume-Price Correlation: {vix_real_time_correlation}")
+    if spx_correlation is not None:
+        print(f"SPX Volume-Price Correlation: {spx_correlation}")
+    if spy_correlation is not None:
+        print(f"SPY Volume-Price Correlation: {spy_correlation}")
+    if vix_correlation is not None:
+        print(f"VIX Volume-Price Correlation: {vix_correlation}")
+    if spx_real_time_correlation is not None:
+        print(
+            f"Real-Time SPX Volume-Price Correlation: {spx_real_time_correlation}")
+    if spy_real_time_correlation is not None:
+        print(
+            f"Real-Time SPY Volume-Price Correlation: {spy_real_time_correlation}")
 
     # Create a heatmap to visualize the correlations
-    correlations = pd.DataFrame({
+    correlations = {
         'SPX': [spx_correlation, spx_real_time_correlation],
         'SPY': [spy_correlation, spy_real_time_correlation],
-        'VIX': [vix_correlation, vix_real_time_correlation]
-    }, index=['Historical', 'Real-Time'])
+        'VIX': [None, None]  # No volume correlation for VIX
+    }
+    correlations = {k: v for k, v in correlations.items(
+    ) if v[0] is not None}  # Filter out None values
 
-    sns.heatmap(correlations, annot=True, cmap='coolwarm')
+    correlation_df = pd.DataFrame(
+        correlations, index=['Historical', 'Real-Time'])
+
+    sns.heatmap(correlation_df, annot=True, cmap='coolwarm')
     plt.title('Volume-Price Correlations')
     plt.show()
+
 
 # VIX-SPX/SPY Correlation Analysis
 
@@ -425,27 +479,6 @@ def train_model(X_train, X_test, y_train, y_test):
 def test_engineer_features():
     data_dict = load_data()
 
-    # Access the specific DataFrames for SPX, SPY, and VIX data
-    df_spx = data_dict['historical_spx']
-    df_spy = data_dict['historical_spy']
-    df_vix = data_dict['historical_vix']
-    df_real_time_spx = data_dict['real_time_spx']
-    df_real_time_spy = data_dict['real_time_spy']
-    df_real_time_vix = data_dict['real_time_vix']
-
-    # Apply feature engineering separately on historical data
-    df_spx = engineer_features(df_spx)
-    df_spy = engineer_features(df_spy)
-    df_vix = engineer_features(df_vix)
-
-    # Apply feature engineering to real-time data
-    df_real_time_spx = engineer_features(
-        df_real_time_spx, tf='1min', has_close=False)
-    df_real_time_spy = engineer_features(
-        df_real_time_spy, tf='1min', has_close=False)
-    df_real_time_vix = engineer_features(
-        df_real_time_vix, tf='1min', has_close=True)
-
     # Perform correlation analysis for volume
     perform_volume_correlation_analysis(data_dict)
 
@@ -455,13 +488,12 @@ def test_engineer_features():
     # Perform VIX-SPX/SPY correlation analysis
     perform_vix_price_correlation_analysis(data_dict)
 
+    # Perform Average Hourly Earnings analysis
+    perform_average_hourly_earnings_analysis(data_dict)
+
     # Display the first few rows to verify the feature engineering
-    print("historic spx", df_spx.head())
-    print("historic spy", df_spy.head())
-    print("historic vix", df_vix.head())
-    print("real time spx", df_real_time_spx.head())
-    print("real time spy", df_real_time_spy.head())
-    print("real time vix", df_real_time_vix.head())
+    print("Average Hourly Earnings Data:",
+          data_dict['average_hourly_earnings_data'].head())
 
 
 def main():
