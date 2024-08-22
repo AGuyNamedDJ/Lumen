@@ -769,6 +769,42 @@ async function createInitialAuditLogs() {
 //     }
 // };
 
+// // createConsumerSentimentData
+// async function createConsumerSentimentData() {
+//     console.log("Creating initial Consumer Sentiment data...");
+//     try {
+//         const sentimentDataEntries = [
+//             { date: '2021-01-01', value: 90.3 },
+//             { date: '2021-02-01', value: 91.2 },
+//             { date: '2021-03-01', value: 89.5 }
+//             // Add more Consumer Sentiment data as needed
+//         ];
+
+//         for (const entry of sentimentDataEntries) {
+//             console.log(`Storing Consumer Sentiment Data: Date - ${entry.date}, Value - ${entry.value}`);
+//             await storeConsumerSentimentData(entry);
+//         }
+
+//         console.log("Finished creating initial Consumer Sentiment data.");
+//     } catch (error) {
+//         console.error("Error creating initial Consumer Sentiment data!");
+//         console.error(error);
+//     }
+// };
+
+// // getAllConsumerSentimentData
+// async function getTestConsumerSentimentData() {
+//     try {
+//         console.log('Fetching all Consumer Sentiment data');
+//         const query = 'SELECT * FROM consumer_sentiment_data ORDER BY date DESC;';
+//         const res = await client.query(query);
+//         console.log('Fetched Consumer Sentiment data:', res.rows);
+//         return res.rows;
+//     } catch (error) {
+//         console.error('Error fetching Consumer Sentiment data:', error);
+//     }
+// };
+
 // Rebuild DB
 async function rebuildDB() {
     try {
@@ -788,6 +824,8 @@ async function rebuildDB() {
         await createInitialAuditLogs();
         // await createInitialRealTimeSPXData();
         // await createInitialDetailedHistoricalSPX();
+        // await createConsumerSentimentData();
+        // await getTestConsumerSentimentData();
         console.log('Tables have been successfully created.');
     } catch (error) {
         console.error("Error during rebuildDB!");
@@ -997,35 +1035,35 @@ async function testDB() {
         //     console.log("Deleted decision rule", deletedDecisionRule);
         // };
 
-        console.log("Starting to test CPI data functions...");
+        // console.log("Starting to test CPI data functions...");
 
-        // Create a new CPI data entry
-        console.log("Calling storeCPIData to create a new entry...");
-        const newCPIData = await storeCPIData({ date: '2024-01-01', value: 260.474 });
-        console.log("New CPI data entry", newCPIData);
+        // // Create a new CPI data entry
+        // console.log("Calling storeCPIData to create a new entry...");
+        // const newCPIData = await storeCPIData({ date: '2024-01-01', value: 260.474 });
+        // console.log("New CPI data entry", newCPIData);
 
-        // Get all CPI data entries
-        console.log("Calling getAllCPIData...");
-        const allCPIData = await getAllCPIData();
-        console.log("All CPI data entries", allCPIData);
+        // // Get all CPI data entries
+        // console.log("Calling getAllCPIData...");
+        // const allCPIData = await getAllCPIData();
+        // console.log("All CPI data entries", allCPIData);
 
-        // Assuming at least one CPI data entry is created successfully
-        if (allCPIData.length > 0) {
-            // Get CPI data by date
-            console.log("Calling getCPIDataByDate for the first entry...");
-            const cpiDataByDate = await getCPIDataByDate(allCPIData[0].date);
-            console.log("CPI data by date", cpiDataByDate);
+        // // Assuming at least one CPI data entry is created successfully
+        // if (allCPIData.length > 0) {
+        //     // Get CPI data by date
+        //     console.log("Calling getCPIDataByDate for the first entry...");
+        //     const cpiDataByDate = await getCPIDataByDate(allCPIData[0].date);
+        //     console.log("CPI data by date", cpiDataByDate);
 
-            // Update CPI data
-            console.log("Updating first CPI data entry's value...");
-            const updatedCPIData = await updateCPIDataByDate(allCPIData[0].date, 261.474);
-            console.log("Updated CPI data entry", updatedCPIData);
+        //     // Update CPI data
+        //     console.log("Updating first CPI data entry's value...");
+        //     const updatedCPIData = await updateCPIDataByDate(allCPIData[0].date, 261.474);
+        //     console.log("Updated CPI data entry", updatedCPIData);
 
-            // Delete CPI data
-            console.log("Deleting the first CPI data entry...");
-            const deletedCPIData = await deleteCPIDataByDate(allCPIData[0].date);
-            console.log("Deleted CPI data entry", deletedCPIData);
-        }
+        //     // Delete CPI data
+        //     console.log("Deleting the first CPI data entry...");
+        //     const deletedCPIData = await deleteCPIDataByDate(allCPIData[0].date);
+        //     console.log("Deleted CPI data entry", deletedCPIData);
+        // }
 
 
 
