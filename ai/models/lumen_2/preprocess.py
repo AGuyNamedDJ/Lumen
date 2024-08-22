@@ -8,23 +8,28 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-
 def get_db_connection():
     db_url = os.getenv('DB_URL')
     print(f"Connecting to DB with URL: {db_url}")
-    engine = create_engine(db_url)
-    print("Engine created, attempting to connect...")
-    connection = engine.connect()
-    print("Connection successful!")
-    return connection
-
+    try:
+        engine = create_engine(db_url)
+        print("Engine created, attempting to connect...")
+        connection = engine.connect()
+        print("Connection successful!")
+        return connection
+    except Exception as e:
+        print(f"Error connecting to the database: {e}")
+        raise e
 
 def load_data(query):
     try:
         connection = get_db_connection()
+        print(f"Executing query: {query}")
         df = pd.read_sql(query, connection)
+        print("Data loaded from the database. DataFrame head:")
+        print(df.head())  # Print the first few rows of the DataFrame
         connection.close()
-        print("Data loaded successfully.")
+        print("Connection closed successfully.")
         return df
     except Exception as e:
         print(f"Error loading data: {e}")
@@ -59,10 +64,50 @@ def clean_average_hourly_earnings_data(df):
     return df
 
 
-# Data Cleaning: consumer_confidence_data
-
-
 def clean_consumer_confidence_data(df):
+    # Debug: Print the DataFrame before any operation
+    print("Initial DataFrame:")
+    print(df.head())
+
+    # Handle missing values in 'value' column
+    if df['value'].isnull().sum() > 0:
+        df = df.dropna(subset=['value'])
+        print("Dropped rows with missing 'value'.")
+    
+    # Convert 'date' to datetime format
+    df['date'] = pd.to_datetime(df['date'])
+    print("Converted 'date' column to datetime format.")
+    
+    # Remove duplicates based on 'date' column
+    before_duplicates = df.shape[0]
+    df = df.drop_duplicates(subset=['date'])
+    after_duplicates = df.shape[0]
+    print(f"Removed {before_duplicates - after_duplicates} duplicate rows.")
+    
+    # Handle outliers in the 'value' column
+    upper_bound = df['value'].mean() + 3 * df['value'].std()
+    lower_bound = df['value'].mean() - 3 * df['value'].std()
+    outliers = df[(df['value'] < lower_bound) | (df['value'] > upper_bound)]
+    df = df[(df['value'] >= lower_bound) & (df['value'] <= upper_bound)]
+    print(f"Removed {outliers.shape[0]} outliers from 'value' column.")
+
+    # Debug: Print the DataFrame after cleaning
+    print("DataFrame after cleaning:")
+    print(df.head())
+
+    # Ensure 'id' column is still present
+    if 'id' not in df.columns:
+        raise KeyError("'id' column is missing after cleaning for consumer_confidence_data. Skipping setting index.")
+
+    return df
+
+# Data Cleaning: consumer_sentiment_data
+
+
+def clean_consumer_sentiment_data(df):
+    print("Initial DataFrame loaded from DB:")
+    print(df.head(), df.info())  # Print initial state of the DataFrame
+
     # Handle missing values in 'value' column
     if df['value'].isnull().sum() > 0:
         df = df.dropna(subset=['value'])
@@ -72,63 +117,77 @@ def clean_consumer_confidence_data(df):
     df['date'] = pd.to_datetime(df['date'])
     print("Converted 'date' column to datetime format.")
 
-    # Remove duplicates based on 'date' column
-    before_duplicates = df.shape[0]
+    # Remove duplicates based on 'date'
+    before_duplicates = len(df)
     df = df.drop_duplicates(subset=['date'])
-    after_duplicates = df.shape[0]
+    after_duplicates = len(df)
     print(f"Removed {before_duplicates - after_duplicates} duplicate rows.")
 
-    # Handle outliers in the 'value' column
-    upper_bound = df['value'].mean() + 3 * df['value'].std()
-    lower_bound = df['value'].mean() - 3 * df['value'].std()
-    outliers = df[(df['value'] < lower_bound) | (df['value'] > upper_bound)]
+    # Handle outliers in 'value' column
+    mean_value = df['value'].mean()
+    std_value = df['value'].std()
+    upper_bound = mean_value + 3 * std_value
+    lower_bound = mean_value - 3 * std_value
+
+    # Temporarily comment out the outlier removal to test
+    before_outliers = len(df)
     df = df[(df['value'] >= lower_bound) & (df['value'] <= upper_bound)]
-    print(f"Removed {outliers.shape[0]} outliers from 'value' column.")
+    after_outliers = len(df)
+    print(f"Removed {before_outliers - after_outliers} outlier rows.")
+    print(f"DataFrame after outlier removal: {df.head()}")
+
+    # Check if the DataFrame is empty after cleaning
+    if df.empty:
+        print("DataFrame is empty after cleaning. Skipping further processing.")
+        return df
+
+    # Ensure 'id' is set as index
+    if 'id' in df.columns:
+        df.set_index('id', inplace=True)
+        print("ID column set as index")
+    else:
+        print("'id' column is missing after cleaning. Cannot set index.")
+
+    # Debug: Final check
+    print("Final cleaned DataFrame:")
+    print(df.head())
 
     return df
-
-# Data Cleaning: consumer_confidence_data
-
-
-def clean_consumer_sentiment_data(df):
-    # Handle missing values
-    if df['value'].isnull().sum() > 0:
-        df = df.dropna(subset=['value'])
-
-    # Convert 'date' to datetime format
-    df['date'] = pd.to_datetime(df['date'])
-
-    # Remove duplicates
-    df = df.drop_duplicates(subset=['date'])
-
-    # Handle outliers
-    upper_bound = df['value'].mean() + 3 * df['value'].std()
-    lower_bound = df['value'].mean() - 3 * df['value'].std()
-    df = df[(df['value'] >= lower_bound) & (df['value'] <= upper_bound)]
-
-    return df
-
-
-# Data Cleaning: core_inflation_data
-
-
+    
 def clean_core_inflation_data(df):
+    # Ensure 'id' and 'date' columns exist
+    if 'id' not in df.columns:
+        raise KeyError("The 'id' column is missing from the data.")
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
+    
+    # Convert 'id' to integer if necessary (optional, depending on your data)
+    df['id'] = df['id'].astype(int)
+    
     # Convert 'date' to datetime format
     df['date'] = pd.to_datetime(df['date'])
     print("Converted 'date' column to datetime format.")
-
+    
+    # Drop 'created_at' column since it's not needed
+    df = df.drop(columns=['created_at'])
+    print("Dropped 'created_at' column.")
+    
+    # Print columns and data types to debug
+    print("DataFrame columns after conversion:", df.columns)
+    print("DataFrame dtypes after conversion:", df.dtypes)
+    
     # Remove duplicates based on the 'date' column
     before_dedup = len(df)
     df = df.drop_duplicates(subset=['date'])
     after_dedup = len(df)
     print(f"Removed {before_dedup - after_dedup} duplicate rows.")
-
+    
     # Handle missing values by dropping rows where 'value' is NaN
     missing_values = df['value'].isnull().sum()
     if missing_values > 0:
         df = df.dropna(subset=['value'])
         print(f"Removed {missing_values} rows with missing 'value'.")
-
+    
     # Handle outliers by filtering out values outside 3 standard deviations
     mean_value = df['value'].mean()
     std_value = df['value'].std()
@@ -137,29 +196,51 @@ def clean_core_inflation_data(df):
     before_outlier_removal = len(df)
     df = df[(df['value'] >= lower_bound) & (df['value'] <= upper_bound)]
     after_outlier_removal = len(df)
-    print(f"Removed {before_outlier_removal -
-          after_outlier_removal} outlier rows.")
-
+    print(f"Removed {before_outlier_removal - after_outlier_removal} outlier rows.")
+    
+    # Print the columns after cleaning
+    print("Columns after cleaning:", df.columns)
+    
+    # Set 'id' as the index
+    df.set_index('id', inplace=True)
+    print("ID column set as index")
+    
     return df
+    
 
 # Data Cleaning: CPI Data
 
-
 def clean_cpi_data(df):
-    # Handle missing values
-    if df['value'].isnull().sum() > 0:
-        df = df.dropna(subset=['value'])
+    # Ensure 'id' and 'date' columns exist
+    if 'id' not in df.columns:
+        raise KeyError("The 'id' column is missing from the data.")
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
 
+    # Drop the 'created_at' and 'updated_at' columns if they exist
+    df = df.drop(columns=['created_at', 'updated_at'], errors='ignore')
+    
+    # Convert 'id' to integer if necessary
+    df['id'] = df['id'].astype(int)
+    
     # Convert 'date' to datetime format
     df['date'] = pd.to_datetime(df['date'])
-
-    # Remove duplicates
+    
+    # Remove duplicates based on 'date' column
     df = df.drop_duplicates(subset=['date'])
-
-    # Handle outliers (if necessary)
+    
+    # Handle missing values by dropping rows where 'value' is NaN
+    if df['value'].isnull().sum() > 0:
+        df = df.dropna(subset=['value'])
+    
+    # Handle outliers in the 'value' column
     upper_bound = df['value'].mean() + 3 * df['value'].std()
     lower_bound = df['value'].mean() - 3 * df['value'].std()
     df = df[(df['value'] >= lower_bound) & (df['value'] <= upper_bound)]
+    
+    # Set 'id' as the index
+    df.set_index('id', inplace=True)
+    print("ID column set as index")
 
     return df
 
@@ -168,33 +249,63 @@ def clean_cpi_data(df):
 
 
 def clean_gdp_data(df):
+    # Ensure 'id' and 'date' columns exist
+    if 'id' not in df.columns:
+        raise KeyError("The 'id' column is missing from the data.")
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
+
+    # Drop the 'updated_at' column if it exists
+    df = df.drop(columns=['updated_at'], errors='ignore')
+
+    # Convert 'id' to integer if necessary
+    df['id'] = df['id'].astype(int)
+
     # Convert 'date' to datetime format
     df['date'] = pd.to_datetime(df['date'])
 
-    # Remove duplicates
+    # Remove duplicates based on 'date' column
     df = df.drop_duplicates(subset=['date'])
 
-    # Handle missing values (optional, depending on the dataset)
+    # Handle missing values by dropping rows where 'value' is NaN
     df = df.dropna(subset=['value'])
 
+    # Set 'id' as the index
+    df.set_index('id', inplace=True)
+    print("ID column set as index")
+
     return df
+
 
 # Data Cleaning: Industrial PRoduction Data
 
 
 def clean_industrial_production_data(df):
+    # Ensure 'id' and 'date' columns exist
+    if 'id' not in df.columns:
+        raise KeyError("The 'id' column is missing from the data.")
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
+
+    # Convert 'id' to integer if necessary (optional, depending on your data)
+    df['id'] = df['id'].astype(int)
+
     # Convert 'date' to datetime format
     df['date'] = pd.to_datetime(df['date'])
 
-    # Remove duplicates
+    # Remove duplicates based on 'date' column
     df = df.drop_duplicates(subset=['date'])
 
-    # Handle missing values
+    # Handle missing values by dropping rows where 'value' is NaN
     df = df.dropna(subset=['value'])
 
     # Handle outliers (using Z-score method)
     z_scores = (df['value'] - df['value'].mean()) / df['value'].std()
     df = df[(z_scores > -3) & (z_scores < 3)]
+
+    # Set 'id' as the index
+    df.set_index('id', inplace=True)
+    print("ID column set as index")
 
     return df
 
@@ -202,25 +313,54 @@ def clean_industrial_production_data(df):
 
 
 def clean_interest_rate_data(df):
+    # Ensure 'id' and 'date' columns exist
+    if 'id' not in df.columns:
+        raise KeyError("The 'id' column is missing from the data.")
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
+
+    # Drop the 'updated_at' column if it exists
+    df = df.drop(columns=['updated_at'], errors='ignore')
+
+    # Convert 'id' to integer if necessary
+    df['id'] = df['id'].astype(int)
+
     # Convert 'date' to datetime format
     df['date'] = pd.to_datetime(df['date'])
 
-    # Remove duplicates
+    # Remove duplicates based on 'date' and 'series_id' columns
     df = df.drop_duplicates(subset=['date', 'series_id'])
 
-    # Handle missing values
+    # Handle missing values by dropping rows where 'value' is NaN
     df = df.dropna(subset=['value'])
 
-    # Handle outliers (using Z-score method)
+    # Handle outliers using the Z-score method
     z_scores = (df['value'] - df['value'].mean()) / df['value'].std()
     df = df[(z_scores > -3) & (z_scores < 3)]
 
+    # Set 'id' as the index
+    df.set_index('id', inplace=True)
+    print("ID column set as index")
+
     return df
+
 
 # Data Cleaning: Labor Force Participation Rate Data
 
 
 def clean_labor_force_participation_rate_data(df):
+    # Ensure 'id' and 'date' columns exist
+    if 'id' not in df.columns:
+        raise KeyError("The 'id' column is missing from the data.")
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
+
+    # Drop the 'updated_at' column if it exists
+    df = df.drop(columns=['updated_at'], errors='ignore')
+
+    # Convert 'id' to integer if necessary
+    df['id'] = df['id'].astype(int)
+
     # Convert 'date' column to datetime format
     df['date'] = pd.to_datetime(df['date'])
 
@@ -230,12 +370,28 @@ def clean_labor_force_participation_rate_data(df):
     # Handle missing values if any
     df = df.dropna(subset=['value'])
 
+    # Set 'id' as the index
+    df.set_index('id', inplace=True)
+    print("ID column set as index")
+
     return df
+
 
 # Data Cleaning: Nonfarm Payroll Employment Data
 
-
 def clean_nonfarm_payroll_employment_data(df):
+    # Ensure 'id' and 'date' columns exist
+    if 'id' not in df.columns:
+        raise KeyError("The 'id' column is missing from the data.")
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
+
+    # Drop the 'updated_at' column if it exists
+    df = df.drop(columns=['updated_at'], errors='ignore')
+
+    # Convert 'id' to integer if necessary
+    df['id'] = df['id'].astype(int)
+
     # Convert 'date' to datetime format
     df['date'] = pd.to_datetime(df['date'])
 
@@ -245,12 +401,26 @@ def clean_nonfarm_payroll_employment_data(df):
     # Handle missing values
     df = df.dropna(subset=['value'])
 
+    # Set 'id' as the index
+    df.set_index('id', inplace=True)
+    print("ID column set as index")
+
     return df
+
 
 # Data Cleaning: Personal Consumption Expenditures Data
 
 
 def clean_personal_consumption_expenditures_data(df):
+    # Ensure 'id' and 'date' columns exist
+    if 'id' not in df.columns:
+        raise KeyError("The 'id' column is missing from the data.")
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
+    
+    # Convert 'id' to integer if necessary (optional, depending on your data)
+    df['id'] = df['id'].astype(int)
+
     # Convert 'date' column to datetime format
     df['date'] = pd.to_datetime(df['date'])
 
@@ -260,6 +430,10 @@ def clean_personal_consumption_expenditures_data(df):
     # Handle missing values in the 'value' column
     if df['value'].isnull().sum() > 0:
         df = df.dropna(subset=['value'])
+
+    # Set 'id' as the index
+    df.set_index('id', inplace=True)
+    print("ID column set as index")
 
     return df
 
@@ -267,6 +441,15 @@ def clean_personal_consumption_expenditures_data(df):
 
 
 def clean_ppi_data(df):
+    # Ensure 'id' and 'date' columns exist
+    if 'id' not in df.columns:
+        raise KeyError("The 'id' column is missing from the data.")
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
+    
+    # Convert 'id' to integer if necessary (optional, depending on your data)
+    df['id'] = df['id'].astype(int)
+
     # Convert 'date' column to datetime format
     df['date'] = pd.to_datetime(df['date'])
 
@@ -276,6 +459,10 @@ def clean_ppi_data(df):
     # Handle missing values in the 'value' column
     if df['value'].isnull().sum() > 0:
         df = df.dropna(subset=['value'])
+
+    # Set 'id' as the index
+    df.set_index('id', inplace=True)
+    print("ID column set as index")
 
     return df
 
@@ -283,6 +470,15 @@ def clean_ppi_data(df):
 
 
 def clean_unemployment_rate_data(df):
+    # Ensure 'id' and 'date' columns exist
+    if 'id' not in df.columns:
+        raise KeyError("The 'id' column is missing from the data.")
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
+    
+    # Convert 'id' to integer if necessary (optional, depending on your data)
+    df['id'] = df['id'].astype(int)
+
     # Convert 'date' column to datetime format
     df['date'] = pd.to_datetime(df['date'])
 
@@ -293,17 +489,32 @@ def clean_unemployment_rate_data(df):
     if df['value'].isnull().sum() > 0:
         df = df.dropna(subset=['value'])
 
-    return df
+    # Set 'id' as the index
+    df.set_index('id', inplace=True)
+    print("ID column set as index")
 
+    return df
+    
 # Data Cleaning: Historical SPX
 
-
 def clean_historical_spx_data(df):
+    # Ensure 'id' and 'timestamp' columns exist
+    if 'id' not in df.columns:
+        raise KeyError("The 'id' column is missing from the data.")
+    if 'timestamp' not in df.columns:
+        raise KeyError("The 'timestamp' column is missing from the data.")
+    
+    # Convert 'id' to integer if necessary
+    df['id'] = df['id'].astype(int)
+
     # Handle missing values
     df.dropna(inplace=True)
 
     # Convert 'timestamp' to datetime format
     df['timestamp'] = pd.to_datetime(df['timestamp'])
+
+    # Add a 'date' column based on 'timestamp'
+    df['date'] = df['timestamp'].dt.date
 
     # Remove duplicates based on 'timestamp'
     df.drop_duplicates(subset=['timestamp'], inplace=True)
@@ -317,12 +528,25 @@ def clean_historical_spx_data(df):
     # Ensure volume is a positive integer
     df = df[df['volume'] > 0]
 
+    # Set 'id' as the index
+    df.set_index('id', inplace=True)
+    print("ID column set as index")
+
     return df
 
 # Data Cleaning: Historical SPY
 
 
 def clean_historical_spy_data(df):
+    # Ensure 'id' and 'timestamp' columns exist
+    if 'id' not in df.columns:
+        raise KeyError("The 'id' column is missing from the data.")
+    if 'timestamp' not in df.columns:
+        raise KeyError("The 'timestamp' column is missing from the data.")
+    
+    # Convert 'id' to integer if necessary
+    df['id'] = df['id'].astype(int)
+
     # Handle missing values
     if df.isnull().sum().sum() > 0:
         df = df.dropna()
@@ -330,8 +554,15 @@ def clean_historical_spy_data(df):
     # Convert 'timestamp' to datetime format
     df['timestamp'] = pd.to_datetime(df['timestamp'])
 
-    # Remove duplicates
+    # Add a 'date' column based on 'timestamp'
+    df['date'] = df['timestamp'].dt.date
+
+    # Remove duplicates based on 'timestamp'
     df = df.drop_duplicates(subset=['timestamp'])
+
+    # Set 'id' as the index
+    df.set_index('id', inplace=True)
+    print("ID column set as index")
 
     return df
 
@@ -339,16 +570,27 @@ def clean_historical_spy_data(df):
 
 
 def clean_historical_vix_data(df):
+    # Ensure 'id' and 'timestamp' columns exist
+    if 'id' not in df.columns:
+        raise KeyError("The 'id' column is missing from the data.")
+    if 'timestamp' not in df.columns:
+        raise KeyError("The 'timestamp' column is missing from the data.")
+    
+    # Convert 'id' to integer if necessary
+    df['id'] = df['id'].astype(int)
+
     # Convert 'timestamp' to datetime format
     df['timestamp'] = pd.to_datetime(df['timestamp'])
 
-    # Remove duplicates
+    # Add a 'date' column based on 'timestamp'
+    df['date'] = df['timestamp'].dt.date
+
+    # Remove duplicates based on 'timestamp'
     df = df.drop_duplicates(subset=['timestamp'])
 
     # Handle missing values more carefully
     # If the entire row is NaN for critical columns, drop it
-    df = df.dropna(subset=['open', 'high', 'low',
-                   'close', 'volume'], how='all')
+    df = df.dropna(subset=['open', 'high', 'low', 'close', 'volume'], how='all')
 
     # Forward fill NaN values to handle missing data points in critical columns
     df = df.fillna(method='ffill')
@@ -357,17 +599,34 @@ def clean_historical_vix_data(df):
     if df.isnull().sum().sum() > 0:
         print("Warning: Some NaN values remain after filling. They may affect feature generation.")
 
+    # Set 'id' as the index
+    df.set_index('id', inplace=True)
+    print("ID column set as index")
+
     return df
+
 
 # Data Cleaning: Real Time SPX
 
 
 def clean_real_time_spx_data(df):
-    # Drop columns with no data
-    df = df[['timestamp', 'current_price']].copy()
+    # Ensure 'id' and 'timestamp' columns exist
+    if 'id' not in df.columns:
+        raise KeyError("The 'id' column is missing from the data.")
+    if 'timestamp' not in df.columns:
+        raise KeyError("The 'timestamp' column is missing from the data.")
 
-    # Convert 'timestamp' to datetime format if it's not already
+    # Convert 'id' to integer if necessary
+    df['id'] = df['id'].astype(int)
+
+    # Drop columns with no data (keeping only id, timestamp, and current_price)
+    df = df[['id', 'timestamp', 'current_price']].copy()
+
+    # Convert 'timestamp' to datetime format
     df['timestamp'] = pd.to_datetime(df['timestamp'])
+
+    # Add a 'date' column based on 'timestamp'
+    df['date'] = df['timestamp'].dt.date
 
     # Remove duplicates based on timestamp
     df = df.drop_duplicates(subset=['timestamp'])
@@ -375,14 +634,27 @@ def clean_real_time_spx_data(df):
     # Sort by timestamp to ensure chronological order
     df = df.sort_values(by='timestamp')
 
+    # Set 'id' as the index
+    df.set_index('id', inplace=True)
+    print("ID column set as index")
+
     return df
 
 # Data Cleaning: Real Time SPY
 
 
 def clean_real_time_spy_data(df):
+    # Ensure 'id' and 'timestamp' columns exist
+    if 'id' not in df.columns:
+        raise KeyError("The 'id' column is missing from the data.")
+    if 'timestamp' not in df.columns:
+        raise KeyError("The 'timestamp' column is missing from the data.")
+
+    # Convert 'id' to integer if necessary (optional, depending on your data)
+    df['id'] = df['id'].astype(int)
+
     # Drop the 'conditions' column and keep only the columns with data
-    df = df[['timestamp', 'current_price', 'volume']].copy()
+    df = df[['id', 'timestamp', 'current_price', 'volume']].copy()
 
     # Convert 'timestamp' to datetime format
     df['timestamp'] = pd.to_datetime(df['timestamp'])
@@ -393,14 +665,24 @@ def clean_real_time_spy_data(df):
     # Sort by timestamp to ensure chronological order
     df = df.sort_values(by='timestamp')
 
+    # Set 'id' as the index
+    df.set_index('id', inplace=True)
+    print("ID column set as index")
+
     return df
 
 # Data Cleaning: Real Time VIX
 
 
 def clean_real_time_vix_data(df):
-    print("Initial DataFrame from DB:")
-    print(df.head(), df.info())
+    # Ensure 'id' and 'timestamp' columns exist
+    if 'id' not in df.columns:
+        raise KeyError("The 'id' column is missing from the data.")
+    if 'timestamp' not in df.columns:
+        raise KeyError("The 'timestamp' column is missing from the data.")
+
+    # Convert 'id' to integer if necessary
+    df['id'] = df['id'].astype(int)
 
     # Fill forward for any missing data
     df = df.fillna(method='ffill').fillna(method='bfill')
@@ -411,10 +693,15 @@ def clean_real_time_vix_data(df):
     # Remove duplicates based on the 'timestamp' and 'current_price'
     df = df.drop_duplicates(subset=['timestamp', 'current_price'])
 
+    # Set 'id' as the index
+    df.set_index('id', inplace=True)
+    print("ID column set as index")
+
     print("Final cleaned DataFrame:")
     print(df.head(), df.info())
 
     return df
+
 
 # Features
 # Features: Average Hourly Earnings Data
@@ -483,6 +770,13 @@ def create_features_for_average_hourly_earnings(df):
 
 
 def create_features_for_consumer_confidence_data(df):
+    # Ensure the 'date' column exists
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
+
+    # Convert 'date' to datetime format
+    df['date'] = pd.to_datetime(df['date'])
+
     # Ensure 'date' is set as index for easier time series operations
     if not pd.api.types.is_datetime64_any_dtype(df.index):
         df = df.set_index('date')
@@ -509,9 +803,8 @@ def create_features_for_consumer_confidence_data(df):
     df['Cumulative_Product'] = (1 + df['value'].pct_change()).cumprod()
 
     # Seasonal Decomposition
-    if len(df) >= 12:  # Ensure there's at least 12 months of data
-        decomposition = seasonal_decompose(
-            df['value'], model='multiplicative', period=12)
+    if len(df) >= 24:  # Ensure there's at least 24 months of data
+        decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
         df['Trend'] = decomposition.trend
         df['Seasonal'] = decomposition.seasonal
         df['Residual'] = decomposition.resid
@@ -540,19 +833,15 @@ def create_features_for_consumer_confidence_data(df):
     df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
 
     # Days Since Last Peak/Trough
-    peak_idx = df['value'].expanding().apply(
-        lambda x: x.idxmax().timestamp(), raw=False)
-    trough_idx = df['value'].expanding().apply(
-        lambda x: x.idxmin().timestamp(), raw=False)
-    df['Days_Since_Peak'] = (df.index.map(
-        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-    df['Days_Since_Trough'] = (df.index.map(
-        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    peak_idx = df['value'].expanding().apply(lambda x: x.idxmax().timestamp(), raw=False)
+    trough_idx = df['value'].expanding().apply(lambda x: x.idxmin().timestamp(), raw=False)
+    df['Days_Since_Peak'] = (df.index.map(pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Trough'] = (df.index.map(pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
 
     return df
 
-# Features: Create Features for Cosumer Sentiment Data
 
+# Features: Create Features for Cosumer Sentiment Date
 
 def create_features_for_consumer_sentiment_data(df):
     # Convert index to datetime if not already done
@@ -1479,7 +1768,6 @@ def create_features_for_real_time_spy(df):
 
 # Features: Real Time VIX
 
-
 def create_features_for_real_time_vix(df):
     print("DataFrame before feature creation:")
     print(df.head(), df.info())
@@ -1488,22 +1776,26 @@ def create_features_for_real_time_vix(df):
         print("Warning: The DataFrame is empty before feature creation.")
         return pd.DataFrame()
 
-    # Create only when there are enough rows
+    # Create Lag feature
+    df['Lag_1'] = df['close'].shift(1)
+
+    # Create moving averages only if there are enough data points
     if len(df) >= 20:
-        df['Lag_1'] = df['close'].shift(1)
         df['SMA_20'] = df['close'].rolling(window=20).mean()
+        df['Bollinger_Upper'] = df['SMA_20'] + 2 * df['close'].rolling(window=20).std()
+        df['Bollinger_Lower'] = df['SMA_20'] - 2 * df['close'].rolling(window=20).std()
+
+    if len(df) >= 50:
         df['SMA_50'] = df['close'].rolling(window=50).mean()
-        df['EMA_12'] = df['close'].ewm(span=12, adjust=False).mean()
-        df['EMA_26'] = df['close'].ewm(span=26, adjust=False).mean()
 
-        df['Bollinger_Upper'] = df['SMA_20'] + 2 * \
-            df['close'].rolling(window=20).std()
-        df['Bollinger_Lower'] = df['SMA_20'] - 2 * \
-            df['close'].rolling(window=20).std()
+    # Create EMA and MACD features
+    df['EMA_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['MACD'] = df['EMA_12'] - df['EMA_26']
+    df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
-        df['MACD'] = df['EMA_12'] - df['EMA_26']
-        df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
-
+    # Calculate RSI only if there are enough data points
+    if len(df) >= 14:
         delta = df['close'].diff(1)
         gain = delta.where(delta > 0, 0)
         loss = -delta.where(delta < 0, 0)
@@ -1512,18 +1804,18 @@ def create_features_for_real_time_vix(df):
         rs = avg_gain / avg_loss
         df['RSI'] = 100 - (100 / (1 + rs))
 
-        df['ATR'] = df[['high', 'low', 'close']].diff(
-        ).abs().max(axis=1).rolling(window=14).mean()
+        # Calculate ATR
+        df['ATR'] = df[['high', 'low', 'close']].diff().abs().max(axis=1).rolling(window=14).mean()
 
-        print("DataFrame after feature creation:")
-        print(df.head(), df.info())
+    # Fill remaining NaN values forward to avoid dropping rows
+    df.fillna(method='ffill', inplace=True)
+    df.fillna(method='bfill', inplace=True)
 
-        df = df.dropna()
-
-    print("Final DataFrame after processing:")
+    print("DataFrame after feature creation:")
     print(df.head(), df.info())
 
     return df
+    
 
 # Normalize Data
 
@@ -1551,74 +1843,78 @@ def normalize_data(df):
 
     return final_df, scaler
 
-# Preprocess Data
-
-
 def preprocess_data(query, table_name):
     df = load_data(query)
 
-    # Check if the 'date' column exists
-    if 'date' not in df.columns:
-        raise KeyError(f"The 'date' column is missing from the {
-                       table_name} data. Please ensure it is included in the query.")
+    # Check if 'id' and either 'date' or 'timestamp' columns exist
+    if 'id' not in df.columns:
+        raise KeyError(f"The 'id' column must be present in the {table_name} data.")
+    
+    if 'date' not in df.columns and 'timestamp' not in df.columns:
+        raise KeyError(f"Either 'date' or 'timestamp' column must be present in the {table_name} data.")
 
     # Clean the data based on the table
     cleaning_function = TABLE_CLEANING_FUNCTIONS.get(table_name)
     if cleaning_function:
         df = cleaning_function(df)
 
-    # Convert 'date' column to datetime and set as index
-    df['date'] = pd.to_datetime(df['date'])
-    df.set_index('date', inplace=True)
+    # Convert 'date' or 'timestamp' column to datetime
+    if 'date' in df.columns:
+        df['date'] = pd.to_datetime(df['date'])
+        print("Converted 'date' column to datetime format.")
+    elif 'timestamp' in df.columns:
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        print("Converted 'timestamp' column to datetime format.")
+        df['date'] = df['timestamp'].dt.date  # Create 'date' column from 'timestamp'
+
+    # Check if the DataFrame is empty after cleaning
+    if df.empty:
+        print(f"DataFrame for {table_name} is empty after cleaning. Skipping further processing.")
+        return df
+
+    # Check if 'id' column exists before setting it as the index
+    if 'id' in df.columns:
+        df.set_index('id', inplace=True)
+        print("ID column set as index")
+    else:
+        print(f"'id' column is missing after cleaning for {table_name}. Skipping setting index.")
 
     # Create features based on the table
-    if table_name == "average_hourly_earnings_data":
-        df = create_features_for_average_hourly_earnings(df)
-    elif table_name == "consumer_confidence_data":
-        df = create_features_for_consumer_confidence_data(df)
-    elif table_name == "consumer_sentiment_data":
-        df = create_features_for_consumer_sentiment_data(df)
-    elif table_name == "core_inflation_data":
-        df = create_features_for_core_inflation_data(df)
-    elif table_name == "cpi_data":
-        df = create_features_for_cpi_data(df)
-    elif table_name == "gdp_data":
-        df = create_features_for_gdp_data(df)
-    elif table_name == "industrial_production_data":
-        df = create_features_for_industrial_production_data(df)
-    elif table_name == "interest_rate_data":
-        df = create_features_for_interest_rate_data(df)
-    elif table_name == "labor_force_participation_rate_data":
-        df = create_features_for_labor_force_participation_rate_data(df)
-    elif table_name == "nonfarm_payroll_employment_data":
-        df = create_features_for_nonfarm_payroll_employment_data(df)
-    elif table_name == "personal_consumption_expenditures":
-        df = create_features_for_personal_consumption_expenditures(df)
-    elif table_name == "ppi_data":
-        df = create_features_for_ppi_data(df)
-    elif table_name == "unemployment_rate_data":
-        df = create_features_for_unemployment_rate_data(df)
-    elif table_name == "historical_spx":
-        df = create_features_for_historical_spx(df)
-    elif table_name == "historical_spy":
-        df = create_features_for_historical_spy(df)
-    elif table_name == "historical_vix":
-        df = create_features_for_historical_vix(df)
-    elif table_name == "real_time_spx":
-        df = create_features_for_real_time_spx(df)
-    elif table_name == "real_time_spy":
-        df = create_features_for_real_time_spy(df)
-    elif table_name == "real_time_vix":
-        df = create_features_for_real_time_vix(df)
+    feature_creation_function = TABLE_FEATURE_FUNCTIONS.get(table_name)
+    if feature_creation_function:
+        df = feature_creation_function(df)
     else:
-        print(f"No specific feature function found for table: {
-              table_name}. Skipping feature creation.")
+        print(f"No specific feature function found for table: {table_name}. Skipping feature creation.")
 
-    # Normalize the data
-    df, scaler = normalize_data(df)
+    # Normalize the data if the DataFrame is not empty
+    if not df.empty:
+        df, scaler = normalize_data(df)
 
     return df
 
+
+# Add a mapping for feature creation functions similar to the cleaning functions
+TABLE_FEATURE_FUNCTIONS = {
+    "average_hourly_earnings_data": create_features_for_average_hourly_earnings,
+    "consumer_confidence_data": create_features_for_consumer_confidence_data,
+    "consumer_sentiment_data": create_features_for_consumer_sentiment_data,
+    "core_inflation_data": create_features_for_core_inflation_data,
+    "cpi_data": create_features_for_cpi_data,
+    "gdp_data": create_features_for_gdp_data,
+    "industrial_production_data": create_features_for_industrial_production_data,
+    "interest_rate_data": create_features_for_interest_rate_data,
+    "labor_force_participation_rate_data": create_features_for_labor_force_participation_rate_data,
+    "nonfarm_payroll_employment_data": create_features_for_nonfarm_payroll_employment_data,
+    "personal_consumption_expenditures": create_features_for_personal_consumption_expenditures,
+    "ppi_data": create_features_for_ppi_data,
+    "unemployment_rate_data": create_features_for_unemployment_rate_data,
+    "historical_spx": create_features_for_historical_spx,
+    "historical_spy": create_features_for_historical_spy,
+    "historical_vix": create_features_for_historical_vix,
+    "real_time_spx": create_features_for_real_time_spx,
+    "real_time_spy": create_features_for_real_time_spy,
+    "real_time_vix": create_features_for_real_time_vix,
+}
 
 # Dictionary mapping table names to their respective cleaning functions
 TABLE_CLEANING_FUNCTIONS = {
@@ -1641,10 +1937,9 @@ TABLE_CLEANING_FUNCTIONS = {
     "real_time_spx": clean_real_time_spx_data,
     "real_time_spy": clean_real_time_spy_data,
     "real_time_vix": clean_real_time_vix_data,
-
 }
 
-# Main
+# Main Execution Block
 if __name__ == "__main__":
     # Set the correct path for saving the processed data
     processed_dir = os.path.join(os.getcwd(), 'data', 'lumen_2', 'processed')
@@ -1660,13 +1955,11 @@ if __name__ == "__main__":
         processed_df = preprocess_data(query, table_name)
 
         if processed_df.empty:
-            print(f"Warning: The feature DataFrame for {
-                  table_name} is empty. Skipping normalization and saving.")
+            print(f"Warning: The feature DataFrame for {table_name} is empty. Skipping normalization and saving.")
             continue
 
         # Save the cleaned data to the processed directory
-        output_path = os.path.join(
-            processed_dir, f"processed_{table_name}.csv")
+        output_path = os.path.join(processed_dir, f"processed_{table_name}.csv")
 
         # Delete the file if it already exists
         if os.path.exists(output_path):
