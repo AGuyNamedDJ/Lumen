@@ -1,5 +1,6 @@
 const yahooFinance = require('yahoo-finance2').default;
 const { createRealTimeVIXRecord } = require('../../db/helperFunctions/realTimeVIX');
+const moment = require('moment-timezone');
 
 const fetchVIXData = async () => {
     try {
@@ -8,7 +9,7 @@ const fetchVIXData = async () => {
         // Fetch the latest quote for VIX
         const result = await yahooFinance.quote(symbol);
 
-        const timestamp = new Date(); // Current timestamp
+        const timestamp = moment().tz('America/Chicago').format(); // Set timestamp to Central Time
         const current_price = result.regularMarketPrice;
         const volume = result.regularMarketVolume || null;
         const open = result.regularMarketOpen || null;

@@ -39,51 +39,80 @@ def load_data(query):
 # Data Cleaning
 # Data Cleaning: average_hourly_earnings_data
 def clean_average_hourly_earnings_data(df):
-    # Ensure the 'date' column exists and is named correctly
+    # Drop unnecessary columns 'created_at' and 'updated_at'
+    df = df.drop(columns=['created_at', 'updated_at'], errors='ignore')
+
+    # Ensure the 'date' column exists; if not, raise an error
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
 
     # Convert 'date' to datetime format
     df['date'] = pd.to_datetime(df['date'])
 
-    # Keep only the relevant columns
+    # Check for duplicate columns and drop them
+    df = df.loc[:, ~df.columns.duplicated()]
+    print("Dropped duplicate columns, if any existed.")
+
+    # Keep only relevant columns: 'id', 'date', and 'value'
     df = df[['id', 'date', 'value']]
 
-    # Handle missing values
-    if df['value'].isnull().sum() > 0:
-        df = df.dropna(subset=['value'])
+    # Handle missing values by dropping rows where 'value' is NaN
+    df = df.dropna(subset=['value'])
 
-    # Remove duplicates
+    # Remove duplicates based on the 'date' column
     df = df.drop_duplicates(subset=['date'])
 
-    # Handle outliers
+    # Handle outliers in the 'value' column
     upper_bound = df['value'].mean() + 3 * df['value'].std()
     lower_bound = df['value'].mean() - 3 * df['value'].std()
     df = df[(df['value'] >= lower_bound) & (df['value'] <= upper_bound)]
 
     return df
 
-
 def clean_consumer_confidence_data(df):
     # Debug: Print the DataFrame before any operation
     print("Initial DataFrame:")
     print(df.head())
 
-    # Handle missing values in 'value' column
-    if df['value'].isnull().sum() > 0:
-        df = df.dropna(subset=['value'])
-        print("Dropped rows with missing 'value'.")
-    
+    # Check if 'created_at' or 'updated_at' columns exist and drop them
+    if 'created_at' in df.columns:
+        df = df.drop(columns=['created_at'])
+    if 'updated_at' in df.columns:
+        df = df.drop(columns=['updated_at'])
+
+    # Ensure the 'date' column exists; if not, rename 'timestamp' to 'date' for consistency
+    if 'date' not in df.columns and 'timestamp' in df.columns:
+        df = df.rename(columns={'timestamp': 'date'})
+
+    # If neither 'date' nor 'timestamp' exists, raise an error
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
+
     # Convert 'date' to datetime format
     df['date'] = pd.to_datetime(df['date'])
     print("Converted 'date' column to datetime format.")
-    
-    # Remove duplicates based on 'date' column
+
+    # Check for duplicate columns and drop them
+    df = df.loc[:, ~df.columns.duplicated()]
+    print("Dropped duplicate columns, if any existed.")
+
+    # Keep only relevant columns: 'id', 'date', and 'value'
+    if 'id' in df.columns and 'value' in df.columns:
+        df = df[['id', 'date', 'value']]
+    else:
+        raise KeyError("Required columns ('id', 'date', 'value') are missing from the data.")
+
+    # Handle missing values by dropping rows where 'value' is NaN
+    if df['value'].isnull().sum() > 0:
+        df = df.dropna(subset=['value'])
+        print("Dropped rows with missing 'value'.")
+
+    # Remove duplicates based on the 'date' column
     before_duplicates = df.shape[0]
     df = df.drop_duplicates(subset=['date'])
     after_duplicates = df.shape[0]
     print(f"Removed {before_duplicates - after_duplicates} duplicate rows.")
-    
+
     # Handle outliers in the 'value' column
     upper_bound = df['value'].mean() + 3 * df['value'].std()
     lower_bound = df['value'].mean() - 3 * df['value'].std()
@@ -95,27 +124,40 @@ def clean_consumer_confidence_data(df):
     print("DataFrame after cleaning:")
     print(df.head())
 
-    # Ensure 'id' column is still present
-    if 'id' not in df.columns:
-        raise KeyError("'id' column is missing after cleaning for consumer_confidence_data. Skipping setting index.")
-
     return df
 
-# Data Cleaning: consumer_sentiment_data
 
-
+# Clean Consumer Sentiment
 def clean_consumer_sentiment_data(df):
     print("Initial DataFrame loaded from DB:")
     print(df.head(), df.info())  # Print initial state of the DataFrame
+
+    # Drop unnecessary columns if they exist
+    df = df.drop(columns=['created_at', 'updated_at'], errors='ignore')
+    
+    # Ensure the 'date' column exists; if not, rename 'timestamp' to 'date' for consistency
+    if 'date' not in df.columns and 'timestamp' in df.columns:
+        df = df.rename(columns={'timestamp': 'date'})
+    
+    # If neither 'date' nor 'timestamp' exists, raise an error
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
+
+    # Convert 'date' to datetime format
+    df['date'] = pd.to_datetime(df['date'])
+    print("Converted 'date' column to datetime format.")
+    
+    # Check for duplicate columns and drop them
+    df = df.loc[:, ~df.columns.duplicated()]
+    print("Dropped duplicate columns, if any existed.")
+
+    # Keep only relevant columns: 'id', 'date', and 'value'
+    df = df[['id', 'date', 'value']]
 
     # Handle missing values in 'value' column
     if df['value'].isnull().sum() > 0:
         df = df.dropna(subset=['value'])
         print("Dropped rows with missing 'value'.")
-
-    # Convert 'date' to datetime format
-    df['date'] = pd.to_datetime(df['date'])
-    print("Converted 'date' column to datetime format.")
 
     # Remove duplicates based on 'date'
     before_duplicates = len(df)
@@ -129,7 +171,6 @@ def clean_consumer_sentiment_data(df):
     upper_bound = mean_value + 3 * std_value
     lower_bound = mean_value - 3 * std_value
 
-    # Temporarily comment out the outlier removal to test
     before_outliers = len(df)
     df = df[(df['value'] >= lower_bound) & (df['value'] <= upper_bound)]
     after_outliers = len(df)
@@ -142,108 +183,88 @@ def clean_consumer_sentiment_data(df):
         return df
 
     # Ensure 'id' is set as index
-    if 'id' in df.columns:
-        df.set_index('id', inplace=True)
-        print("ID column set as index")
-    else:
-        print("'id' column is missing after cleaning. Cannot set index.")
+    df.set_index('id', inplace=True)
+    print("ID column set as index")
 
     # Debug: Final check
     print("Final cleaned DataFrame:")
     print(df.head())
 
-    return df
-    
+    return df    
+
+
 def clean_core_inflation_data(df):
-    # Ensure 'id' and 'date' columns exist
-    if 'id' not in df.columns:
-        raise KeyError("The 'id' column is missing from the data.")
+    # Check if 'created_at' or 'updated_at' columns exist and drop them
+    if 'created_at' in df.columns:
+        df = df.drop(columns=['created_at'])
+    if 'updated_at' in df.columns:
+        df = df.drop(columns=['updated_at'])
+
+    # Ensure the 'date' column exists; if not, rename 'timestamp' to 'date' for consistency
+    if 'date' not in df.columns and 'timestamp' in df.columns:
+        df = df.rename(columns={'timestamp': 'date'})
+    
+    # If neither 'date' nor 'timestamp' exists, raise an error
     if 'date' not in df.columns:
-        raise KeyError("The 'date' column is missing from the data.")
-    
-    # Convert 'id' to integer if necessary (optional, depending on your data)
-    df['id'] = df['id'].astype(int)
-    
+        raise KeyError("The 'date' column is missing from the core inflation data.")
+
     # Convert 'date' to datetime format
     df['date'] = pd.to_datetime(df['date'])
-    print("Converted 'date' column to datetime format.")
-    
-    # Drop 'created_at' column since it's not needed
-    df = df.drop(columns=['created_at'])
-    print("Dropped 'created_at' column.")
-    
-    # Print columns and data types to debug
-    print("DataFrame columns after conversion:", df.columns)
-    print("DataFrame dtypes after conversion:", df.dtypes)
-    
-    # Remove duplicates based on the 'date' column
-    before_dedup = len(df)
-    df = df.drop_duplicates(subset=['date'])
-    after_dedup = len(df)
-    print(f"Removed {before_dedup - after_dedup} duplicate rows.")
-    
-    # Handle missing values by dropping rows where 'value' is NaN
-    missing_values = df['value'].isnull().sum()
-    if missing_values > 0:
-        df = df.dropna(subset=['value'])
-        print(f"Removed {missing_values} rows with missing 'value'.")
-    
-    # Handle outliers by filtering out values outside 3 standard deviations
-    mean_value = df['value'].mean()
-    std_value = df['value'].std()
-    upper_bound = mean_value + 3 * std_value
-    lower_bound = mean_value - 3 * std_value
-    before_outlier_removal = len(df)
-    df = df[(df['value'] >= lower_bound) & (df['value'] <= upper_bound)]
-    after_outlier_removal = len(df)
-    print(f"Removed {before_outlier_removal - after_outlier_removal} outlier rows.")
-    
-    # Print the columns after cleaning
-    print("Columns after cleaning:", df.columns)
-    
-    # Set 'id' as the index
-    df.set_index('id', inplace=True)
-    print("ID column set as index")
-    
-    return df
-    
 
-# Data Cleaning: CPI Data
+    # Keep only relevant columns: 'id', 'date', and 'value'
+    df = df[['id', 'date', 'value']]
 
-def clean_cpi_data(df):
-    # Ensure 'id' and 'date' columns exist
-    if 'id' not in df.columns:
-        raise KeyError("The 'id' column is missing from the data.")
-    if 'date' not in df.columns:
-        raise KeyError("The 'date' column is missing from the data.")
-
-    # Drop the 'created_at' and 'updated_at' columns if they exist
-    df = df.drop(columns=['created_at', 'updated_at'], errors='ignore')
-    
-    # Convert 'id' to integer if necessary
-    df['id'] = df['id'].astype(int)
-    
-    # Convert 'date' to datetime format
-    df['date'] = pd.to_datetime(df['date'])
-    
-    # Remove duplicates based on 'date' column
-    df = df.drop_duplicates(subset=['date'])
-    
     # Handle missing values by dropping rows where 'value' is NaN
     if df['value'].isnull().sum() > 0:
         df = df.dropna(subset=['value'])
-    
+
+    # Remove duplicates based on the 'date' column
+    df = df.drop_duplicates(subset=['date'])
+
     # Handle outliers in the 'value' column
     upper_bound = df['value'].mean() + 3 * df['value'].std()
     lower_bound = df['value'].mean() - 3 * df['value'].std()
     df = df[(df['value'] >= lower_bound) & (df['value'] <= upper_bound)]
-    
-    # Set 'id' as the index
-    df.set_index('id', inplace=True)
-    print("ID column set as index")
+
+    return df    
+
+# Data Cleaning: CPI Data
+
+def clean_cpi_data(df):
+    # Drop the 'created_at' and 'updated_at' columns if they exist
+    df = df.drop(columns=['created_at', 'updated_at'], errors='ignore')
+
+    # Ensure the 'date' column exists; if not, raise an error
+    if 'date' not in df.columns and 'timestamp' in df.columns:
+        df = df.rename(columns={'timestamp': 'date'})
+
+    # If neither 'date' nor 'timestamp' exists, raise an error
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
+
+    # Convert 'date' to datetime format
+    df['date'] = pd.to_datetime(df['date'])
+
+    # Check for duplicate columns and drop them
+    df = df.loc[:, ~df.columns.duplicated()]
+    print("Dropped duplicate columns, if any existed.")
+
+    # Keep only relevant columns: 'id', 'date', and 'value'
+    df = df[['id', 'date', 'value']]
+
+    # Handle missing values by dropping rows where 'value' is NaN
+    if df['value'].isnull().sum() > 0:
+        df = df.dropna(subset=['value'])
+
+    # Remove duplicates based on the 'date' column
+    df = df.drop_duplicates(subset=['date'])
+
+    # Handle outliers in the 'value' column
+    upper_bound = df['value'].mean() + 3 * df['value'].std()
+    lower_bound = df['value'].mean() - 3 * df['value'].std()
+    df = df[(df['value'] >= lower_bound) & (df['value'] <= upper_bound)]
 
     return df
-
 
 # Data Cleaning: GDP Data
 
@@ -264,146 +285,180 @@ def clean_gdp_data(df):
     # Convert 'date' to datetime format
     df['date'] = pd.to_datetime(df['date'])
 
+    # Keep only relevant columns: 'id', 'date', and 'value'
+    df = df[['id', 'date', 'value']]
+
     # Remove duplicates based on 'date' column
     df = df.drop_duplicates(subset=['date'])
 
     # Handle missing values by dropping rows where 'value' is NaN
     df = df.dropna(subset=['value'])
 
-    # Set 'id' as the index
-    df.set_index('id', inplace=True)
-    print("ID column set as index")
+    # Check for duplicate columns and drop them
+    df = df.loc[:, ~df.columns.duplicated()]
+    print("Dropped duplicate columns, if any existed.")
 
     return df
-
 
 # Data Cleaning: Industrial PRoduction Data
 
 
 def clean_industrial_production_data(df):
-    # Ensure 'id' and 'date' columns exist
-    if 'id' not in df.columns:
-        raise KeyError("The 'id' column is missing from the data.")
+    # Check for 'created_at' and 'updated_at' columns and drop them if they exist
+    if 'created_at' in df.columns:
+        df = df.drop(columns=['created_at'])
+    if 'updated_at' in df.columns:
+        df = df.drop(columns=['updated_at'])
+
+    # Ensure the 'date' column exists; if not, rename 'timestamp' to 'date' for consistency
+    if 'date' not in df.columns and 'timestamp' in df.columns:
+        df = df.rename(columns={'timestamp': 'date'})
+    
+    # If neither 'date' nor 'timestamp' exists, raise an error
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
-
-    # Convert 'id' to integer if necessary (optional, depending on your data)
-    df['id'] = df['id'].astype(int)
 
     # Convert 'date' to datetime format
     df['date'] = pd.to_datetime(df['date'])
 
-    # Remove duplicates based on 'date' column
-    df = df.drop_duplicates(subset=['date'])
+    # Check for duplicate columns and drop them
+    df = df.loc[:, ~df.columns.duplicated()]
+    print("Dropped duplicate columns, if any existed.")
+
+    # Keep only relevant columns: 'id', 'date', and 'value'
+    df = df[['id', 'date', 'value']]
+
+    # Convert 'id' to integer if necessary (optional, depending on your data)
+    df['id'] = df['id'].astype(int)
 
     # Handle missing values by dropping rows where 'value' is NaN
-    df = df.dropna(subset=['value'])
+    if df['value'].isnull().sum() > 0:
+        df = df.dropna(subset=['value'])
+
+    # Remove duplicates based on the 'date' column
+    df = df.drop_duplicates(subset=['date'])
 
     # Handle outliers (using Z-score method)
     z_scores = (df['value'] - df['value'].mean()) / df['value'].std()
     df = df[(z_scores > -3) & (z_scores < 3)]
 
-    # Set 'id' as the index
-    df.set_index('id', inplace=True)
-    print("ID column set as index")
-
     return df
+
 
 # Data Cleaning: Interest Rate Data
 
 
 def clean_interest_rate_data(df):
-    # Ensure 'id' and 'date' columns exist
-    if 'id' not in df.columns:
-        raise KeyError("The 'id' column is missing from the data.")
+    # Check for 'created_at' and 'updated_at' columns and drop them if they exist
+    if 'created_at' in df.columns:
+        df = df.drop(columns=['created_at'])
+    if 'updated_at' in df.columns:
+        df = df.drop(columns=['updated_at'])
+
+    # Ensure the 'date' column exists; if not, rename 'timestamp' to 'date' for consistency
+    if 'date' not in df.columns and 'timestamp' in df.columns:
+        df = df.rename(columns={'timestamp': 'date'})
+    
+    # If neither 'date' nor 'timestamp' exists, raise an error
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
-
-    # Drop the 'updated_at' column if it exists
-    df = df.drop(columns=['updated_at'], errors='ignore')
-
-    # Convert 'id' to integer if necessary
-    df['id'] = df['id'].astype(int)
 
     # Convert 'date' to datetime format
     df['date'] = pd.to_datetime(df['date'])
 
-    # Remove duplicates based on 'date' and 'series_id' columns
-    df = df.drop_duplicates(subset=['date', 'series_id'])
+    # Check for duplicate columns and drop them
+    df = df.loc[:, ~df.columns.duplicated()]
+    print("Dropped duplicate columns, if any existed.")
+
+    # Keep only relevant columns: 'id', 'date', 'series_id' and 'value'
+    df = df[['id', 'date', 'series_id', 'value']]
+
+    # Convert 'id' to integer if necessary (optional, depending on your data)
+    df['id'] = df['id'].astype(int)
 
     # Handle missing values by dropping rows where 'value' is NaN
-    df = df.dropna(subset=['value'])
+    if df['value'].isnull().sum() > 0:
+        df = df.dropna(subset=['value'])
 
-    # Handle outliers using the Z-score method
+    # Remove duplicates based on the 'date' column
+    df = df.drop_duplicates(subset=['date'])
+
+    # Handle outliers (using Z-score method)
     z_scores = (df['value'] - df['value'].mean()) / df['value'].std()
     df = df[(z_scores > -3) & (z_scores < 3)]
 
-    # Set 'id' as the index
-    df.set_index('id', inplace=True)
-    print("ID column set as index")
-
     return df
-
-
+    
 # Data Cleaning: Labor Force Participation Rate Data
 
 
 def clean_labor_force_participation_rate_data(df):
-    # Ensure 'id' and 'date' columns exist
-    if 'id' not in df.columns:
-        raise KeyError("The 'id' column is missing from the data.")
+    print("Beginning to clean labor force participation rate data.")
+
+    # Drop 'created_at' and 'updated_at' columns if they exist
+    df = df.drop(columns=['created_at', 'updated_at'], errors='ignore')
+
+    # Ensure 'date' column exists and convert to datetime
+    if 'date' not in df.columns and 'timestamp' in df.columns:
+        df = df.rename(columns={'timestamp': 'date'})
+
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
-
-    # Drop the 'updated_at' column if it exists
-    df = df.drop(columns=['updated_at'], errors='ignore')
-
-    # Convert 'id' to integer if necessary
-    df['id'] = df['id'].astype(int)
-
-    # Convert 'date' column to datetime format
+    
     df['date'] = pd.to_datetime(df['date'])
+    print("Converted 'date' column to datetime format.")
 
-    # Remove any duplicates based on 'date'
+    # Remove duplicates
     df = df.drop_duplicates(subset=['date'])
+    print("Dropped duplicates based on 'date' column.")
 
-    # Handle missing values if any
+    # Handle missing values in 'value' column
     df = df.dropna(subset=['value'])
+    print("Dropped rows with missing 'value'.")
+
+    # Keep only relevant columns: 'id', 'date', and 'value'
+    df = df[['id', 'date', 'value']]
+    print("Kept only relevant columns: 'id', 'date', 'value'.")
 
     # Set 'id' as the index
     df.set_index('id', inplace=True)
-    print("ID column set as index")
+    print("ID column set as index.")
 
     return df
-
 
 # Data Cleaning: Nonfarm Payroll Employment Data
 
 def clean_nonfarm_payroll_employment_data(df):
-    # Ensure 'id' and 'date' columns exist
-    if 'id' not in df.columns:
-        raise KeyError("The 'id' column is missing from the data.")
+    print("Beginning to Nonfarm Payroll Employment Data.")
+
+    # Drop 'created_at' and 'updated_at' columns if they exist
+    df = df.drop(columns=['created_at', 'updated_at'], errors='ignore')
+
+    # Ensure 'date' column exists and convert to datetime
+    if 'date' not in df.columns and 'timestamp' in df.columns:
+        df = df.rename(columns={'timestamp': 'date'})
+
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
-
-    # Drop the 'updated_at' column if it exists
-    df = df.drop(columns=['updated_at'], errors='ignore')
-
-    # Convert 'id' to integer if necessary
-    df['id'] = df['id'].astype(int)
-
-    # Convert 'date' to datetime format
+    
     df['date'] = pd.to_datetime(df['date'])
+    print("Converted 'date' column to datetime format.")
 
-    # Remove any duplicates based on 'date' and 'value'
-    df = df.drop_duplicates(subset=['date', 'value'])
+    # Remove duplicates
+    df = df.drop_duplicates(subset=['date'])
+    print("Dropped duplicates based on 'date' column.")
 
-    # Handle missing values
+    # Handle missing values in 'value' column
     df = df.dropna(subset=['value'])
+    print("Dropped rows with missing 'value'.")
+
+    # Keep only relevant columns: 'id', 'date', and 'value'
+    df = df[['id', 'date', 'value']]
+    print("Kept only relevant columns: 'id', 'date', 'value'.")
 
     # Set 'id' as the index
     df.set_index('id', inplace=True)
-    print("ID column set as index")
+    print("ID column set as index.")
 
     return df
 
@@ -412,88 +467,115 @@ def clean_nonfarm_payroll_employment_data(df):
 
 
 def clean_personal_consumption_expenditures_data(df):
-    # Ensure 'id' and 'date' columns exist
-    if 'id' not in df.columns:
-        raise KeyError("The 'id' column is missing from the data.")
+    print("Beginning to clean Personal Consumption Expenditures Data.")
+
+    # Drop 'created_at' and 'updated_at' columns if they exist
+    df = df.drop(columns=['created_at', 'updated_at'], errors='ignore')
+
+    # Ensure 'date' column exists and convert to datetime
+    if 'date' not in df.columns and 'timestamp' in df.columns:
+        df = df.rename(columns={'timestamp': 'date'})
+
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
     
-    # Convert 'id' to integer if necessary (optional, depending on your data)
-    df['id'] = df['id'].astype(int)
-
-    # Convert 'date' column to datetime format
     df['date'] = pd.to_datetime(df['date'])
+    print("Converted 'date' column to datetime format.")
 
-    # Remove duplicates based on 'date'
+    # Remove duplicates
     df = df.drop_duplicates(subset=['date'])
+    print("Dropped duplicates based on 'date' column.")
 
-    # Handle missing values in the 'value' column
-    if df['value'].isnull().sum() > 0:
-        df = df.dropna(subset=['value'])
+    # Handle missing values in 'value' column
+    df = df.dropna(subset=['value'])
+    print("Dropped rows with missing 'value'.")
+
+    # Keep only relevant columns: 'id', 'date', and 'value'
+    df = df[['id', 'date', 'value']]
+    print("Kept only relevant columns: 'id', 'date', 'value'.")
 
     # Set 'id' as the index
     df.set_index('id', inplace=True)
-    print("ID column set as index")
+    print("ID column set as index.")
 
     return df
+
 
 # Data Cleaning: PPI Data
 
 
 def clean_ppi_data(df):
-    # Ensure 'id' and 'date' columns exist
-    if 'id' not in df.columns:
-        raise KeyError("The 'id' column is missing from the data.")
+    print("Beginning to clean PPI Data.")
+
+    # Drop 'created_at' and 'updated_at' columns if they exist
+    df = df.drop(columns=['created_at', 'updated_at'], errors='ignore')
+
+    # Ensure 'date' column exists and convert to datetime
+    if 'date' not in df.columns and 'timestamp' in df.columns:
+        df = df.rename(columns={'timestamp': 'date'})
+
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
     
-    # Convert 'id' to integer if necessary (optional, depending on your data)
-    df['id'] = df['id'].astype(int)
-
-    # Convert 'date' column to datetime format
     df['date'] = pd.to_datetime(df['date'])
+    print("Converted 'date' column to datetime format.")
 
-    # Remove duplicates based on 'date'
+    # Remove duplicates
     df = df.drop_duplicates(subset=['date'])
+    print("Dropped duplicates based on 'date' column.")
 
-    # Handle missing values in the 'value' column
-    if df['value'].isnull().sum() > 0:
-        df = df.dropna(subset=['value'])
+    # Handle missing values in 'value' column
+    df = df.dropna(subset=['value'])
+    print("Dropped rows with missing 'value'.")
+
+    # Keep only relevant columns: 'id', 'date', and 'value'
+    df = df[['id', 'date', 'value']]
+    print("Kept only relevant columns: 'id', 'date', 'value'.")
 
     # Set 'id' as the index
     df.set_index('id', inplace=True)
-    print("ID column set as index")
+    print("ID column set as index.")
 
     return df
+
 
 # Data Cleaning: Unemployment Rate Data
 
 
 def clean_unemployment_rate_data(df):
-    # Ensure 'id' and 'date' columns exist
-    if 'id' not in df.columns:
-        raise KeyError("The 'id' column is missing from the data.")
+    print("Beginning to clean Unemployment Rate Data.")
+
+    # Drop 'created_at' and 'updated_at' columns if they exist
+    df = df.drop(columns=['created_at', 'updated_at'], errors='ignore')
+
+    # Ensure 'date' column exists and convert to datetime
+    if 'date' not in df.columns and 'timestamp' in df.columns:
+        df = df.rename(columns={'timestamp': 'date'})
+
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
     
-    # Convert 'id' to integer if necessary (optional, depending on your data)
-    df['id'] = df['id'].astype(int)
-
-    # Convert 'date' column to datetime format
     df['date'] = pd.to_datetime(df['date'])
+    print("Converted 'date' column to datetime format.")
 
-    # Remove duplicates based on 'date'
+    # Remove duplicates
     df = df.drop_duplicates(subset=['date'])
+    print("Dropped duplicates based on 'date' column.")
 
-    # Handle missing values in the 'value' column
-    if df['value'].isnull().sum() > 0:
-        df = df.dropna(subset=['value'])
+    # Handle missing values in 'value' column
+    df = df.dropna(subset=['value'])
+    print("Dropped rows with missing 'value'.")
+
+    # Keep only relevant columns: 'id', 'date', and 'value'
+    df = df[['id', 'date', 'value']]
+    print("Kept only relevant columns: 'id', 'date', 'value'.")
 
     # Set 'id' as the index
     df.set_index('id', inplace=True)
-    print("ID column set as index")
+    print("ID column set as index.")
 
     return df
+
     
 # Data Cleaning: Historical SPX
 
@@ -650,14 +732,17 @@ def clean_real_time_spy_data(df):
     if 'timestamp' not in df.columns:
         raise KeyError("The 'timestamp' column is missing from the data.")
 
-    # Convert 'id' to integer if necessary (optional, depending on your data)
+    # Convert 'id' to integer if necessary
     df['id'] = df['id'].astype(int)
 
-    # Drop the 'conditions' column and keep only the columns with data
+    # Drop columns with no data (keeping only id, timestamp, and current_price)
     df = df[['id', 'timestamp', 'current_price', 'volume']].copy()
 
     # Convert 'timestamp' to datetime format
     df['timestamp'] = pd.to_datetime(df['timestamp'])
+
+    # Add a 'date' column based on 'timestamp'
+    df['date'] = df['timestamp'].dt.date
 
     # Remove duplicates based on timestamp
     df = df.drop_duplicates(subset=['timestamp'])
@@ -670,6 +755,7 @@ def clean_real_time_spy_data(df):
     print("ID column set as index")
 
     return df
+
 
 # Data Cleaning: Real Time VIX
 
@@ -684,36 +770,50 @@ def clean_real_time_vix_data(df):
     # Convert 'id' to integer if necessary
     df['id'] = df['id'].astype(int)
 
-    # Fill forward for any missing data
-    df = df.fillna(method='ffill').fillna(method='bfill')
+    # Drop columns with no data (keeping only id, timestamp, and current_price)
+    df = df[['id', 'timestamp', 'current_price']].copy()
 
-    # Convert 'timestamp' to datetime format using .loc to avoid the warning
-    df.loc[:, 'timestamp'] = pd.to_datetime(df['timestamp'])
+    # Rename 'current_price' to 'close' for consistency with other tables
+    df = df.rename(columns={'current_price': 'close'})
 
-    # Remove duplicates based on the 'timestamp' and 'current_price'
-    df = df.drop_duplicates(subset=['timestamp', 'current_price'])
+    # Convert 'timestamp' to datetime format
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+
+    # Add a 'date' column based on 'timestamp'
+    df['date'] = df['timestamp'].dt.date
+
+    # Remove duplicates based on timestamp
+    df = df.drop_duplicates(subset=['timestamp'])
+
+    # Sort by timestamp to ensure chronological order
+    df = df.sort_values(by='timestamp')
 
     # Set 'id' as the index
     df.set_index('id', inplace=True)
     print("ID column set as index")
 
-    print("Final cleaned DataFrame:")
-    print(df.head(), df.info())
-
     return df
-
 
 # Features
 # Features: Average Hourly Earnings Data
 
-
 def create_features_for_average_hourly_earnings(df):
-    # Set 'date' as the index
-    if 'date' in df.columns:
-        df = df.set_index('date')
+    # Log the beginning of the function
+    print("Beginning create features for average hourly earnings data.")
+    
+    # Ensure 'date' is retained and is a column
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
+    
+    # Set 'id' as the index
+    if 'id' in df.columns:
+        df.set_index('id', inplace=True)
+        print("ID column set as index.")
+    else:
+        raise KeyError("The 'id' column is missing from the data.")
 
-    # Ensure the index is a datetime type
-    df.index = pd.to_datetime(df.index)
+    # Convert 'date' to datetime format
+    df['date'] = pd.to_datetime(df['date'])
 
     # Annualized Growth Rate
     df['CAGR_12'] = (df['value'] / df['value'].shift(12)) ** (1/1) - 1
@@ -728,8 +828,7 @@ def create_features_for_average_hourly_earnings(df):
     df['MACD'] = short_ema - long_ema
 
     # Seasonal Decomposition
-    decomposition = seasonal_decompose(
-        df['value'], model='multiplicative', period=12)
+    decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
     df['Trend'] = decomposition.trend
     df['Seasonal'] = decomposition.seasonal
     df['Residual'] = decomposition.resid
@@ -746,40 +845,46 @@ def create_features_for_average_hourly_earnings(df):
     df['AHE_Ratio_12M'] = df['value'] / df['value'].rolling(window=12).mean()
 
     # Days Since Last Peak/Trough
-    peak_idx = df['value'].expanding().apply(
-        lambda x: x.idxmax().timestamp(), raw=False)
-    trough_idx = df['value'].expanding().apply(
-        lambda x: x.idxmin().timestamp(), raw=False)
+    peak_idx = df['value'].expanding().apply(lambda x: x.idxmax())
+    trough_idx = df['value'].expanding().apply(lambda x: x.idxmin())
 
-    df['Days_Since_Peak'] = (df.index.map(
-        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-    df['Days_Since_Trough'] = (df.index.map(
-        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    # Instead of using loc, handle duplicates and use .at or .iat for safe access
+    peak_idx_timestamps = peak_idx.dropna().map(lambda x: df.at[x, 'date'] if x in df.index else pd.NaT)
+    trough_idx_timestamps = trough_idx.dropna().map(lambda x: df.at[x, 'date'] if x in df.index else pd.NaT)
 
-    # RSI
+    # Calculate days since peak/trough and handle NaN values
+    df['Days_Since_Peak'] = (df['date'].map(pd.Timestamp.timestamp) - peak_idx_timestamps.map(pd.Timestamp.timestamp)).apply(
+        lambda x: pd.Timedelta(seconds=x).days if pd.notnull(x) else None)
+    df['Days_Since_Trough'] = (df['date'].map(pd.Timestamp.timestamp) - trough_idx_timestamps.map(pd.Timestamp.timestamp)).apply(
+        lambda x: pd.Timedelta(seconds=x).days if pd.notnull(x) else None)
+
+    # RSI Calculation
     delta = df['value'].diff(1)
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / loss
     df['RSI'] = 100 - (100 / (1 + rs))
 
+    # No need to reset the index, keep 'id' as index
+    print("Finished processing average hourly earnings data.")
     return df
 
 
-# Features: Consumer Confidence Data
+
+# Features: Consumer Confidence Data````
 
 
 def create_features_for_consumer_confidence_data(df):
-    # Ensure the 'date' column exists
+    # Ensure the 'date' column exists and set it as the index
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
-
-    # Convert 'date' to datetime format
+    
+    # Convert 'date' to datetime format if not already converted
     df['date'] = pd.to_datetime(df['date'])
 
-    # Ensure 'date' is set as index for easier time series operations
-    if not pd.api.types.is_datetime64_any_dtype(df.index):
-        df = df.set_index('date')
+    # Set 'date' as the index for easier time series operations
+    df = df.set_index('date', drop=False)  # Keep 'date' in the DataFrame but use it as an index
+    print("Set 'date' column as index for time series operations.")
 
     # Lag Features
     df['Lag_1'] = df['value'].shift(1)
@@ -838,15 +943,21 @@ def create_features_for_consumer_confidence_data(df):
     df['Days_Since_Peak'] = (df.index.map(pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
     df['Days_Since_Trough'] = (df.index.map(pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
 
+    # Reset the index to make 'date' a column again
+    df.reset_index(drop=True, inplace=True)
+    print("Reset 'date' from index to regular column.")
+
     return df
 
 
-# Features: Create Features for Cosumer Sentiment Date
+# Features: Create Features for Consumer Sentiment Data
 
 def create_features_for_consumer_sentiment_data(df):
-    # Convert index to datetime if not already done
+    print("Beginning create features for consumer sentiment data.")
+    
+    # Ensure 'date' is set as index for easier time series operations
     if not pd.api.types.is_datetime64_any_dtype(df.index):
-        df = df.set_index('date')
+        df = df.set_index('date', drop=False)  # Set 'date' as index but keep as a column
 
     # Monthly and Annual Percentage Change
     df['Monthly_Percentage_Change'] = df['value'].pct_change()
@@ -869,51 +980,45 @@ def create_features_for_consumer_sentiment_data(df):
     rs = gain / loss
     df['RSI'] = 100 - (100 / (1 + rs))
 
+    # Reset the index to make 'date' a column again, if needed
+    df.reset_index(drop=True, inplace=True)
+    print("Features created and 'date' reset from index to regular column.")
+
     return df
 
+    
 # Features: Core Inflation Data
 
 
 def create_features_for_core_inflation_data(df):
-    # Ensure 'date' is in datetime format and set it as index
-    if not pd.api.types.is_datetime64_any_dtype(df['date']):
-        df['date'] = pd.to_datetime(df['date'])
-    df = df.set_index('date')
+    # Ensure 'date' is retained
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the core inflation data.")
 
-    # Check for missing values
-    if df['value'].isnull().sum() > 0:
-        print("Warning: Missing values found in 'value' column. Filling missing values.")
-        df['value'].fillna(method='ffill', inplace=True)
+    # Set 'date' as the index
+    df = df.set_index('date', drop=False)  # Keep 'date' column in the data
+
+    # Ensure the index is a datetime type
+    df.index = pd.to_datetime(df.index)
+
+    # Annualized Growth Rate
+    df['CAGR_12'] = (df['value'] / df['value'].shift(12)) ** (1/1) - 1
 
     # Monthly and Annual Percentage Change
     df['Monthly_Percentage_Change'] = df['value'].pct_change()
     df['Annual_Percentage_Change'] = df['value'].pct_change(periods=12)
 
-    # Cumulative Sum of Core Inflation
+    # Exponential Moving Average (EMA)
+    df['EMA_12'] = df['value'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['value'].ewm(span=26, adjust=False).mean()
+
+    # Cumulative Sum of Changes
     df['Cumulative_Sum'] = df['value'].cumsum()
 
-    # Rolling Averages
-    df['Rolling_3M_Average'] = df['value'].rolling(window=3).mean()
-    df['Rolling_6M_Average'] = df['value'].rolling(window=6).mean()
-    df['Rolling_12M_Average'] = df['value'].rolling(window=12).mean()
-
-    # Moving Average Convergence Divergence (MACD)
-    short_ema = df['value'].ewm(span=12, adjust=False).mean()
-    long_ema = df['value'].ewm(span=26, adjust=False).mean()
-    df['MACD'] = short_ema - long_ema
-
-    # Seasonal Decomposition
-    try:
-        decomposition = seasonal_decompose(
-            df['value'], model='additive', period=12)
-        df['Trend'] = decomposition.trend
-        df['Seasonal'] = decomposition.seasonal
-        df['Residual'] = decomposition.resid
-    except Exception as e:
-        print(f"Error during seasonal decomposition: {e}")
-        df['Trend'] = None
-        df['Seasonal'] = None
-        df['Residual'] = None
+    # Rolling Growth Rates
+    df['Rolling_3M_Growth'] = df['value'].pct_change(periods=3)
+    df['Rolling_6M_Growth'] = df['value'].pct_change(periods=6)
+    df['Rolling_12M_Growth'] = df['value'].pct_change(periods=12)
 
     # Relative Strength Index (RSI)
     delta = df['value'].diff(1)
@@ -922,38 +1027,40 @@ def create_features_for_core_inflation_data(df):
     rs = gain / loss
     df['RSI'] = 100 - (100 / (1 + rs))
 
-    # Rolling Standard Deviation (Volatility)
-    df['Rolling_3M_StdDev'] = df['value'].rolling(window=3).std()
-    df['Rolling_6M_StdDev'] = df['value'].rolling(window=6).std()
-    df['Rolling_12M_StdDev'] = df['value'].rolling(window=12).std()
-
-    # Inflation Momentum
-    df['Momentum_3M'] = df['value'] - df['value'].shift(3)
-    df['Momentum_6M'] = df['value'] - df['value'].shift(6)
-    df['Momentum_12M'] = df['value'] - df['value'].shift(12)
-
-    # Z-Scores
+    # Z-Score
     df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
 
-    # Days Since Last Peak/Trough
-    peak_idx = df['value'].expanding().apply(
-        lambda x: x.idxmax().timestamp(), raw=False)
-    trough_idx = df['value'].expanding().apply(
-        lambda x: x.idxmin().timestamp(), raw=False)
+    # Seasonal Decomposition
+    if len(df) >= 24:  # Ensure there's at least 24 months of data
+        decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
+        df['Trend'] = decomposition.trend
+        df['Seasonal'] = decomposition.seasonal
+        df['Residual'] = decomposition.resid
+    else:
+        print("Not enough data points for seasonal decomposition. Skipping this feature.")
+        df['Trend'] = np.nan
+        df['Seasonal'] = np.nan
+        df['Residual'] = np.nan
 
-    df['Days_Since_Peak'] = (df.index.map(
-        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-    df['Days_Since_Trough'] = (df.index.map(
-        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    # Reset the index to make 'date' a column again
+    df.reset_index(drop=True, inplace=True)
 
     return df
+    
+    
 # Features: CPI Data
 
 
 def create_features_for_cpi_data(df):
-    # Convert index to datetime if not already done
-    if not pd.api.types.is_datetime64_any_dtype(df.index):
-        df = df.set_index('date')
+    # Ensure 'date' is set as index for easier time series operations
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
+    
+    # Set 'date' as the index
+    df = df.set_index('date', drop=False)
+
+    # Ensure the index is a datetime type
+    df.index = pd.to_datetime(df.index)
 
     # Monthly and Annual Percentage Change
     df['Monthly_Percentage_Change'] = df['value'].pct_change()
@@ -965,8 +1072,7 @@ def create_features_for_cpi_data(df):
     df['MACD'] = short_ema - long_ema
 
     # Seasonal Decomposition
-    decomposition = seasonal_decompose(
-        df['value'], model='multiplicative', period=12)
+    decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
     df['Trend'] = decomposition.trend
     df['Seasonal'] = decomposition.seasonal
     df['Residual'] = decomposition.resid
@@ -983,15 +1089,11 @@ def create_features_for_cpi_data(df):
     df['CPI_Ratio_12M'] = df['value'] / df['value'].rolling(window=12).mean()
 
     # Days Since Last Peak/Trough
-    peak_idx = df['value'].expanding().apply(
-        lambda x: x.idxmax().timestamp(), raw=False)
-    trough_idx = df['value'].expanding().apply(
-        lambda x: x.idxmin().timestamp(), raw=False)
+    peak_idx = df['value'].expanding().apply(lambda x: x.idxmax().timestamp(), raw=False)
+    trough_idx = df['value'].expanding().apply(lambda x: x.idxmin().timestamp(), raw=False)
 
-    df['Days_Since_Peak'] = (df.index.map(
-        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-    df['Days_Since_Trough'] = (df.index.map(
-        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Peak'] = (df.index.map(pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Trough'] = (df.index.map(pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
 
     # RSI
     delta = df['value'].diff(1)
@@ -1000,15 +1102,22 @@ def create_features_for_cpi_data(df):
     rs = gain / loss
     df['RSI'] = 100 - (100 / (1 + rs))
 
+    # Reset the index to keep 'date' as a column
+    df.reset_index(drop=True, inplace=True)
+
     return df
+
 
 # Features: GDP Data
 
 
 def create_features_for_gdp_data(df):
+    # Print starting message
+    print("Beginning create features for GDP data.")
+
     # Ensure 'date' is set as index for easier time series operations
     if not pd.api.types.is_datetime64_any_dtype(df.index):
-        df = df.set_index('date')
+        df = df.set_index('date', drop=False)  # Keep 'date' column in the data
 
     # Lag Features
     df['Lag_1'] = df['value'].shift(1)
@@ -1031,8 +1140,7 @@ def create_features_for_gdp_data(df):
     df['Cumulative_Product'] = (1 + df['value'].pct_change()).cumprod()
 
     # Seasonal Decomposition
-    decomposition = seasonal_decompose(
-        df['value'], model='multiplicative', period=4)
+    decomposition = seasonal_decompose(df['value'], model='multiplicative', period=4)
     df['Trend'] = decomposition.trend
     df['Seasonal'] = decomposition.seasonal
     df['Residual'] = decomposition.resid
@@ -1051,15 +1159,19 @@ def create_features_for_gdp_data(df):
     rs = gain / loss
     df['RSI'] = 100 - (100 / (1 + rs))
 
+    # Reset the index to make 'date' a column again, if necessary
+    df.reset_index(drop=True, inplace=True)
+
     return df
+
 
 # Features: Industrial Production Data
 
 
 def create_features_for_industrial_production_data(df):
     # Ensure 'date' is set as index for easier time series operations
-    if not pd.api.types.is_datetime64_any_dtype(df.index):
-        df = df.set_index('date')
+    if 'date' not in df.index.names:
+        df = df.set_index('date', drop=False)  # Use 'date' as the index but keep it as a column
 
     # Lag Features
     df['Lag_1'] = df['value'].shift(1)
@@ -1083,8 +1195,7 @@ def create_features_for_industrial_production_data(df):
     df['Cumulative_Product'] = (1 + df['value'].pct_change()).cumprod()
 
     # Seasonal Decomposition
-    decomposition = seasonal_decompose(
-        df['value'], model='multiplicative', period=12)
+    decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
     df['Trend'] = decomposition.trend
     df['Seasonal'] = decomposition.seasonal
     df['Residual'] = decomposition.resid
@@ -1108,22 +1219,24 @@ def create_features_for_industrial_production_data(df):
     df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
 
     # Days Since Last Peak/Trough
-    peak_idx = df['value'].expanding().apply(
-        lambda x: x.idxmax().timestamp(), raw=False)
-    trough_idx = df['value'].expanding().apply(
-        lambda x: x.idxmin().timestamp(), raw=False)
-    df['Days_Since_Peak'] = (df.index.map(
-        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-    df['Days_Since_Trough'] = (df.index.map(
-        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    peak_idx = df['value'].expanding().apply(lambda x: x.idxmax().timestamp() if pd.notnull(x.idxmax()) else None, raw=False)
+    trough_idx = df['value'].expanding().apply(lambda x: x.idxmin().timestamp() if pd.notnull(x.idxmin()) else None, raw=False)
+    
+    df['Days_Since_Peak'] = df.index.map(pd.Timestamp.timestamp) - peak_idx
+    df['Days_Since_Trough'] = df.index.map(pd.Timestamp.timestamp) - trough_idx
+
+    # Reset index to make 'date' a column again
+    df.reset_index(drop=True, inplace=True)
 
     return df
 
-    # Features: Interest Rate Data
 
+    # Features: Interest Rate Data
 
 def create_features_for_interest_rate_data(df):
     # Ensure 'date' is set as index for easier time series operations
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
     if not pd.api.types.is_datetime64_any_dtype(df.index):
         df = df.set_index('date')
 
@@ -1149,8 +1262,7 @@ def create_features_for_interest_rate_data(df):
     df['Cumulative_Product'] = (1 + df['value'].pct_change()).cumprod()
 
     # Seasonal Decomposition
-    decomposition = seasonal_decompose(
-        df['value'], model='multiplicative', period=12)
+    decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
     df['Trend'] = decomposition.trend
     df['Seasonal'] = decomposition.seasonal
     df['Residual'] = decomposition.resid
@@ -1174,24 +1286,22 @@ def create_features_for_interest_rate_data(df):
     df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
 
     # Days Since Last Peak/Trough
-    peak_idx = df['value'].expanding().apply(
-        lambda x: x.idxmax().timestamp(), raw=False)
-    trough_idx = df['value'].expanding().apply(
-        lambda x: x.idxmin().timestamp(), raw=False)
-    df['Days_Since_Peak'] = (df.index.map(
-        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-    df['Days_Since_Trough'] = (df.index.map(
-        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    peak_idx = df['value'].expanding().apply(lambda x: x.idxmax().timestamp(), raw=False)
+    trough_idx = df['value'].expanding().apply(lambda x: x.idxmin().timestamp(), raw=False)
+    df['Days_Since_Peak'] = (df.index.map(pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Trough'] = (df.index.map(pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+
+    # Reset index to remove 'date' from being an index
+    df.reset_index(drop=True, inplace=True)
+    print("Reset 'date' from being an index to a regular column.")
 
     return df
 
 # Feature: Labor Force Participation Data
-
-
 def create_features_for_labor_force_participation_rate_data(df):
     # Ensure 'date' is set as index for easier time series operations
-    if not pd.api.types.is_datetime64_any_dtype(df.index):
-        df = df.set_index('date')
+    if 'date' not in df.index.names:
+        df = df.set_index('date', drop=False)  # Use 'date' as the index but keep it as a column
 
     # Lag Features
     df['Lag_1'] = df['value'].shift(1)
@@ -1215,8 +1325,7 @@ def create_features_for_labor_force_participation_rate_data(df):
     df['Cumulative_Product'] = (1 + df['value'].pct_change()).cumprod()
 
     # Seasonal Decomposition
-    decomposition = seasonal_decompose(
-        df['value'], model='multiplicative', period=12)
+    decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
     df['Trend'] = decomposition.trend
     df['Seasonal'] = decomposition.seasonal
     df['Residual'] = decomposition.resid
@@ -1240,90 +1349,32 @@ def create_features_for_labor_force_participation_rate_data(df):
     df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
 
     # Days Since Last Peak/Trough
-    peak_idx = df['value'].expanding().apply(
-        lambda x: x.idxmax().timestamp(), raw=False)
-    trough_idx = df['value'].expanding().apply(
-        lambda x: x.idxmin().timestamp(), raw=False)
-    df['Days_Since_Peak'] = (df.index.map(
-        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-    df['Days_Since_Trough'] = (df.index.map(
-        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    peak_idx = df['value'].expanding().apply(lambda x: x.idxmax().timestamp() if pd.notnull(x.idxmax()) else None, raw=False)
+    trough_idx = df['value'].expanding().apply(lambda x: x.idxmin().timestamp() if pd.notnull(x.idxmin()) else None, raw=False)
+    
+    df['Days_Since_Peak'] = df.index.map(pd.Timestamp.timestamp) - peak_idx
+    df['Days_Since_Trough'] = df.index.map(pd.Timestamp.timestamp) - trough_idx
+
+    # Reset index to make 'date' a column again
+    df.reset_index(drop=True, inplace=True)
 
     return df
+
 
 # Features: Nonfarm Payroll Employment Data
 
 
 def create_features_for_nonfarm_payroll_employment_data(df):
-    # Ensure 'date' is set as index for easier time series operations
-    if not pd.api.types.is_datetime64_any_dtype(df.index):
-        df = df.set_index('date')
+    # Ensure the 'date' column exists and set it as the index
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
+    
+    # Convert 'date' to datetime format if not already converted
+    df['date'] = pd.to_datetime(df['date'])
 
-    # Lag Features: Useful to understand changes over time
-    df['Lag_1'] = df['value'].shift(1)
-    df['Lag_3'] = df['value'].shift(3)
-    df['Lag_12'] = df['value'].shift(12)
-
-    # Rolling Statistics: Moving averages and standard deviations
-    df['Rolling_Mean_3M'] = df['value'].rolling(window=3).mean()
-    df['Rolling_Mean_6M'] = df['value'].rolling(window=6).mean()
-    df['Rolling_Mean_12M'] = df['value'].rolling(window=12).mean()
-    df['Rolling_Std_3M'] = df['value'].rolling(window=3).std()
-    df['Rolling_Std_6M'] = df['value'].rolling(window=6).std()
-    df['Rolling_Std_12M'] = df['value'].rolling(window=12).std()
-
-    # Percentage Change: Month-over-Month and Year-over-Year
-    df['MoM_Percentage_Change'] = df['value'].pct_change()
-    df['YoY_Percentage_Change'] = df['value'].pct_change(periods=12)
-
-    # Cumulative Sum and Product
-    df['Cumulative_Sum'] = df['value'].cumsum()
-    df['Cumulative_Product'] = (1 + df['value'].pct_change()).cumprod()
-
-    # Exponential Moving Average (EMA)
-    df['EMA_12'] = df['value'].ewm(span=12, adjust=False).mean()
-    df['EMA_26'] = df['value'].ewm(span=26, adjust=False).mean()
-    df['EMA_50'] = df['value'].ewm(span=50, adjust=False).mean()
-
-    # Rate of Change (ROC)
-    df['ROC'] = df['value'].diff(12) / df['value'].shift(12)
-
-    # Z-Score: Normalizing the values based on mean and standard deviation
-    df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
-
-    # Seasonal Decomposition: Decompose the series into trend, seasonal, and residual components
-    decomposition = seasonal_decompose(
-        df['value'], model='multiplicative', period=12)
-    df['Trend'] = decomposition.trend
-    df['Seasonal'] = decomposition.seasonal
-    df['Residual'] = decomposition.resid
-
-    # Days Since Last Peak/Trough: Time since the last highest/lowest value
-    peak_idx = df['value'].expanding().apply(
-        lambda x: x.idxmax().timestamp(), raw=False)
-    trough_idx = df['value'].expanding().apply(
-        lambda x: x.idxmin().timestamp(), raw=False)
-    df['Days_Since_Peak'] = (df.index.map(
-        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-    df['Days_Since_Trough'] = (df.index.map(
-        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-
-    # RSI (Relative Strength Index)
-    delta = df['value'].diff(1)
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / loss
-    df['RSI'] = 100 - (100 / (1 + rs))
-
-    return df
-
-# Features: Personal Consumption Expenditures Data
-
-
-def create_features_for_personal_consumption_expenditures(df):
-    # Ensure 'date' is set as index for easier time series operations
-    if not pd.api.types.is_datetime64_any_dtype(df.index):
-        df = df.set_index('date')
+    # Set 'date' as the index for easier time series operations
+    df = df.set_index('date', drop=False)  # Keep 'date' in the DataFrame but use it as an index
+    print("Set 'date' column as index for time series operations.")
 
     # Lag Features
     df['Lag_1'] = df['value'].shift(1)
@@ -1346,6 +1397,18 @@ def create_features_for_personal_consumption_expenditures(df):
     df['Cumulative_Sum'] = df['value'].cumsum()
     df['Cumulative_Product'] = (1 + df['value'].pct_change()).cumprod()
 
+    # Seasonal Decomposition
+    if len(df) >= 24:  # Ensure there's at least 24 months of data
+        decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
+        df['Trend'] = decomposition.trend
+        df['Seasonal'] = decomposition.seasonal
+        df['Residual'] = decomposition.resid
+    else:
+        print("Not enough data points for seasonal decomposition. Skipping this feature.")
+        df['Trend'] = np.nan
+        df['Seasonal'] = np.nan
+        df['Residual'] = np.nan
+
     # Exponential Moving Average (EMA)
     df['EMA_12'] = df['value'].ewm(span=12, adjust=False).mean()
     df['EMA_26'] = df['value'].ewm(span=26, adjust=False).mean()
@@ -1354,32 +1417,104 @@ def create_features_for_personal_consumption_expenditures(df):
     # Rate of Change (ROC)
     df['ROC'] = df['value'].diff(12) / df['value'].shift(12)
 
-    # Z-Score
-    df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
-
-    # Seasonal Decomposition
-    decomposition = seasonal_decompose(
-        df['value'], model='multiplicative', period=12)
-    df['Trend'] = decomposition.trend
-    df['Seasonal'] = decomposition.seasonal
-    df['Residual'] = decomposition.resid
-
-    # Days Since Last Peak/Trough
-    peak_idx = df['value'].expanding().apply(
-        lambda x: x.idxmax().timestamp(), raw=False)
-    trough_idx = df['value'].expanding().apply(
-        lambda x: x.idxmin().timestamp(), raw=False)
-    df['Days_Since_Peak'] = (df.index.map(
-        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-    df['Days_Since_Trough'] = (df.index.map(
-        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-
-    # RSI (Relative Strength Index)
+    # Relative Strength Index (RSI)
     delta = df['value'].diff(1)
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / loss
     df['RSI'] = 100 - (100 / (1 + rs))
+
+    # Z-Score
+    df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
+
+    # Days Since Last Peak/Trough
+    peak_idx = df['value'].expanding().apply(lambda x: x.idxmax().timestamp(), raw=False)
+    trough_idx = df['value'].expanding().apply(lambda x: x.idxmin().timestamp(), raw=False)
+    df['Days_Since_Peak'] = (df.index.map(pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Trough'] = (df.index.map(pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+
+    # Reset the index to make 'date' a column again
+    df.reset_index(drop=True, inplace=True)
+    print("Reset 'date' from index to regular column.")
+
+    return df
+
+    
+# Features: Personal Consumption Expenditures Data
+
+
+def create_features_for_personal_consumption_expenditures(df):
+    # Ensure the 'date' column exists and set it as the index
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
+    
+    # Convert 'date' to datetime format if not already converted
+    df['date'] = pd.to_datetime(df['date'])
+
+    # Set 'date' as the index for easier time series operations
+    df = df.set_index('date', drop=False)  # Keep 'date' in the DataFrame but use it as an index
+    print("Set 'date' column as index for time series operations.")
+
+    # Lag Features
+    df['Lag_1'] = df['value'].shift(1)
+    df['Lag_3'] = df['value'].shift(3)
+    df['Lag_12'] = df['value'].shift(12)
+
+    # Rolling Statistics
+    df['Rolling_Mean_3M'] = df['value'].rolling(window=3).mean()
+    df['Rolling_Mean_6M'] = df['value'].rolling(window=6).mean()
+    df['Rolling_Mean_12M'] = df['value'].rolling(window=12).mean()
+    df['Rolling_Std_3M'] = df['value'].rolling(window=3).std()
+    df['Rolling_Std_6M'] = df['value'].rolling(window=6).std()
+    df['Rolling_Std_12M'] = df['value'].rolling(window=12).std()
+
+    # Percentage Change
+    df['MoM_Percentage_Change'] = df['value'].pct_change()
+    df['YoY_Percentage_Change'] = df['value'].pct_change(periods=12)
+
+    # Cumulative Sum and Product
+    df['Cumulative_Sum'] = df['value'].cumsum()
+    df['Cumulative_Product'] = (1 + df['value'].pct_change()).cumprod()
+
+    # Seasonal Decomposition
+    if len(df) >= 24:  # Ensure there's at least 24 months of data
+        decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
+        df['Trend'] = decomposition.trend
+        df['Seasonal'] = decomposition.seasonal
+        df['Residual'] = decomposition.resid
+    else:
+        print("Not enough data points for seasonal decomposition. Skipping this feature.")
+        df['Trend'] = np.nan
+        df['Seasonal'] = np.nan
+        df['Residual'] = np.nan
+
+    # Exponential Moving Average (EMA)
+    df['EMA_12'] = df['value'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['value'].ewm(span=26, adjust=False).mean()
+    df['EMA_50'] = df['value'].ewm(span=50, adjust=False).mean()
+
+    # Rate of Change (ROC)
+    df['ROC'] = df['value'].diff(12) / df['value'].shift(12)
+
+    # Relative Strength Index (RSI)
+    delta = df['value'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    # Z-Score
+    df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
+
+    # Days Since Last Peak/Trough
+    peak_idx = df['value'].expanding().apply(lambda x: x.idxmax().timestamp(), raw=False)
+    trough_idx = df['value'].expanding().apply(lambda x: x.idxmin().timestamp(), raw=False)
+    df['Days_Since_Peak'] = (df.index.map(pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Trough'] = (df.index.map(pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+
+    # Reset the index to make 'date' a column again
+    df.reset_index(drop=True, inplace=True)
+    print("Reset 'date' from index to regular column.")
 
     return df
 
@@ -1387,9 +1522,16 @@ def create_features_for_personal_consumption_expenditures(df):
 
 
 def create_features_for_ppi_data(df):
-    # Ensure 'date' is set as index for easier time series operations
-    if not pd.api.types.is_datetime64_any_dtype(df.index):
-        df = df.set_index('date')
+    # Ensure the 'date' column exists and set it as the index
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
+    
+    # Convert 'date' to datetime format if not already converted
+    df['date'] = pd.to_datetime(df['date'])
+
+    # Set 'date' as the index for easier time series operations
+    df = df.set_index('date', drop=False)  # Keep 'date' in the DataFrame but use it as an index
+    print("Set 'date' column as index for time series operations.")
 
     # Lag Features
     df['Lag_1'] = df['value'].shift(1)
@@ -1412,6 +1554,18 @@ def create_features_for_ppi_data(df):
     df['Cumulative_Sum'] = df['value'].cumsum()
     df['Cumulative_Product'] = (1 + df['value'].pct_change()).cumprod()
 
+    # Seasonal Decomposition
+    if len(df) >= 24:  # Ensure there's at least 24 months of data
+        decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
+        df['Trend'] = decomposition.trend
+        df['Seasonal'] = decomposition.seasonal
+        df['Residual'] = decomposition.resid
+    else:
+        print("Not enough data points for seasonal decomposition. Skipping this feature.")
+        df['Trend'] = np.nan
+        df['Seasonal'] = np.nan
+        df['Residual'] = np.nan
+
     # Exponential Moving Average (EMA)
     df['EMA_12'] = df['value'].ewm(span=12, adjust=False).mean()
     df['EMA_26'] = df['value'].ewm(span=26, adjust=False).mean()
@@ -1420,32 +1574,25 @@ def create_features_for_ppi_data(df):
     # Rate of Change (ROC)
     df['ROC'] = df['value'].diff(12) / df['value'].shift(12)
 
-    # Z-Score
-    df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
-
-    # Seasonal Decomposition
-    decomposition = seasonal_decompose(
-        df['value'], model='multiplicative', period=12)
-    df['Trend'] = decomposition.trend
-    df['Seasonal'] = decomposition.seasonal
-    df['Residual'] = decomposition.resid
-
-    # Days Since Last Peak/Trough
-    peak_idx = df['value'].expanding().apply(
-        lambda x: x.idxmax().timestamp(), raw=False)
-    trough_idx = df['value'].expanding().apply(
-        lambda x: x.idxmin().timestamp(), raw=False)
-    df['Days_Since_Peak'] = (df.index.map(
-        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-    df['Days_Since_Trough'] = (df.index.map(
-        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-
-    # RSI (Relative Strength Index)
+    # Relative Strength Index (RSI)
     delta = df['value'].diff(1)
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / loss
     df['RSI'] = 100 - (100 / (1 + rs))
+
+    # Z-Score
+    df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
+
+    # Days Since Last Peak/Trough
+    peak_idx = df['value'].expanding().apply(lambda x: x.idxmax().timestamp(), raw=False)
+    trough_idx = df['value'].expanding().apply(lambda x: x.idxmin().timestamp(), raw=False)
+    df['Days_Since_Peak'] = (df.index.map(pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Trough'] = (df.index.map(pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+
+    # Reset the index to make 'date' a column again
+    df.reset_index(drop=True, inplace=True)
+    print("Reset 'date' from index to regular column.")
 
     return df
 
@@ -1453,9 +1600,16 @@ def create_features_for_ppi_data(df):
 
 
 def create_features_for_unemployment_rate_data(df):
-    # Ensure 'date' is set as index for easier time series operations
-    if not pd.api.types.is_datetime64_any_dtype(df.index):
-        df = df.set_index('date')
+    # Ensure the 'date' column exists and set it as the index
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the data.")
+    
+    # Convert 'date' to datetime format if not already converted
+    df['date'] = pd.to_datetime(df['date'])
+
+    # Set 'date' as the index for easier time series operations
+    df = df.set_index('date', drop=False)  # Keep 'date' in the DataFrame but use it as an index
+    print("Set 'date' column as index for time series operations.")
 
     # Lag Features
     df['Lag_1'] = df['value'].shift(1)
@@ -1478,6 +1632,18 @@ def create_features_for_unemployment_rate_data(df):
     df['Cumulative_Sum'] = df['value'].cumsum()
     df['Cumulative_Product'] = (1 + df['value'].pct_change()).cumprod()
 
+    # Seasonal Decomposition
+    if len(df) >= 24:  # Ensure there's at least 24 months of data
+        decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
+        df['Trend'] = decomposition.trend
+        df['Seasonal'] = decomposition.seasonal
+        df['Residual'] = decomposition.resid
+    else:
+        print("Not enough data points for seasonal decomposition. Skipping this feature.")
+        df['Trend'] = np.nan
+        df['Seasonal'] = np.nan
+        df['Residual'] = np.nan
+
     # Exponential Moving Average (EMA)
     df['EMA_12'] = df['value'].ewm(span=12, adjust=False).mean()
     df['EMA_26'] = df['value'].ewm(span=26, adjust=False).mean()
@@ -1486,32 +1652,25 @@ def create_features_for_unemployment_rate_data(df):
     # Rate of Change (ROC)
     df['ROC'] = df['value'].diff(12) / df['value'].shift(12)
 
-    # Z-Score
-    df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
-
-    # Seasonal Decomposition
-    decomposition = seasonal_decompose(
-        df['value'], model='multiplicative', period=12)
-    df['Trend'] = decomposition.trend
-    df['Seasonal'] = decomposition.seasonal
-    df['Residual'] = decomposition.resid
-
-    # Days Since Last Peak/Trough
-    peak_idx = df['value'].expanding().apply(
-        lambda x: x.idxmax().timestamp(), raw=False)
-    trough_idx = df['value'].expanding().apply(
-        lambda x: x.idxmin().timestamp(), raw=False)
-    df['Days_Since_Peak'] = (df.index.map(
-        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-    df['Days_Since_Trough'] = (df.index.map(
-        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-
-    # RSI (Relative Strength Index)
+    # Relative Strength Index (RSI)
     delta = df['value'].diff(1)
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / loss
     df['RSI'] = 100 - (100 / (1 + rs))
+
+    # Z-Score
+    df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
+
+    # Days Since Last Peak/Trough
+    peak_idx = df['value'].expanding().apply(lambda x: x.idxmax().timestamp(), raw=False)
+    trough_idx = df['value'].expanding().apply(lambda x: x.idxmin().timestamp(), raw=False)
+    df['Days_Since_Peak'] = (df.index.map(pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Trough'] = (df.index.map(pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+
+    # Reset the index to make 'date' a column again
+    df.reset_index(drop=True, inplace=True)
+    print("Reset 'date' from index to regular column.")
 
     return df
 
@@ -1769,73 +1928,101 @@ def create_features_for_real_time_spy(df):
 # Features: Real Time VIX
 
 def create_features_for_real_time_vix(df):
-    print("DataFrame before feature creation:")
-    print(df.head(), df.info())
+    # Ensure the 'date' column exists; if not, raise an error
+    if 'date' not in df.columns:
+        raise KeyError("The 'date' column is missing from the VIX data.")
 
-    if df.empty:
-        print("Warning: The DataFrame is empty before feature creation.")
-        return pd.DataFrame()
+    # Set 'date' as the index
+    df = df.set_index('date', drop=False)  # Keep 'date' column in the data
 
-    # Create Lag feature
+    # Ensure the index is a datetime type
+    df.index = pd.to_datetime(df.index)
+
+    # Feature 1: Daily percentage change
+    df['Daily_Percentage_Change'] = df['close'].pct_change()
+
+    # Feature 2: Rolling mean and standard deviation (volatility indicators)
+    df['Rolling_Mean_10D'] = df['close'].rolling(window=10).mean()
+    df['Rolling_Std_10D'] = df['close'].rolling(window=10).std()
+    df['Rolling_Mean_20D'] = df['close'].rolling(window=20).mean()
+    df['Rolling_Std_20D'] = df['close'].rolling(window=20).std()
+
+    # Feature 3: MACD (Moving Average Convergence Divergence)
+    short_ema = df['close'].ewm(span=12, adjust=False).mean()
+    long_ema = df['close'].ewm(span=26, adjust=False).mean()
+    df['MACD'] = short_ema - long_ema
+
+    # Feature 4: RSI (Relative Strength Index)
+    delta = df['close'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    # Feature 5: Lagged values
     df['Lag_1'] = df['close'].shift(1)
+    df['Lag_5'] = df['close'].shift(5)
+    df['Lag_10'] = df['close'].shift(10)
 
-    # Create moving averages only if there are enough data points
-    if len(df) >= 20:
-        df['SMA_20'] = df['close'].rolling(window=20).mean()
-        df['Bollinger_Upper'] = df['SMA_20'] + 2 * df['close'].rolling(window=20).std()
-        df['Bollinger_Lower'] = df['SMA_20'] - 2 * df['close'].rolling(window=20).std()
+    # Feature 6: Exponential Moving Averages
+    df['EMA_10'] = df['close'].ewm(span=10, adjust=False).mean()
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
 
-    if len(df) >= 50:
-        df['SMA_50'] = df['close'].rolling(window=50).mean()
+    # Feature 7: Cumulative sum of changes
+    df['Cumulative_Sum'] = df['close'].cumsum()
 
-    # Create EMA and MACD features
-    df['EMA_12'] = df['close'].ewm(span=12, adjust=False).mean()
-    df['EMA_26'] = df['close'].ewm(span=26, adjust=False).mean()
-    df['MACD'] = df['EMA_12'] - df['EMA_26']
-    df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+    # Feature 8: Z-Score normalization for volatility spikes
+    df['Z_Score'] = (df['close'] - df['close'].mean()) / df['close'].std()
 
-    # Calculate RSI only if there are enough data points
-    if len(df) >= 14:
-        delta = df['close'].diff(1)
-        gain = delta.where(delta > 0, 0)
-        loss = -delta.where(delta < 0, 0)
-        avg_gain = gain.rolling(window=14).mean()
-        avg_loss = loss.rolling(window=14).mean()
-        rs = avg_gain / avg_loss
-        df['RSI'] = 100 - (100 / (1 + rs))
+    # Feature 9: Bollinger Bands (upper and lower)
+    rolling_mean = df['close'].rolling(window=20).mean()
+    rolling_std = df['close'].rolling(window=20).std()
+    df['Bollinger_Upper'] = rolling_mean + (rolling_std * 2)
+    df['Bollinger_Lower'] = rolling_mean - (rolling_std * 2)
 
-        # Calculate ATR
-        df['ATR'] = df[['high', 'low', 'close']].diff().abs().max(axis=1).rolling(window=14).mean()
+    # Feature 10: Rate of Change (ROC)
+    df['Rate_Of_Change'] = df['close'].diff(5) / df['close'].shift(5)
 
-    # Fill remaining NaN values forward to avoid dropping rows
-    df.fillna(method='ffill', inplace=True)
-    df.fillna(method='bfill', inplace=True)
+    # Reset the index to make 'date' a column again
+    df.reset_index(drop=True, inplace=True)
 
-    print("DataFrame after feature creation:")
-    print(df.head(), df.info())
-
-    return df
-    
+    return df  
 
 # Normalize Data
 
-
 def normalize_data(df):
-    # Separate datetime columns and non-numeric columns from the rest
-    datetime_columns = df.select_dtypes(include=['datetime64']).columns
-    non_numeric_columns = df.select_dtypes(exclude=[np.number]).columns
+    # Identify datetime columns
+    datetime_columns = df.select_dtypes(include=['datetime64']).columns.tolist()
+    
+    # Check for 'date' or 'timestamp' and print which one exists, or raise an error
+    if 'date' in df.columns and 'timestamp' in df.columns:
+        print("Both 'date' and 'timestamp' columns exist.")
+    elif 'date' in df.columns:
+        print("'date' column exists.")
+        datetime_columns.append('date')  # Ensure 'date' is treated as a datetime column
+    elif 'timestamp' in df.columns:
+        print("'timestamp' column exists.")
+        datetime_columns.append('timestamp')  # Ensure 'timestamp' is treated as a datetime column
+    else:
+        print("Error: No 'date' or 'timestamp' column found.")
+        return df, None
 
-    # Remove overlaps by treating 'created_at' and 'updated_at' as datetime only
-    non_numeric_columns = non_numeric_columns.difference(datetime_columns)
+    # Identify non-numeric columns
+    non_numeric_columns = df.select_dtypes(exclude=[np.number]).columns.tolist()
 
-    numeric_df = df.drop(columns=datetime_columns.union(non_numeric_columns))
+    # Remove overlaps and treat 'created_at' and 'updated_at' as datetime only
+    non_numeric_columns = [col for col in non_numeric_columns if col not in datetime_columns]
+
+    # Separate numeric data for scaling
+    numeric_df = df.drop(columns=datetime_columns + non_numeric_columns, errors='ignore')
 
     # Initialize the scaler
     scaler = MinMaxScaler(feature_range=(0, 1))
 
     # Scale the numeric data
-    scaled_numeric_df = pd.DataFrame(scaler.fit_transform(
-        numeric_df), columns=numeric_df.columns, index=numeric_df.index)
+    scaled_numeric_df = pd.DataFrame(scaler.fit_transform(numeric_df), 
+                                     columns=numeric_df.columns, 
+                                     index=numeric_df.index)
 
     # Reattach the datetime and non-numeric columns without scaling
     final_df = pd.concat(
@@ -1843,52 +2030,52 @@ def normalize_data(df):
 
     return final_df, scaler
 
+
 def preprocess_data(query, table_name):
     df = load_data(query)
 
-    # Check if 'id' and either 'date' or 'timestamp' columns exist
+    # Step 1: Check if 'date' or 'timestamp' column exists
     if 'id' not in df.columns:
         raise KeyError(f"The 'id' column must be present in the {table_name} data.")
     
     if 'date' not in df.columns and 'timestamp' not in df.columns:
         raise KeyError(f"Either 'date' or 'timestamp' column must be present in the {table_name} data.")
 
-    # Clean the data based on the table
+    # Step 2: Convert 'date' or 'timestamp' to datetime and ensure consistency
+    if 'timestamp' in df.columns:
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df['date'] = df['timestamp']  # Create 'date' column from 'timestamp' if not present
+        print("'timestamp' column converted to datetime and 'date' column created.")
+    elif 'date' in df.columns:
+        df['date'] = pd.to_datetime(df['date'])
+        print("'date' column converted to datetime.")
+
+    # Step 3: Set 'date' as index
+    df = df.set_index('date', drop=False)  # Keep 'date' in the DataFrame but use it as an index
+    print("Set 'date' column as index.")
+
+    # Step 4: Perform table-specific cleaning and feature creation
     cleaning_function = TABLE_CLEANING_FUNCTIONS.get(table_name)
     if cleaning_function:
         df = cleaning_function(df)
+        print(f"Cleaned {table_name} data.")
 
-    # Convert 'date' or 'timestamp' column to datetime
-    if 'date' in df.columns:
-        df['date'] = pd.to_datetime(df['date'])
-        print("Converted 'date' column to datetime format.")
-    elif 'timestamp' in df.columns:
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
-        print("Converted 'timestamp' column to datetime format.")
-        df['date'] = df['timestamp'].dt.date  # Create 'date' column from 'timestamp'
-
-    # Check if the DataFrame is empty after cleaning
-    if df.empty:
-        print(f"DataFrame for {table_name} is empty after cleaning. Skipping further processing.")
-        return df
-
-    # Check if 'id' column exists before setting it as the index
-    if 'id' in df.columns:
-        df.set_index('id', inplace=True)
-        print("ID column set as index")
-    else:
-        print(f"'id' column is missing after cleaning for {table_name}. Skipping setting index.")
-
-    # Create features based on the table
     feature_creation_function = TABLE_FEATURE_FUNCTIONS.get(table_name)
     if feature_creation_function:
         df = feature_creation_function(df)
-    else:
-        print(f"No specific feature function found for table: {table_name}. Skipping feature creation.")
+        print(f"Features created for {table_name} data.")
 
     # Normalize the data if the DataFrame is not empty
     if not df.empty:
         df, scaler = normalize_data(df)
+
+    # Step 5: Check for duplicate columns and drop them
+    df = df.loc[:, ~df.columns.duplicated()]
+    print("Dropped duplicate columns, if any existed.")
+
+    # Reset index to remove 'date' from being an index
+    df.reset_index(drop=True, inplace=True)
+    print("'date' column reset from index to regular column.")
 
     return df
 
