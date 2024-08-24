@@ -249,28 +249,611 @@ def recompute_indicators(df, tf, has_close=True):
 
 # Correlations
 
+# Average Hourly Earnings: Historical
+def average_hourly_earnings_correlation_historical(data_dict):
+    print("Starting historical average hourly earnings correlation analysis...")
 
-def average_hourly_earnings_correlation(data_dict):
-    # Extract the relevant data
-    average_hourly_earnings = data_dict['average_hourly_earnings_data']
-    spx_data = data_dict['historical_spx']
-    spy_data = data_dict['historical_spy']
+    historical_average_hourly_earnings = data_dict['average_hourly_earnings_data']
+    historical_spx_data = data_dict['historical_spx']
+    historical_spy_data = data_dict['historical_spy']
 
     # Truncate to the shortest length to avoid length mismatch
-    min_length = min(len(average_hourly_earnings),
-                     len(spx_data), len(spy_data))
+    min_length = min(len(historical_average_hourly_earnings), len(historical_spx_data), len(historical_spy_data))
 
     # Truncate datasets
-    average_hourly_earnings = average_hourly_earnings.iloc[:min_length]
-    spx_data = spx_data.iloc[:min_length]
-    spy_data = spy_data.iloc[:min_length]
+    historical_average_hourly_earnings = historical_average_hourly_earnings.iloc[:min_length]
+    historical_spx_data = historical_spx_data.iloc[:min_length]
+    historical_spy_data = historical_spy_data.iloc[:min_length]
 
     # Calculate correlations
-    spx_corr = average_hourly_earnings['value'].corr(spx_data['close'])
-    spy_corr = average_hourly_earnings['value'].corr(spy_data['close'])
+    historical_spx_corr = historical_average_hourly_earnings['value'].corr(historical_spx_data['close'])
+    historical_spy_corr = historical_average_hourly_earnings['value'].corr(historical_spy_data['close'])
 
-    return spx_corr, spy_corr
+    print(f"Historical SPX Correlation: {historical_spx_corr}, Historical SPY Correlation: {historical_spy_corr}")
 
+    return historical_spx_corr, historical_spy_corr
+
+# Average Hourly Earnings: Real Time
+def average_hourly_earnings_correlation_real_time(data_dict):
+    print("Starting real-time average hourly earnings correlation analysis...")
+
+    real_time_average_hourly_earnings = data_dict['average_hourly_earnings_data']
+    real_time_spx_data = data_dict['real_time_spx']
+    real_time_spy_data = data_dict['real_time_spy']
+
+    # Aggregate real-time data to daily to match real_time_average_hourly_earnings
+    real_time_spx_data_daily = real_time_spx_data.groupby('date')['current_price'].mean().reset_index()
+    real_time_spy_data_daily = real_time_spy_data.groupby('date')['current_price'].mean().reset_index()
+
+    # Align the dates
+    merged_real_time_spx = pd.merge(real_time_average_hourly_earnings, real_time_spx_data_daily, on='date', how='inner')
+    merged_real_time_spy = pd.merge(real_time_average_hourly_earnings, real_time_spy_data_daily, on='date', how='inner')
+
+    # Calculate correlations
+    real_time_spx_corr = merged_real_time_spx['value'].corr(merged_real_time_spx['current_price'])
+    real_time_spy_corr = merged_real_time_spy['value'].corr(merged_real_time_spy['current_price'])
+
+    print(f"Real-Time SPX Correlation: {real_time_spx_corr}, Real-Time SPY Correlation: {real_time_spy_corr}")
+
+    return real_time_spx_corr, real_time_spy_corr
+
+
+def perform_average_hourly_earnings_historical_analysis(data_dict):
+    # Perform historical correlation analysis
+    historical_spx_corr, historical_spy_corr = average_hourly_earnings_correlation_historical(data_dict)
+
+    # Print out historical correlations
+    print(f"Historical Average Hourly Earnings - SPX Correlation: {historical_spx_corr}")
+    print(f"Historical Average Hourly Earnings - SPY Correlation: {historical_spy_corr}")
+
+    # Create a heatmap for historical data
+    correlations_hist = pd.DataFrame({
+        'SPX': [historical_spx_corr],
+        'SPY': [historical_spy_corr],
+    }, index=['Historical Average Hourly Earnings'])
+
+    sns.heatmap(correlations_hist, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+    plt.title('Historical Average Hourly Earnings - Price Correlations')
+    plt.show()
+
+def perform_average_hourly_earnings_real_time_analysis(data_dict):
+    # Perform real-time correlation analysis
+    real_time_spx_corr, real_time_spy_corr = average_hourly_earnings_correlation_real_time(data_dict)
+
+    # Print out real-time correlations
+    print(f"Real-Time Average Hourly Earnings - SPX Correlation: {real_time_spx_corr}")
+    print(f"Real-Time Average Hourly Earnings - SPY Correlation: {real_time_spy_corr}")
+
+    # Create a heatmap for real-time data
+    correlations_real_time = pd.DataFrame({
+        'SPX': [real_time_spx_corr],
+        'SPY': [real_time_spy_corr],
+    }, index=['Real-Time Average Hourly Earnings'])
+
+    sns.heatmap(correlations_real_time, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+    plt.title('Real-Time Average Hourly Earnings - Price Correlations')
+    plt.show()
+
+# Consumer Confidence Analysis: Historic
+def create_consumer_confidence_heatmap_historic(data_dict):
+    """
+    This function calculates the correlations between consumer confidence data and SPX/SPY close prices,
+    and then creates heatmaps to visualize these correlations.
+    
+    Parameters:
+    - data_dict: A dictionary containing DataFrames for consumer confidence and historical SPX, SPY data.
+    """
+    # Load the consumer confidence data
+    consumer_confidence_df = data_dict['consumer_confidence_data']
+        
+    # Load the historical SPX and SPY data
+    spx_df = data_dict['historical_spx']
+    spy_df = data_dict['historical_spy']
+    
+    # Merge consumer confidence data with SPX and SPY to align dates
+    merged_spx = pd.merge(consumer_confidence_df, spx_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spx'))
+    merged_spy = pd.merge(consumer_confidence_df, spy_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spy'))
+    
+    # Select only numeric columns for correlation
+    numeric_cols_spx = merged_spx.select_dtypes(include=[float, int]).columns
+    numeric_cols_spy = merged_spy.select_dtypes(include=[float, int]).columns
+    
+    # Calculate correlation with SPX and SPY close prices
+    spx_correlations = merged_spx[numeric_cols_spx].corr()['close']
+    spy_correlations = merged_spy[numeric_cols_spy].corr()['close']
+    
+    # Combine the correlations into a single DataFrame for visualization
+    combined_correlations = pd.DataFrame({'SPX': spx_correlations, 'SPY': spy_correlations}).dropna()
+    
+    # Plot the heatmap
+    plt.figure(figsize=(10, len(combined_correlations) * 0.5))
+    sns.heatmap(combined_correlations, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+    plt.title('Consumer Confidence Correlation with SPX and SPY')
+    plt.show()
+
+# Consumer Confidence Analysis: Real Time
+def create_consumer_confidence_heatmap_real_time(data_dict):
+    """
+    This function calculates the correlations between consumer confidence data and real-time SPX/SPY current prices,
+    and then creates heatmaps to visualize these correlations.
+
+    Parameters:
+    - data_dict: A dictionary containing DataFrames for consumer confidence and real-time SPX, SPY data.
+    """
+    # Load the consumer confidence data
+    consumer_confidence_df = data_dict['consumer_confidence_data']
+    
+    # Load the real-time SPX and SPY data
+    spx_df = data_dict['real_time_spx']
+    spy_df = data_dict['real_time_spy']
+    
+    # Convert the 'date' column to datetime if not already done
+    consumer_confidence_df['date'] = pd.to_datetime(consumer_confidence_df['date'])
+    spx_df['date'] = pd.to_datetime(spx_df['date'])
+    spy_df['date'] = pd.to_datetime(spy_df['date'])
+    
+    # Aggregate real-time data to daily to match consumer confidence granularity
+    spx_daily = spx_df.groupby('date')['current_price'].mean().reset_index()
+    spy_daily = spy_df.groupby('date')['current_price'].mean().reset_index()
+    
+    # Merge consumer confidence data with aggregated SPX and SPY data to align dates
+    merged_spx = pd.merge(consumer_confidence_df, spx_daily, on='date', how='inner', suffixes=('', '_spx'))
+    merged_spy = pd.merge(consumer_confidence_df, spy_daily, on='date', how='inner', suffixes=('', '_spy'))
+    
+    # Debugging: Print the first few rows of the merged data
+    print("Merged SPX DataFrame:")
+    print(merged_spx.head())
+    print("Merged SPY DataFrame:")
+    print(merged_spy.head())
+    
+    # Select only numeric columns for correlation
+    numeric_cols_spx = merged_spx.select_dtypes(include=[float, int]).columns
+    numeric_cols_spy = merged_spy.select_dtypes(include=[float, int]).columns
+    
+    # Calculate correlation with SPX and SPY current prices
+    spx_correlations = merged_spx[numeric_cols_spx].corr()['current_price']
+    spy_correlations = merged_spy[numeric_cols_spy].corr()['current_price']
+    
+    # Combine the correlations into a single DataFrame for visualization
+    combined_correlations = pd.DataFrame({'SPX': spx_correlations, 'SPY': spy_correlations}).dropna()
+    
+    # Debugging: Print combined correlations
+    print("Combined Correlations DataFrame:")
+    print(combined_correlations)
+    print("Shape:", combined_correlations.shape)
+    
+    # Check if DataFrame is empty
+    if combined_correlations.empty:
+        print("No data to plot for consumer confidence correlation with real-time SPX and SPY.")
+        return
+    
+    # Plot the heatmap with adjusted figure size to avoid aspect ratio issues
+    plt.figure(figsize=(10, max(1, len(combined_correlations) * 0.5)))
+    sns.heatmap(combined_correlations, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+    plt.title('Consumer Confidence Correlation with Real-Time SPX and SPY')
+    plt.tight_layout()  # Adjust layout to prevent clipping
+    plt.show()
+
+def create_consumer_sentiment_heatmap(data_dict):
+    """
+    This function calculates the correlations between consumer sentiment data and SPX/SPY close prices,
+    and then creates heatmaps to visualize these correlations.
+    
+    Parameters:
+    - data_dict: A dictionary containing DataFrames for consumer sentiment and historical SPX, SPY data.
+    """
+    # Load the consumer sentiment data
+    consumer_sentiment_df = data_dict['consumer_sentiment_data']
+    
+    # Load the historical SPX and SPY data
+    spx_df = data_dict['historical_spx']
+    spy_df = data_dict['historical_spy']
+    
+    # Merge consumer sentiment data with SPX and SPY to align dates
+    merged_spx = pd.merge(consumer_sentiment_df, spx_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spx'))
+    merged_spy = pd.merge(consumer_sentiment_df, spy_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spy'))
+    
+    # Select only numeric columns for correlation
+    numeric_cols_spx = merged_spx.select_dtypes(include=[float, int]).columns
+    numeric_cols_spy = merged_spy.select_dtypes(include=[float, int]).columns
+    
+    # Calculate correlation with SPX and SPY close prices
+    spx_correlations = merged_spx[numeric_cols_spx].corr()['close']
+    spy_correlations = merged_spy[numeric_cols_spy].corr()['close']
+    
+    # Combine the correlations into a single DataFrame for visualization
+    combined_correlations = pd.DataFrame({'SPX': spx_correlations, 'SPY': spy_correlations}).dropna()
+    
+    # Plot the heatmap
+    plt.figure(figsize=(10, len(combined_correlations) * 0.5))
+    sns.heatmap(combined_correlations, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+    plt.title('Consumer Sentiment Correlation with SPX and SPY')
+    plt.show()
+
+# Core Inflation Analysis
+def create_core_inflation_heatmap_historical(data_dict):
+    """
+    This function calculates the correlations between core inflation data and historical SPX/SPY close prices,
+    and then creates heatmaps to visualize these correlations.
+    
+    Parameters:
+    - data_dict: A dictionary containing DataFrames for core inflation and historical SPX, SPY data.
+    """
+    # Load the core inflation data
+    core_inflation_df = data_dict['core_inflation_data']
+        
+    # Load the historical SPX and SPY data
+    historical_spx_df = data_dict['historical_spx']
+    historical_spy_df = data_dict['historical_spy']
+    
+    # Merge core inflation data with historical SPX and SPY to align dates
+    merged_spx = pd.merge(core_inflation_df, historical_spx_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spx'))
+    merged_spy = pd.merge(core_inflation_df, historical_spy_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spy'))
+    
+    # Select only numeric columns for correlation
+    numeric_cols_spx = merged_spx.select_dtypes(include=[float, int]).columns
+    numeric_cols_spy = merged_spy.select_dtypes(include=[float, int]).columns
+    
+    # Calculate correlation with SPX and SPY close prices
+    spx_correlations = merged_spx[numeric_cols_spx].corr()['close']
+    spy_correlations = merged_spy[numeric_cols_spy].corr()['close']
+    
+    # Combine the correlations into a single DataFrame for visualization
+    combined_correlations = pd.DataFrame({'SPX': spx_correlations, 'SPY': spy_correlations}).dropna()
+    
+    # Plot the heatmap
+    plt.figure(figsize=(10, len(combined_correlations) * 0.5))
+    sns.heatmap(combined_correlations, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+    plt.title('Core Inflation Correlation with Historical SPX and SPY')
+    plt.show()
+
+# CPI Data
+def create_cpi_correlation_heatmap_historical(data_dict):
+    """
+    This function calculates the correlations between CPI data and historical SPX/SPY close prices,
+    and then creates heatmaps to visualize these correlations.
+    
+    Parameters:
+    - data_dict: A dictionary containing DataFrames for CPI and historical SPX, SPY data.
+    """
+    # Load the CPI data
+    cpi_df = data_dict['cpi_data']
+        
+    # Load the historical SPX and SPY data
+    historical_spx_df = data_dict['historical_spx']
+    historical_spy_df = data_dict['historical_spy']
+    
+    # Merge CPI data with historical SPX and SPY to align dates
+    merged_spx = pd.merge(cpi_df, historical_spx_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spx'))
+    merged_spy = pd.merge(cpi_df, historical_spy_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spy'))
+    
+    # Select only numeric columns for correlation
+    numeric_cols_spx = merged_spx.select_dtypes(include=[float, int]).columns
+    numeric_cols_spy = merged_spy.select_dtypes(include=[float, int]).columns
+    
+    # Calculate correlation with SPX and SPY close prices
+    spx_correlations = merged_spx[numeric_cols_spx].corr()['close']
+    spy_correlations = merged_spy[numeric_cols_spy].corr()['close']
+    
+    # Combine the correlations into a single DataFrame for visualization
+    combined_correlations = pd.DataFrame({'SPX': spx_correlations, 'SPY': spy_correlations}).dropna()
+    
+    # Plot the heatmap
+    plt.figure(figsize=(10, len(combined_correlations) * 0.5))
+    sns.heatmap(combined_correlations, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+    plt.title('CPI Correlation with Historical SPX and SPY')
+    plt.show()
+
+# GDP Data
+def create_gdp_correlation_heatmap_historical(data_dict):
+    """
+    This function calculates the correlations between GDP data and historical SPX/SPY close prices,
+    and then creates heatmaps to visualize these correlations.
+    
+    Parameters:
+    - data_dict: A dictionary containing DataFrames for GDP and historical SPX, SPY data.
+    """
+    # Load the GDP data
+    gdp_df = data_dict['gdp_data']
+        
+    # Load the historical SPX and SPY data
+    historical_spx_df = data_dict['historical_spx']
+    historical_spy_df = data_dict['historical_spy']
+    
+    # Merge GDP data with historical SPX and SPY to align dates
+    merged_spx = pd.merge(gdp_df, historical_spx_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spx'))
+    merged_spy = pd.merge(gdp_df, historical_spy_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spy'))
+    
+    # Select only numeric columns for correlation
+    numeric_cols_spx = merged_spx.select_dtypes(include=[float, int]).columns
+    numeric_cols_spy = merged_spy.select_dtypes(include=[float, int]).columns
+    
+    # Calculate correlation with SPX and SPY close prices
+    spx_correlations = merged_spx[numeric_cols_spx].corr()['close']
+    spy_correlations = merged_spy[numeric_cols_spy].corr()['close']
+    
+    # Combine the correlations into a single DataFrame for visualization
+    combined_correlations = pd.DataFrame({'SPX': spx_correlations, 'SPY': spy_correlations}).dropna()
+    
+    # Plot the heatmap
+    plt.figure(figsize=(10, len(combined_correlations) * 0.5))
+    sns.heatmap(combined_correlations, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+    plt.title('GDP Correlation with Historical SPX and SPY')
+    plt.show()
+
+# Industrial Production Data
+def create_industrial_production_correlation_heatmap_historical(data_dict):
+    """
+    This function calculates the correlations between Industrial Production data and historical SPX/SPY close prices,
+    and then creates heatmaps to visualize these correlations.
+    
+    Parameters:
+    - data_dict: A dictionary containing DataFrames for Industrial Production and historical SPX, SPY data.
+    """
+    # Load the Industrial Production data
+    industrial_production_df = data_dict['industrial_production_data']
+        
+    # Load the historical SPX and SPY data
+    historical_spx_df = data_dict['historical_spx']
+    historical_spy_df = data_dict['historical_spy']
+    
+    # Merge Industrial Production data with historical SPX and SPY to align dates
+    merged_spx = pd.merge(industrial_production_df, historical_spx_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spx'))
+    merged_spy = pd.merge(industrial_production_df, historical_spy_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spy'))
+    
+    # Select only numeric columns for correlation
+    numeric_cols_spx = merged_spx.select_dtypes(include=[float, int]).columns
+    numeric_cols_spy = merged_spy.select_dtypes(include=[float, int]).columns
+    
+    # Calculate correlation with SPX and SPY close prices
+    spx_correlations = merged_spx[numeric_cols_spx].corr()['close']
+    spy_correlations = merged_spy[numeric_cols_spy].corr()['close']
+    
+    # Combine the correlations into a single DataFrame for visualization
+    combined_correlations = pd.DataFrame({'SPX': spx_correlations, 'SPY': spy_correlations}).dropna()
+    
+    # Plot the heatmap
+    plt.figure(figsize=(10, len(combined_correlations) * 0.5))
+    sns.heatmap(combined_correlations, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+    plt.title('Industrial Production Correlation with Historical SPX and SPY')
+    plt.show()
+
+# Interest Rate Data
+def create_interest_rate_correlation_heatmap_historical(data_dict):
+    """
+    This function calculates the correlations between interest rate data and historical SPX/SPY close prices,
+    and then creates heatmaps to visualize these correlations.
+    
+    Parameters:
+    - data_dict: A dictionary containing DataFrames for interest rate and historical SPX, SPY data.
+    """
+    # Load the interest rate data
+    interest_rate_df = data_dict['interest_rate_data']
+        
+    # Load the historical SPX and SPY data
+    historical_spx_df = data_dict['historical_spx']
+    historical_spy_df = data_dict['historical_spy']
+    
+    # Merge interest rate data with historical SPX and SPY to align dates
+    merged_spx = pd.merge(interest_rate_df, historical_spx_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spx'))
+    merged_spy = pd.merge(interest_rate_df, historical_spy_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spy'))
+    
+    # Select only numeric columns for correlation
+    numeric_cols_spx = merged_spx.select_dtypes(include=[float, int]).columns
+    numeric_cols_spy = merged_spy.select_dtypes(include=[float, int]).columns
+    
+    # Calculate correlation with SPX and SPY close prices
+    spx_correlations = merged_spx[numeric_cols_spx].corr()['close']
+    spy_correlations = merged_spy[numeric_cols_spy].corr()['close']
+    
+    # Combine the correlations into a single DataFrame for visualization
+    combined_correlations = pd.DataFrame({'SPX': spx_correlations, 'SPY': spy_correlations}).dropna()
+    
+    # Plot the heatmap
+    plt.figure(figsize=(10, len(combined_correlations) * 0.5))
+    sns.heatmap(combined_correlations, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+    plt.title('Interest Rate Correlation with Historical SPX and SPY')
+    plt.show()
+
+# Labor Force Participation
+def create_labor_force_participation_correlation_heatmap_historical(data_dict):
+    """
+    This function calculates the correlations between labor force participation data and historical SPX/SPY close prices,
+    and then creates heatmaps to visualize these correlations.
+    
+    Parameters:
+    - data_dict: A dictionary containing DataFrames for labor force participation and historical SPX, SPY data.
+    """
+    # Load the labor force participation data
+    labor_force_participation_df = data_dict['labor_force_participation_rate_data']
+        
+    # Load the historical SPX and SPY data
+    historical_spx_df = data_dict['historical_spx']
+    historical_spy_df = data_dict['historical_spy']
+    
+    # Merge labor force participation data with historical SPX and SPY to align dates
+    merged_spx = pd.merge(labor_force_participation_df, historical_spx_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spx'))
+    merged_spy = pd.merge(labor_force_participation_df, historical_spy_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spy'))
+    
+    # Select only numeric columns for correlation
+    numeric_cols_spx = merged_spx.select_dtypes(include=[float, int]).columns
+    numeric_cols_spy = merged_spy.select_dtypes(include=[float, int]).columns
+    
+    # Calculate correlation with SPX and SPY close prices
+    spx_correlations = merged_spx[numeric_cols_spx].corr()['close']
+    spy_correlations = merged_spy[numeric_cols_spy].corr()['close']
+    
+    # Combine the correlations into a single DataFrame for visualization
+    combined_correlations = pd.DataFrame({'SPX': spx_correlations, 'SPY': spy_correlations}).dropna()
+    
+    # Plot the heatmap
+    plt.figure(figsize=(10, len(combined_correlations) * 0.5))
+    sns.heatmap(combined_correlations, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+    plt.title('Labor Force Participation Correlation with Historical SPX and SPY')
+    plt.show()
+
+# Non Farm Payroll Employment Rate
+def create_nonfarm_payroll_correlation_heatmap_historical(data_dict):
+    """
+    This function calculates the correlations between non-farm payroll employment data and SPX/SPY close prices,
+    and then creates heatmaps to visualize these correlations.
+
+    Parameters:
+    - data_dict: A dictionary containing DataFrames for non-farm payroll employment and historical SPX, SPY data.
+    """
+    # Load the non-farm payroll employment data
+    nonfarm_payroll_df = data_dict['nonfarm_payroll_employment_data']
+
+    # Load the historical SPX and SPY data
+    spx_df = data_dict['historical_spx']
+    spy_df = data_dict['historical_spy']
+
+    # Merge non-farm payroll employment data with SPX and SPY to align dates
+    merged_spx = pd.merge(nonfarm_payroll_df, spx_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spx'))
+    merged_spy = pd.merge(nonfarm_payroll_df, spy_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spy'))
+
+    # Select only numeric columns for correlation
+    numeric_cols_spx = merged_spx.select_dtypes(include=[float, int]).columns
+    numeric_cols_spy = merged_spy.select_dtypes(include=[float, int]).columns
+
+    # Calculate correlation with SPX and SPY close prices
+    spx_correlations = merged_spx[numeric_cols_spx].corr()['close']
+    spy_correlations = merged_spy[numeric_cols_spy].corr()['close']
+
+    # Combine the correlations into a single DataFrame for visualization
+    combined_correlations = pd.DataFrame({'SPX': spx_correlations, 'SPY': spy_correlations}).dropna()
+
+    # Plot the heatmap
+    if not combined_correlations.empty:
+        plt.figure(figsize=(10, len(combined_correlations) * 0.5))
+        sns.heatmap(combined_correlations, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+        plt.title('Non-Farm Payroll Employment Correlation with SPX and SPY')
+        plt.show()
+    else:
+        print("No data to plot for non-farm payroll employment correlation with SPX and SPY.")
+
+# Personal Consumption Expenditures Data
+def create_personal_consumption_expenditures_correlation_heatmap_historical(data_dict):
+    """
+    This function calculates the correlations between personal consumption expenditures data and SPX/SPY close prices,
+    and then creates heatmaps to visualize these correlations.
+
+    Parameters:
+    - data_dict: A dictionary containing DataFrames for personal consumption expenditures and historical SPX, SPY data.
+    """
+    # Load the personal consumption expenditures data
+    personal_consumption_expenditures_df = data_dict['personal_consumption_expenditures_data']
+
+    # Load the historical SPX and SPY data
+    historical_spx_df = data_dict['historical_spx']
+    historical_spy_df = data_dict['historical_spy']
+
+    # Merge personal consumption expenditures data with SPX and SPY to align dates
+    merged_spx = pd.merge(personal_consumption_expenditures_df, historical_spx_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spx'))
+    merged_spy = pd.merge(personal_consumption_expenditures_df, historical_spy_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spy'))
+
+    # Select only numeric columns for correlation
+    numeric_cols_spx = merged_spx.select_dtypes(include=[float, int]).columns
+    numeric_cols_spy = merged_spy.select_dtypes(include=[float, int]).columns
+
+    # Calculate correlation with SPX and SPY close prices
+    spx_correlations = merged_spx[numeric_cols_spx].corr()['close']
+    spy_correlations = merged_spy[numeric_cols_spy].corr()['close']
+
+    # Combine the correlations into a single DataFrame for visualization
+    combined_correlations = pd.DataFrame({'SPX': spx_correlations, 'SPY': spy_correlations}).dropna()
+
+    # Plot the heatmap
+    if not combined_correlations.empty:
+        plt.figure(figsize=(10, len(combined_correlations) * 0.5))
+        sns.heatmap(combined_correlations, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+        plt.title('Personal Consumption Expenditures Correlation with SPX and SPY')
+        plt.show()
+    else:
+        print("No data to plot for personal consumption expenditures correlation with SPX and SPY.")
+
+# PPI Data
+def create_ppi_correlation_heatmap_historical(data_dict):
+    """
+    This function calculates the correlations between PPI data and SPX/SPY close prices,
+    and then creates heatmaps to visualize these correlations.
+
+    Parameters:
+    - data_dict: A dictionary containing DataFrames for PPI and historical SPX, SPY data.
+    """
+    # Load the PPI data
+    ppi_df = data_dict['ppi_data']
+
+    # Load the historical SPX and SPY data
+    historical_spx_df = data_dict['historical_spx']
+    historical_spy_df = data_dict['historical_spy']
+
+    # Merge PPI data with SPX and SPY to align dates
+    merged_spx = pd.merge(ppi_df, historical_spx_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spx'))
+    merged_spy = pd.merge(ppi_df, historical_spy_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spy'))
+
+    # Select only numeric columns for correlation
+    numeric_cols_spx = merged_spx.select_dtypes(include=[float, int]).columns
+    numeric_cols_spy = merged_spy.select_dtypes(include=[float, int]).columns
+
+    # Calculate correlation with SPX and SPY close prices
+    spx_correlations = merged_spx[numeric_cols_spx].corr()['close']
+    spy_correlations = merged_spy[numeric_cols_spy].corr()['close']
+
+    # Combine the correlations into a single DataFrame for visualization
+    combined_correlations = pd.DataFrame({'SPX': spx_correlations, 'SPY': spy_correlations}).dropna()
+
+    # Plot the heatmap
+    if not combined_correlations.empty:
+        plt.figure(figsize=(10, len(combined_correlations) * 0.5))
+        sns.heatmap(combined_correlations, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+        plt.title('PPI Correlation with SPX and SPY')
+        plt.show()
+    else:
+        print("No data to plot for PPI correlation with SPX and SPY.")
+
+# Unemployment Rate Data
+def create_unemployment_rate_correlation_heatmap_historical(data_dict):
+    """
+    This function calculates the correlations between Unemployment Rate data and SPX/SPY close prices,
+    and then creates heatmaps to visualize these correlations.
+
+    Parameters:
+    - data_dict: A dictionary containing DataFrames for Unemployment Rate and historical SPX, SPY data.
+    """
+    # Load the Unemployment Rate data
+    unemployment_rate_df = data_dict['unemployment_rate_data']
+
+    # Load the historical SPX and SPY data
+    historical_spx_df = data_dict['historical_spx']
+    historical_spy_df = data_dict['historical_spy']
+
+    # Merge Unemployment Rate data with SPX and SPY to align dates
+    merged_spx = pd.merge(unemployment_rate_df, historical_spx_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spx'))
+    merged_spy = pd.merge(unemployment_rate_df, historical_spy_df[['date', 'close']], on='date', how='inner', suffixes=('', '_spy'))
+
+    # Select only numeric columns for correlation
+    numeric_cols_spx = merged_spx.select_dtypes(include=[float, int]).columns
+    numeric_cols_spy = merged_spy.select_dtypes(include=[float, int]).columns
+
+    # Calculate correlation with SPX and SPY close prices
+    spx_correlations = merged_spx[numeric_cols_spx].corr()['close']
+    spy_correlations = merged_spy[numeric_cols_spy].corr()['close']
+
+    # Combine the correlations into a single DataFrame for visualization
+    combined_correlations = pd.DataFrame({'SPX': spx_correlations, 'SPY': spy_correlations}).dropna()
+
+    # Plot the heatmap
+    if not combined_correlations.empty:
+        plt.figure(figsize=(10, len(combined_correlations) * 0.5))
+        sns.heatmap(combined_correlations, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+        plt.title('Unemployment Rate Correlation with SPX and SPY')
+        plt.show()
+    else:
+        print("No data to plot for Unemployment Rate correlation with SPX and SPY.")
+
+
+# Lagged Correlation
 def lagged_correlation_analysis(vix_df, spx_df, spy_df, max_lag=10):
     correlations = {'Lag': [], 'VIX-SPX': [], 'VIX-SPY': []}
 
@@ -292,24 +875,6 @@ def lagged_correlation_analysis(vix_df, spx_df, spy_df, max_lag=10):
     plt.show()
 
 
-def perform_average_hourly_earnings_analysis(data_dict):
-    spx_corr, spy_corr = average_hourly_earnings_correlation(data_dict)
-
-    # Print out correlations
-    print(f"Average Hourly Earnings - SPX Correlation: {spx_corr}")
-    print(f"Average Hourly Earnings - SPY Correlation: {spy_corr}")
-
-    # Create a heatmap to visualize the correlations
-    correlations = pd.DataFrame({
-        'SPX': [spx_corr],
-        'SPY': [spy_corr],
-    }, index=['Average Hourly Earnings'])
-
-    sns.heatmap(correlations, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
-    plt.title('Average Hourly Earnings - Price Correlations')
-    plt.show()
-
-
 # Calculate Correlations for Indicators
 
 def indicator_correlation(df, target='close'):
@@ -323,6 +888,35 @@ def indicator_correlation(df, target='close'):
             correlation = df[indicator].corr(df[target])
             correlations[indicator] = correlation
     return correlations
+
+# Real Time Indicator Correlation
+def real_time_indicator_correlation(data_dict):
+    """
+    This function calculates the correlations between real-time SPX and SPY prices and various indicators.
+    
+    Parameters:
+    - data_dict: A dictionary containing DataFrames for real-time SPX, SPY, and other indicators.
+    """
+    real_time_spx = data_dict['real_time_spx']
+    real_time_spy = data_dict['real_time_spy']
+    
+    # List of indicators to analyze
+    indicators = ['Lag_1', 'SMA_20', 'SMA_50', 'EMA_12', 'EMA_26', 'Bollinger_Upper', 'Bollinger_Lower', 'MACD', 'MACD_Signal', 'RSI', 'ATR']
+    
+    # Calculate correlations for SPX
+    spx_correlations = real_time_spx[indicators].corrwith(real_time_spx['current_price'])
+    
+    # Calculate correlations for SPY
+    spy_correlations = real_time_spy[indicators].corrwith(real_time_spy['current_price'])
+    
+    # Combine the correlations into a single DataFrame for visualization
+    combined_correlations = pd.DataFrame({'SPX': spx_correlations, 'SPY': spy_correlations})
+    
+    # Plot the heatmap
+    plt.figure(figsize=(10, len(combined_correlations) * 0.5))
+    sns.heatmap(combined_correlations, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+    plt.title('Real-Time Indicator Correlation with SPX and SPY')
+    plt.show()
 
 # Perform Indicator Correlation Analysis
 
@@ -351,6 +945,47 @@ def perform_indicator_correlation_analysis(data_dict):
     plt.title('Indicator-Price Correlations')
     plt.show()
 
+
+def real_time_bull_bear_market_analysis(data_dict):
+    """
+    This function performs bull and bear market analysis using real-time SPX data
+    and moving average crossover method.
+    
+    Parameters:
+    - data_dict: A dictionary containing DataFrames for real-time SPX data.
+    """
+    real_time_spx = data_dict['real_time_spx']
+    
+    # Define short-term and long-term moving averages
+    short_window = 50
+    long_window = 200
+    
+    # Calculate moving averages
+    real_time_spx['SMA_short'] = real_time_spx['current_price'].rolling(window=short_window).mean()
+    real_time_spx['SMA_long'] = real_time_spx['current_price'].rolling(window=long_window).mean()
+    
+    # Determine bull and bear markets based on moving average crossover
+    real_time_spx['market_condition'] = np.where(
+        real_time_spx['SMA_short'] > real_time_spx['SMA_long'], 'Bull', 'Bear'
+    )
+    
+    # Filter out periods where moving averages are not defined
+    real_time_spx = real_time_spx.dropna(subset=['SMA_short', 'SMA_long'])
+    
+    # Calculate average SPX price in bull and bear markets
+    bull_market_avg = real_time_spx[real_time_spx['market_condition'] == 'Bull']['current_price'].mean()
+    bear_market_avg = real_time_spx[real_time_spx['market_condition'] == 'Bear']['current_price'].mean()
+    
+    print(f"Average SPX Price in Bull Market: {bull_market_avg}")
+    print(f"Average SPX Price in Bear Market: {bear_market_avg}")
+    
+    # Optionally visualize the data
+    plt.figure(figsize=(10, 6))
+    sns.boxplot(x='market_condition', y='current_price', data=real_time_spx)
+    plt.title('SPX Price Distribution in Bull and Bear Markets')
+    plt.xlabel('Market Condition')
+    plt.ylabel('SPX Current Price')
+    plt.show()
 
 def perform_market_condition_correlation_analysis(data_dict):
     # Get the historical data
@@ -507,7 +1142,7 @@ def vix_price_correlation(vix_df, spx_df, spy_df, lag=0):
 
     return vix_spx_corr, vix_spy_corr
 
-
+# VIX Price Correlation
 def perform_vix_price_correlation_analysis(data_dict, lag=None):
     # Get the data
     historical_vix = data_dict['historical_vix']
@@ -540,6 +1175,7 @@ def perform_vix_price_correlation_analysis(data_dict, lag=None):
     plt.title(f'VIX-Price Correlations (Lag {lag})')
     plt.show()
 
+# Rolling Correlation Analysis
 def rolling_correlation_analysis(vix_df, spx_df, spy_df, window=30):
     vix_spx_rolling_corr = vix_df['close'].rolling(window=window).corr(spx_df['close'])
     vix_spy_rolling_corr = vix_df['close'].rolling(window=window).corr(spy_df['close'])
@@ -597,6 +1233,107 @@ def volatility_regimes_analysis(vix_df, spx_df, spy_df):
     plt.legend()
     plt.show()
 
+
+# Function to compute correlations between real-time VIX and SPX/SPY
+def spx_vix_correlation_real_time(spx_df, vix_df, lag=0):
+    print("Starting SPX-VIX real-time correlation analysis...")
+
+    # Rename columns if necessary
+    if 'timestamp' not in spx_df.columns:
+        if 'date' in spx_df.columns:
+            spx_df.rename(columns={'date': 'timestamp'}, inplace=True)
+            print("Renamed 'date' to 'timestamp' in SPX DataFrame.")
+        else:
+            raise KeyError("'timestamp' or 'date' column not found in SPX DataFrame")
+
+    if 'timestamp' not in vix_df.columns:
+        if 'date' in vix_df.columns:
+            vix_df.rename(columns={'date': 'timestamp'}, inplace=True)
+            print("Renamed 'date' to 'timestamp' in VIX DataFrame.")
+        else:
+            raise KeyError("'timestamp' or 'date' column not found in VIX DataFrame")
+
+    # Convert to datetime
+    spx_df['timestamp'] = pd.to_datetime(spx_df['timestamp'], errors='coerce')
+    vix_df['timestamp'] = pd.to_datetime(vix_df['timestamp'], errors='coerce')
+
+    print(f"Initial SPX timestamps:\n{spx_df[['timestamp']].head()}")
+    print(f"Initial VIX timestamps:\n{vix_df[['timestamp']].head()}")
+
+    # Aggregate SPX and VIX data to daily levels
+    spx_df['date'] = spx_df['timestamp'].dt.date
+    vix_df['date'] = vix_df['timestamp'].dt.date
+
+    spx_daily = spx_df.groupby('date').agg({'current_price': 'mean'}).reset_index()
+    vix_daily = vix_df.groupby('date').agg({'close': 'mean'}).reset_index()
+
+    print(f"SPX DataFrame after daily aggregation:\n{spx_daily.head()}")
+    print(f"VIX DataFrame after daily aggregation:\n{vix_daily.head()}")
+
+    # Align data based on date
+    merged_data = pd.merge(spx_daily, vix_daily, on='date', how='inner', suffixes=('_spx', '_vix'))
+
+    if lag:
+        merged_data['close_vix_shifted'] = merged_data['close'].shift(lag)
+        correlation = merged_data['close_vix_shifted'].corr(merged_data['current_price'])
+    else:
+        correlation = merged_data['close'].corr(merged_data['current_price'])
+
+    print(f"SPX-VIX Real-Time Correlation: {correlation}")
+
+    return correlation
+
+def spy_vix_correlation_real_time(spy_df, vix_df, lag=0):
+    print("Starting SPY-VIX real-time correlation analysis...")
+
+    # Rename columns if necessary
+    if 'timestamp' not in spy_df.columns:
+        if 'date' in spy_df.columns:
+            spy_df.rename(columns={'date': 'timestamp'}, inplace=True)
+            print("Renamed 'date' to 'timestamp' in SPY DataFrame.")
+        else:
+            raise KeyError("'timestamp' or 'date' column not found in SPY DataFrame")
+
+    if 'timestamp' not in vix_df.columns:
+        if 'date' in vix_df.columns:
+            vix_df.rename(columns={'date': 'timestamp'}, inplace=True)
+            print("Renamed 'date' to 'timestamp' in VIX DataFrame.")
+        else:
+            raise KeyError("'timestamp' or 'date' column not found in VIX DataFrame")
+
+    # Convert to datetime
+    spy_df['timestamp'] = pd.to_datetime(spy_df['timestamp'], errors='coerce')
+    vix_df['timestamp'] = pd.to_datetime(vix_df['timestamp'], errors='coerce')
+
+    print(f"Initial SPY timestamps:\n{spy_df[['timestamp']].head()}")
+    print(f"Initial VIX timestamps:\n{vix_df[['timestamp']].head()}")
+
+    # Aggregate SPY and VIX data to daily levels
+    spy_df['date'] = spy_df['timestamp'].dt.date
+    vix_df['date'] = vix_df['timestamp'].dt.date
+
+    spy_daily = spy_df.groupby('date').agg({'current_price': 'mean'}).reset_index()
+    vix_daily = vix_df.groupby('date').agg({'close': 'mean'}).reset_index()
+
+    print(f"SPY DataFrame after daily aggregation:\n{spy_daily.head()}")
+    print(f"VIX DataFrame after daily aggregation:\n{vix_daily.head()}")
+
+    # Align data based on date
+    merged_data = pd.merge(spy_daily, vix_daily, on='date', how='inner', suffixes=('_spy', '_vix'))
+
+    if lag:
+        merged_data['close_vix_shifted'] = merged_data['close'].shift(lag)
+        correlation = merged_data['close_vix_shifted'].corr(merged_data['current_price'])
+    else:
+        correlation = merged_data['close'].corr(merged_data['current_price'])
+
+    print(f"SPY-VIX Real-Time Correlation: {correlation}")
+
+    return correlation
+
+
+
+# Engineering Features
 def engineer_features(df, tf='daily', has_close=True):
     logging.debug("Starting feature engineering...")
 
@@ -692,17 +1429,51 @@ def train_model(X_train, X_test, y_train, y_test):
 def test_engineer_features():
     data_dict = load_data()
 
-    # Perform correlation analysis for volume
-    perform_volume_correlation_analysis(data_dict)
+    # FRED API
+    # Perform Average Hourly Earnings Analysis: Historical & Real-Time
+    perform_average_hourly_earnings_historical_analysis(data_dict)
+    perform_average_hourly_earnings_real_time_analysis(data_dict)
 
+    # Perform Consumer Confidence Analysis
+    create_consumer_confidence_heatmap_historic(data_dict)
+    create_consumer_confidence_heatmap_real_time(data_dict)
+
+    # Perform Consumer Sentiment Analysis
+    create_consumer_sentiment_heatmap(data_dict)
+
+    # Perform Core Inflation Analysis
+    create_core_inflation_heatmap_historical(data_dict)
+
+    # Perform CPI Analysis
+    create_cpi_correlation_heatmap_historical(data_dict)
+
+    # Perform GDP Data Analysis
+    create_gdp_correlation_heatmap_historical(data_dict)
+
+    # Perform Industrial Production Analysis
+    create_industrial_production_correlation_heatmap_historical(data_dict)
+
+    # Perform Interest Rate Data
+    create_interest_rate_correlation_heatmap_historical(data_dict)
+
+    # Perform Labor Force Partipcipation Analysis
+    create_labor_force_participation_correlation_heatmap_historical(data_dict)
+
+    # Perform Non Farm Payroll EMployment Rate Analysis
+    create_nonfarm_payroll_correlation_heatmap_historical(data_dict)
+
+    # Perform Personal Consumption Expenditures Analysis
+    create_personal_consumption_expenditures_correlation_heatmap_historical(data_dict)
+
+    # Perform PPI Data Analysis
+    create_ppi_correlation_heatmap_historical(data_dict)
+
+    # Perofrm Unemployment Rate Analysis
+    create_unemployment_rate_correlation_heatmap_historical(data_dict)
+
+    # Indicators
     # Perform indicator correlation analysis
     perform_indicator_correlation_analysis(data_dict)
-
-    # Perform VIX-SPX/SPY correlation analysis
-    perform_vix_price_correlation_analysis(data_dict)
-
-    # Perform Average Hourly Earnings analysis
-    perform_average_hourly_earnings_analysis(data_dict)
 
     # Perform Bull vs. Bear Market correlation analysis
     perform_market_condition_correlation_analysis(data_dict)
@@ -718,6 +1489,34 @@ def test_engineer_features():
 
     # Perform Volatility Regimes Analysis
     volatility_regimes_analysis(historical_vix, historical_spx, historical_spy)
+
+    # Perform correlation analysis for volume
+    perform_volume_correlation_analysis(data_dict)
+
+    # Perform SPX-VIX real-time correlation analysis
+    spx_vix_corr = spx_vix_correlation_real_time(data_dict['real_time_spx'], data_dict['real_time_vix'], lag=0)
+
+    # Perform SPY-VIX real-time correlation analysis
+    spy_vix_corr = spy_vix_correlation_real_time(data_dict['real_time_spy'], data_dict['real_time_vix'], lag=0)
+
+    # Perform correlation with indicators for real-time data
+    real_time_indicator_correlation(data_dict)
+
+    # Perform bull and bear market analysis using real-time data
+    real_time_bull_bear_market_analysis(data_dict)
+
+    print(f"Final SPX-VIX Correlation: {spx_vix_corr}")
+    print(f"Final SPY-VIX Correlation: {spy_vix_corr}")
+
+    # Optionally visualize the correlations
+    correlations = pd.DataFrame({
+        'SPX-VIX': [spx_vix_corr],
+        'SPY-VIX': [spy_vix_corr],
+    })
+
+    sns.heatmap(correlations, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+    plt.title('Real-Time SPX-VIX and SPY-VIX Correlations')
+    plt.show()
 
     # Print summary of data for verification
     for key, df in data_dict.items():
