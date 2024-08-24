@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -270,6 +271,26 @@ def average_hourly_earnings_correlation(data_dict):
 
     return spx_corr, spy_corr
 
+def lagged_correlation_analysis(vix_df, spx_df, spy_df, max_lag=10):
+    correlations = {'Lag': [], 'VIX-SPX': [], 'VIX-SPY': []}
+
+    for lag in range(0, max_lag + 1):
+        shifted_vix = vix_df['close'].shift(lag)
+
+        vix_spx_corr = shifted_vix.corr(spx_df['close'])
+        vix_spy_corr = shifted_vix.corr(spy_df['close'])
+
+        correlations['Lag'].append(lag)
+        correlations['VIX-SPX'].append(vix_spx_corr)
+        correlations['VIX-SPY'].append(vix_spy_corr)
+
+    corr_df = pd.DataFrame(correlations)
+
+    plt.figure(figsize=(10, 6))
+    sns.heatmap(corr_df.set_index('Lag'), annot=True, cmap='coolwarm', center=0)
+    plt.title('Lagged VIX-Price Correlations')
+    plt.show()
+
 
 def perform_average_hourly_earnings_analysis(data_dict):
     spx_corr, spy_corr = average_hourly_earnings_correlation(data_dict)
@@ -346,11 +367,15 @@ def perform_market_condition_correlation_analysis(data_dict):
     bull_market_spy = historical_spy[historical_spy['market_condition'] == 'bull']
     bear_market_spy = historical_spy[historical_spy['market_condition'] == 'bear']
 
+    # Select only numeric columns for correlation
+    numeric_columns_spx = bull_market_spx.select_dtypes(include=['float64', 'int64']).columns
+    numeric_columns_spy = bull_market_spy.select_dtypes(include=['float64', 'int64']).columns
+
     # Calculate correlations for each market condition
-    bull_corr_spx = bull_market_spx.corr()['close']
-    bear_corr_spx = bear_market_spx.corr()['close']
-    bull_corr_spy = bull_market_spy.corr()['close']
-    bear_corr_spy = bear_market_spy.corr()['close']
+    bull_corr_spx = bull_market_spx[numeric_columns_spx].corr()['close']
+    bear_corr_spx = bear_market_spx[numeric_columns_spx].corr()['close']
+    bull_corr_spy = bull_market_spy[numeric_columns_spy].corr()['close']
+    bear_corr_spy = bear_market_spy[numeric_columns_spy].corr()['close']
 
     # Print correlations
     print("Bull Market SPX Correlations:")
@@ -439,36 +464,49 @@ def perform_volume_correlation_analysis(data_dict):
 # VIX-SPX/SPY Correlation Analysis
 
 
-def vix_price_correlation(df_vix, df_spx, df_spy, vix_column='close', lag=None):
-    # Ensure timestamp column exists and is set as index
-    if 'timestamp' not in df_vix.columns or 'timestamp' not in df_spx.columns or 'timestamp' not in df_spy.columns:
-        raise KeyError("All dataframes must have a 'timestamp' column for correlation.")
+def vix_price_correlation(vix_df, spx_df, spy_df, lag=0):
+    # Ensure the DataFrames have either 'timestamp' or 'date' columns
+    for df_name, df in zip(['VIX', 'SPX', 'SPY'], [vix_df, spx_df, spy_df]):
+        logging.debug(f"Checking columns for {df_name} DataFrame: {df.columns.tolist()}")
 
-    # Convert timestamp to datetime if not already
-    df_vix['timestamp'] = pd.to_datetime(df_vix['timestamp'])
-    df_spx['timestamp'] = pd.to_datetime(df_spx['timestamp'])
-    df_spy['timestamp'] = pd.to_datetime(df_spy['timestamp'])
+        # Rename to 'timestamp' if 'date' is used
+        if 'timestamp' in df.columns:
+            logging.debug(f"{df_name} DataFrame has 'timestamp' column.")
+        elif 'date' in df.columns:
+            df.rename(columns={'date': 'timestamp'}, inplace=True)
+            logging.debug(f"Renamed 'date' to 'timestamp' for {df_name} DataFrame.")
+        else:
+            logging.error(f"{df_name} DataFrame is missing both 'timestamp' and 'date' columns.")
+            raise KeyError(f"{df_name} DataFrame must have either a 'timestamp' or 'date' column for correlation.")
 
-    # Set timestamp as index for alignment
-    df_vix = df_vix.set_index('timestamp')
-    df_spx = df_spx.set_index('timestamp')
-    df_spy = df_spy.set_index('timestamp')
+    # Convert 'timestamp' to datetime format for consistency
+    for df_name, df in zip(['VIX', 'SPX', 'SPY'], [vix_df, spx_df, spy_df]):
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        logging.debug(f"Converted 'timestamp' to datetime for {df_name} DataFrame.")
 
-    # Apply lag if specified
+    # Align data based on 'timestamp'
+    aligned_data = vix_df.set_index('timestamp').join(
+        spx_df.set_index('timestamp'), lsuffix='_vix', rsuffix='_spx', how='inner'
+    ).join(spy_df.set_index('timestamp'), lsuffix='_spx', rsuffix='_spy', how='inner')
+
+    logging.debug(f"Columns in aligned_data: {aligned_data.columns.tolist()}")
+
+    # Verify that expected suffixes are present in the merged data
+    if not any(col.endswith('_spy') for col in aligned_data.columns):
+        logging.error("SPY DataFrame merging didn't result in expected '_spy' suffixed columns.")
+        raise KeyError("SPY DataFrame merging didn't result in expected '_spy' suffixed columns.")
+
+    # Calculate correlations with lag if specified
     if lag:
-        df_vix = df_vix.shift(lag)
+        aligned_data['vix_shifted'] = aligned_data['close_vix'].shift(lag)
+        vix_spx_corr = aligned_data['vix_shifted'].corr(aligned_data['close_spx'])
+        vix_spy_corr = aligned_data['vix_shifted'].corr(aligned_data.filter(regex='_spy').iloc[:, 0])
+    else:
+        vix_spx_corr = aligned_data['close_vix'].corr(aligned_data['close_spx'])
+        vix_spy_corr = aligned_data['close_vix'].corr(aligned_data.filter(regex='_spy').iloc[:, 0])
 
-    # Perform the merge_asof operation to align the VIX with SPX and SPY data
-    aligned_df_spx = pd.merge_asof(df_vix.sort_index(), df_spx.sort_index(), left_index=True, right_index=True, suffixes=('_vix', '_spx'))
-    aligned_df_spy = pd.merge_asof(df_vix.sort_index(), df_spy.sort_index(), left_index=True, right_index=True, suffixes=('_vix', '_spy'))
+    return vix_spx_corr, vix_spy_corr
 
-    # Calculate the correlation between VIX and SPX
-    vix_spx_correlation = aligned_df_spx[f'{vix_column}_vix'].corr(aligned_df_spx['close_spx'])
-
-    # Calculate the correlation between VIX and SPY
-    vix_spy_correlation = aligned_df_spy[f'{vix_column}_vix'].corr(aligned_df_spy['close_spy'])
-
-    return vix_spx_correlation, vix_spy_correlation
 
 def perform_vix_price_correlation_analysis(data_dict, lag=None):
     # Get the data
@@ -476,6 +514,15 @@ def perform_vix_price_correlation_analysis(data_dict, lag=None):
     historical_spx = data_dict['historical_spx']
     historical_spy = data_dict['historical_spy']
 
+    # Ensure consistency by using 'timestamp'
+    for df in [historical_vix, historical_spx, historical_spy]:
+        if 'date' in df.columns:
+            df.rename(columns={'date': 'timestamp'}, inplace=True)
+        elif 'timestamp' not in df.columns:
+            raise KeyError("Dataframes must have either a 'timestamp' or 'date' column for correlation.")
+
+    # Now all DataFrames should have a 'timestamp' column, and no need to rename to 'time_index'
+    
     # Calculate VIX-SPX and VIX-SPY correlations with lag
     vix_spx_corr, vix_spy_corr = vix_price_correlation(historical_vix, historical_spx, historical_spy, lag=lag)
 
@@ -492,7 +539,63 @@ def perform_vix_price_correlation_analysis(data_dict, lag=None):
     sns.heatmap(correlation_df, annot=True, cmap='coolwarm')
     plt.title(f'VIX-Price Correlations (Lag {lag})')
     plt.show()
-    
+
+def rolling_correlation_analysis(vix_df, spx_df, spy_df, window=30):
+    vix_spx_rolling_corr = vix_df['close'].rolling(window=window).corr(spx_df['close'])
+    vix_spy_rolling_corr = vix_df['close'].rolling(window=window).corr(spy_df['close'])
+
+    plt.figure(figsize=(14, 7))
+    plt.plot(vix_spx_rolling_corr, label='VIX-SPX Rolling Correlation', color='blue')
+    plt.plot(vix_spy_rolling_corr, label='VIX-SPY Rolling Correlation', color='red')
+    plt.axhline(0, color='black', linewidth=0.5, linestyle='--')
+    plt.title(f'Rolling Correlation (Window = {window} days)')
+    plt.xlabel('Date')
+    plt.ylabel('Correlation')
+    plt.legend()
+    plt.show()
+
+
+# Ensure the function definition is properly aligned with other functions
+def volatility_regimes_analysis(vix_df, spx_df, spy_df):
+    # Define volatility regimes based on VIX values
+    vix_df['volatility_regime'] = pd.cut(vix_df['close'], bins=[0, 12, 20, 30, np.inf], labels=['Low', 'Moderate', 'High', 'Extreme'])
+
+    correlations = {
+        'Volatility Regime': [],
+        'VIX-SPX Correlation': [],
+        'VIX-SPY Correlation': []
+    }
+
+    # Loop through each volatility regime
+    for regime in ['Low', 'Moderate', 'High', 'Extreme']:
+        regime_mask = vix_df['volatility_regime'] == regime
+
+        # Align indices and use .loc to filter
+        aligned_spx = spx_df.loc[regime_mask.index.intersection(spx_df.index)]
+        aligned_spy = spy_df.loc[regime_mask.index.intersection(spy_df.index)]
+        aligned_vix = vix_df.loc[regime_mask.index.intersection(vix_df.index)]
+
+        # Apply mask after alignment
+        regime_vix = aligned_vix[regime_mask]['close']
+        regime_spx = aligned_spx[regime_mask]['close']
+        regime_spy = aligned_spy[regime_mask]['close']
+
+        vix_spx_corr = regime_vix.corr(regime_spx)
+        vix_spy_corr = regime_vix.corr(regime_spy)
+
+        correlations['Volatility Regime'].append(regime)
+        correlations['VIX-SPX Correlation'].append(vix_spx_corr)
+        correlations['VIX-SPY Correlation'].append(vix_spy_corr)
+
+    corr_df = pd.DataFrame(correlations)
+
+    plt.figure(figsize=(10, 6))
+    sns.barplot(x='Volatility Regime', y='VIX-SPX Correlation', data=corr_df, color='blue', label='VIX-SPX')
+    sns.barplot(x='Volatility Regime', y='VIX-SPY Correlation', data=corr_df, color='red', label='VIX-SPY', alpha=0.7)
+    plt.title('Correlation by Volatility Regime')
+    plt.ylabel('Correlation')
+    plt.legend()
+    plt.show()
 
 def engineer_features(df, tf='daily', has_close=True):
     logging.debug("Starting feature engineering...")
@@ -602,7 +705,19 @@ def test_engineer_features():
     perform_average_hourly_earnings_analysis(data_dict)
 
     # Perform Bull vs. Bear Market correlation analysis
-    perform_bull_bear_correlation_analysis(data_dict)
+    perform_market_condition_correlation_analysis(data_dict)
+
+     # Perform Lagged Correlation Analysis
+    historical_vix = data_dict['historical_vix']
+    historical_spx = data_dict['historical_spx']
+    historical_spy = data_dict['historical_spy']
+    lagged_correlation_analysis(historical_vix, historical_spx, historical_spy, max_lag=10)
+
+    # Perform Rolling Correlation Analysis
+    rolling_correlation_analysis(historical_vix, historical_spx, historical_spy, window=30)
+
+    # Perform Volatility Regimes Analysis
+    volatility_regimes_analysis(historical_vix, historical_spx, historical_spy)
 
     # Print summary of data for verification
     for key, df in data_dict.items():
@@ -634,6 +749,15 @@ def main():
     perform_volume_correlation_analysis(data_dict)
     perform_indicator_correlation_analysis(data_dict)
     perform_vix_price_correlation_analysis(data_dict)
+
+    # Perform Lagged Correlation Analysis
+    lagged_correlation_analysis(historical_vix, historical_spx, historical_spy, max_lag=10)
+
+    # Perform Rolling Correlation Analysis
+    rolling_correlation_analysis(historical_vix, historical_spx, historical_spy, window=30)
+
+    # Perform Volatility Regimes Analysis
+    volatility_regimes_analysis(historical_vix, historical_spx, historical_spy)
 
     # Prepare data for the model
     X_spx, y_spx = prepare_data(combined_spx)
