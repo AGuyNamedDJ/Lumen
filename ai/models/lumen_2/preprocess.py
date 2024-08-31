@@ -689,8 +689,6 @@ def clean_historical_vix_data(df):
 
 
 # Data Cleaning: Real Time SPX
-
-
 def clean_real_time_spx_data(df):
     # Ensure 'id' and 'timestamp' columns exist
     if 'id' not in df.columns:
@@ -701,30 +699,40 @@ def clean_real_time_spx_data(df):
     # Convert 'id' to integer if necessary
     df['id'] = df['id'].astype(int)
 
-    # Drop columns with no data (keeping only id, timestamp, and current_price)
-    df = df[['id', 'timestamp', 'current_price']].copy()
-
     # Convert 'timestamp' to datetime format
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
 
-    # Add a 'date' column based on 'timestamp'
-    df['date'] = df['timestamp'].dt.date
+    # Set 'timestamp' as the index but keep it as a column
+    if df.index.name != 'timestamp':
+        df.set_index('timestamp', inplace=True, drop=False)
+        print("'timestamp' column used as index.")
 
-    # Remove duplicates based on timestamp
-    df = df.drop_duplicates(subset=['timestamp'])
+    # Remove duplicates based on index (timestamp)
+    df = df[~df.index.duplicated(keep='first')]
 
-    # Sort by timestamp to ensure chronological order
-    df = df.sort_values(by='timestamp')
+    # Sort by index (timestamp) to ensure chronological order
+    df.sort_index(inplace=True)
+    print("DataFrame sorted by timestamp index.")
 
-    # Set 'id' as the index
+    # Reset index to keep 'timestamp' in the DataFrame as a column
+    if 'timestamp' not in df.columns:
+        df.reset_index(drop=False, inplace=True)
+        print("Index reset, 'timestamp' kept as a column.")
+    else:
+        # If 'timestamp' is already a column, reset without keeping it as a column again
+        df.reset_index(drop=True, inplace=True)
+        print("Index reset without duplicating 'timestamp' column.")
+
+    # Now set 'id' as the index
     df.set_index('id', inplace=True)
-    print("ID column set as index")
+    print("ID column set as index.")
+
+    # Debugging: Print the final state of the DataFrame
+    print("Final DataFrame state:\n", df.head())
 
     return df
 
 # Data Cleaning: Real Time SPY
-
-
 def clean_real_time_spy_data(df):
     # Ensure 'id' and 'timestamp' columns exist
     if 'id' not in df.columns:
@@ -735,31 +743,41 @@ def clean_real_time_spy_data(df):
     # Convert 'id' to integer if necessary
     df['id'] = df['id'].astype(int)
 
-    # Drop columns with no data (keeping only id, timestamp, and current_price)
-    df = df[['id', 'timestamp', 'current_price', 'volume']].copy()
-
     # Convert 'timestamp' to datetime format
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
 
-    # Add a 'date' column based on 'timestamp'
-    df['date'] = df['timestamp'].dt.date
+    # Set 'timestamp' as the index but keep it as a column
+    if df.index.name != 'timestamp':
+        df.set_index('timestamp', inplace=True, drop=False)
+        print("'timestamp' column used as index.")
 
-    # Remove duplicates based on timestamp
-    df = df.drop_duplicates(subset=['timestamp'])
+    # Remove duplicates based on index (timestamp)
+    df = df[~df.index.duplicated(keep='first')]
 
-    # Sort by timestamp to ensure chronological order
-    df = df.sort_values(by='timestamp')
+    # Sort by index (timestamp) to ensure chronological order
+    df.sort_index(inplace=True)
+    print("DataFrame sorted by timestamp index.")
 
-    # Set 'id' as the index
+    # Reset index to keep 'timestamp' in the DataFrame as a column
+    if 'timestamp' not in df.columns:
+        df.reset_index(drop=False, inplace=True)
+        print("Index reset, 'timestamp' kept as a column.")
+    else:
+        # If 'timestamp' is already a column, reset without keeping it as a column again
+        df.reset_index(drop=True, inplace=True)
+        print("Index reset without duplicating 'timestamp' column.")
+
+    # Now set 'id' as the index
     df.set_index('id', inplace=True)
-    print("ID column set as index")
+    print("ID column set as index.")
+
+    # Debugging: Print the final state of the DataFrame
+    print("Final DataFrame state:\n", df.head())
 
     return df
 
 
 # Data Cleaning: Real Time VIX
-
-
 def clean_real_time_vix_data(df):
     # Ensure 'id' and 'timestamp' columns exist
     if 'id' not in df.columns:
@@ -770,29 +788,39 @@ def clean_real_time_vix_data(df):
     # Convert 'id' to integer if necessary
     df['id'] = df['id'].astype(int)
 
-    # Drop columns with no data (keeping only id, timestamp, and current_price)
-    df = df[['id', 'timestamp', 'current_price']].copy()
-
-    # Rename 'current_price' to 'close' for consistency with other tables
-    df = df.rename(columns={'current_price': 'close'})
-
     # Convert 'timestamp' to datetime format
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
 
-    # Add a 'date' column based on 'timestamp'
-    df['date'] = df['timestamp'].dt.date
+    # Set 'timestamp' as the index but keep it as a column
+    if df.index.name != 'timestamp':
+        df.set_index('timestamp', inplace=True, drop=False)
+        print("'timestamp' column used as index.")
 
-    # Remove duplicates based on timestamp
-    df = df.drop_duplicates(subset=['timestamp'])
+    # Remove duplicates based on index (timestamp)
+    df = df[~df.index.duplicated(keep='first')]
 
-    # Sort by timestamp to ensure chronological order
-    df = df.sort_values(by='timestamp')
+    # Sort by index (timestamp) to ensure chronological order
+    df.sort_index(inplace=True)
+    print("DataFrame sorted by timestamp index.")
 
-    # Set 'id' as the index
+    # Reset index to keep 'timestamp' in the DataFrame as a column
+    if 'timestamp' not in df.columns:
+        df.reset_index(drop=False, inplace=True)
+        print("Index reset, 'timestamp' kept as a column.")
+    else:
+        # If 'timestamp' is already a column, reset without keeping it as a column again
+        df.reset_index(drop=True, inplace=True)
+        print("Index reset without duplicating 'timestamp' column.")
+
+    # Now set 'id' as the index
     df.set_index('id', inplace=True)
-    print("ID column set as index")
+    print("ID column set as index.")
+
+    # Debugging: Print the final state of the DataFrame
+    print("Final DataFrame state:\n", df.head())
 
     return df
+
 
 # Features
 # Features: Average Hourly Earnings Data
@@ -1829,16 +1857,13 @@ def create_features_for_historical_vix(df):
     return df
 
 # Features: Real Time SPX
-
-
 def create_features_for_real_time_spx(df):
-    # Ensure 'timestamp' is set as index for easier time series operations
-    if not pd.api.types.is_datetime64_any_dtype(df.index):
-        df = df.set_index('timestamp')
+    # Ensure the 'timestamp' column exists
+    if 'timestamp' not in df.columns:
+        raise KeyError("The 'timestamp' column is missing from the SPX data.")
 
-    # Print initial DataFrame
-    print("Initial DataFrame:")
-    print(df.head())
+    # Use 'timestamp' for sorting and as a reference, but do not set it as the primary index
+    # Any operation requiring 'timestamp' as an index should use it temporarily
 
     # Lag Features
     df['Lag_1'] = df['current_price'].shift(1)
@@ -1852,10 +1877,8 @@ def create_features_for_real_time_spx(df):
     df['EMA_26'] = df['current_price'].ewm(span=26, adjust=False).mean()
 
     # Bollinger Bands
-    df['Bollinger_Upper'] = df['SMA_20'] + 2 * \
-        df['current_price'].rolling(window=20).std()
-    df['Bollinger_Lower'] = df['SMA_20'] - 2 * \
-        df['current_price'].rolling(window=20).std()
+    df['Bollinger_Upper'] = df['SMA_20'] + 2 * df['current_price'].rolling(window=20).std()
+    df['Bollinger_Lower'] = df['SMA_20'] - 2 * df['current_price'].rolling(window=20).std()
 
     # MACD
     df['MACD'] = df['EMA_12'] - df['EMA_26']
@@ -1878,139 +1901,168 @@ def create_features_for_real_time_spx(df):
     # Drop NaNs generated by feature creation
     df = df.dropna()
 
-    return df
+    return dfdef
+    
+def create_features_for_real_time_spx(df):
+    # Ensure the 'timestamp' column exists
+    if 'timestamp' not in df.columns:
+        raise KeyError("The 'timestamp' column is missing from the SPX data.")
 
-# Features: Real Time SPY
+    # Set 'timestamp' as the index
+    df.set_index('timestamp', drop=False, inplace=True)  # Keep 'timestamp' column in the data
 
+    # Ensure the index is a datetime type
+    df.index = pd.to_datetime(df.index)
 
-def create_features_for_real_time_spy(df):
-    # Ensure the dataframe is sorted by timestamp
-    df = df.sort_values('timestamp')
-
-    # Lag feature (Previous price)
+    # Feature Creation
     df['Lag_1'] = df['current_price'].shift(1)
-
-    # Simple Moving Averages (SMA)
     df['SMA_20'] = df['current_price'].rolling(window=20).mean()
     df['SMA_50'] = df['current_price'].rolling(window=50).mean()
-
-    # Exponential Moving Averages (EMA)
     df['EMA_12'] = df['current_price'].ewm(span=12, adjust=False).mean()
     df['EMA_26'] = df['current_price'].ewm(span=26, adjust=False).mean()
+    df['Bollinger_Upper'] = df['SMA_20'] + 2 * df['current_price'].rolling(window=20).std()
+    df['Bollinger_Lower'] = df['SMA_20'] - 2 * df['current_price'].rolling(window=20).std()
+    df['MACD'] = df['EMA_12'] - df['EMA_26']
+    df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+    delta = df['current_price'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    df['ATR'] = df['current_price'].rolling(window=14).std()
 
-    # Bollinger Bands
-    df['Bollinger_Upper'] = df['SMA_20'] + 2 * \
-        df['current_price'].rolling(window=20).std()
-    df['Bollinger_Lower'] = df['SMA_20'] - 2 * \
-        df['current_price'].rolling(window=20).std()
+    # Check DataFrame after feature creation
+    print("DataFrame after feature creation:")
+    print(df.isna().sum())
 
-    # Relative Strength Index (RSI)
+    # Only drop rows with missing data if it won't empty the DataFrame
+    # Allow keeping some rows with NaNs to maintain sufficient data
+    if len(df.dropna()) > 20:  # Assuming 20 is a minimum threshold to consider data sufficient
+        df.dropna(inplace=True)
+        print("Dropped rows with NaN values.")
+
+    return df
+    
+# Features: Real Time SPY
+def create_features_for_real_time_spy(df):
+    # Ensure the 'timestamp' column exists
+    if 'timestamp' not in df.columns:
+        raise KeyError("The 'timestamp' column is missing from the SPX data.")
+
+    # Set 'timestamp' as the index
+    df.set_index('timestamp', drop=False, inplace=True)  # Keep 'timestamp' column in the data
+
+    # Ensure the index is a datetime type
+    df.index = pd.to_datetime(df.index)
+
+    # Feature Creation
+    df['Lag_1'] = df['current_price'].shift(1)
+    df['SMA_20'] = df['current_price'].rolling(window=20).mean()
+    df['SMA_50'] = df['current_price'].rolling(window=50).mean()
+    df['EMA_12'] = df['current_price'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['current_price'].ewm(span=26, adjust=False).mean()
+    df['Bollinger_Upper'] = df['SMA_20'] + 2 * df['current_price'].rolling(window=20).std()
+    df['Bollinger_Lower'] = df['SMA_20'] - 2 * df['current_price'].rolling(window=20).std()
+    df['MACD'] = df['EMA_12'] - df['EMA_26']
+    df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+    delta = df['current_price'].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    df['ATR'] = df['current_price'].rolling(window=14).std()
+
+    # Check DataFrame after feature creation
+    print("DataFrame after feature creation:")
+    print(df.isna().sum())
+
+    # Only drop rows with missing data if it won't empty the DataFrame
+    # Allow keeping some rows with NaNs to maintain sufficient data
+    if len(df.dropna()) > 20:  # Assuming 20 is a minimum threshold to consider data sufficient
+        df.dropna(inplace=True)
+        print("Dropped rows with NaN values.")
+
+    return df
+    
+# Features: Real Time VIX
+def create_features_for_real_time_vix(df):
+    # Ensure the 'timestamp' column exists
+    if 'timestamp' not in df.columns:
+        raise KeyError("The 'timestamp' column is missing from the VIX data.")
+
+    # Convert 'timestamp' to datetime if it's not already
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+
+    # Set 'timestamp' as the index and drop it from columns
+    df = df.set_index('timestamp', drop=True)
+
+    # Feature 1: Daily percentage change
+    df['Daily_Percentage_Change'] = df['current_price'].pct_change()
+
+    # Feature 2: Rolling mean and standard deviation (volatility indicators)
+    df['Rolling_Mean_10D'] = df['current_price'].rolling(window=10).mean()
+    df['Rolling_Std_10D'] = df['current_price'].rolling(window=10).std()
+    df['Rolling_Mean_20D'] = df['current_price'].rolling(window=20).mean()
+    df['Rolling_Std_20D'] = df['current_price'].rolling(window=20).std()
+
+    # Feature 3: MACD (Moving Average Convergence Divergence)
+    short_ema = df['current_price'].ewm(span=12, adjust=False).mean()
+    long_ema = df['current_price'].ewm(span=26, adjust=False).mean()
+    df['MACD'] = short_ema - long_ema
+
+    # Feature 4: RSI (Relative Strength Index)
     delta = df['current_price'].diff(1)
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / loss
     df['RSI'] = 100 - (100 / (1 + rs))
 
-    # Moving Average Convergence Divergence (MACD)
-    df['MACD'] = df['EMA_12'] - df['EMA_26']
-    df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
-
-    # Average True Range (ATR)
-    high_low = df['current_price'] - df['current_price'].shift(1)
-    df['ATR'] = high_low.rolling(window=14).mean()
-
-    # Drop rows with NaN values resulting from rolling calculations
-    df = df.dropna()
-
-    return df
-
-
-# Features: Real Time VIX
-
-def create_features_for_real_time_vix(df):
-    # Ensure the 'date' column exists; if not, raise an error
-    if 'date' not in df.columns:
-        raise KeyError("The 'date' column is missing from the VIX data.")
-
-    # Set 'date' as the index
-    df = df.set_index('date', drop=False)  # Keep 'date' column in the data
-
-    # Ensure the index is a datetime type
-    df.index = pd.to_datetime(df.index)
-
-    # Feature 1: Daily percentage change
-    df['Daily_Percentage_Change'] = df['close'].pct_change()
-
-    # Feature 2: Rolling mean and standard deviation (volatility indicators)
-    df['Rolling_Mean_10D'] = df['close'].rolling(window=10).mean()
-    df['Rolling_Std_10D'] = df['close'].rolling(window=10).std()
-    df['Rolling_Mean_20D'] = df['close'].rolling(window=20).mean()
-    df['Rolling_Std_20D'] = df['close'].rolling(window=20).std()
-
-    # Feature 3: MACD (Moving Average Convergence Divergence)
-    short_ema = df['close'].ewm(span=12, adjust=False).mean()
-    long_ema = df['close'].ewm(span=26, adjust=False).mean()
-    df['MACD'] = short_ema - long_ema
-
-    # Feature 4: RSI (Relative Strength Index)
-    delta = df['close'].diff(1)
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / loss
-    df['RSI'] = 100 - (100 / (1 + rs))
-
     # Feature 5: Lagged values
-    df['Lag_1'] = df['close'].shift(1)
-    df['Lag_5'] = df['close'].shift(5)
-    df['Lag_10'] = df['close'].shift(10)
+    df['Lag_1'] = df['current_price'].shift(1)
+    df['Lag_5'] = df['current_price'].shift(5)
+    df['Lag_10'] = df['current_price'].shift(10)
 
     # Feature 6: Exponential Moving Averages
-    df['EMA_10'] = df['close'].ewm(span=10, adjust=False).mean()
-    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['EMA_10'] = df['current_price'].ewm(span=10, adjust=False).mean()
+    df['EMA_20'] = df['current_price'].ewm(span=20, adjust=False).mean()
 
     # Feature 7: Cumulative sum of changes
-    df['Cumulative_Sum'] = df['close'].cumsum()
+    df['Cumulative_Sum'] = df['current_price'].cumsum()
 
     # Feature 8: Z-Score normalization for volatility spikes
-    df['Z_Score'] = (df['close'] - df['close'].mean()) / df['close'].std()
+    df['Z_Score'] = (df['current_price'] - df['current_price'].mean()) / df['current_price'].std()
 
     # Feature 9: Bollinger Bands (upper and lower)
-    rolling_mean = df['close'].rolling(window=20).mean()
-    rolling_std = df['close'].rolling(window=20).std()
+    rolling_mean = df['current_price'].rolling(window=20).mean()
+    rolling_std = df['current_price'].rolling(window=20).std()
     df['Bollinger_Upper'] = rolling_mean + (rolling_std * 2)
     df['Bollinger_Lower'] = rolling_mean - (rolling_std * 2)
 
     # Feature 10: Rate of Change (ROC)
-    df['Rate_Of_Change'] = df['close'].diff(5) / df['close'].shift(5)
+    df['Rate_Of_Change'] = df['current_price'].diff(5) / df['current_price'].shift(5)
 
-    # Reset the index to make 'date' a column again
-    df.reset_index(drop=True, inplace=True)
+    # Reset the index to keep 'timestamp' as a column (if necessary for other operations)
+    df.reset_index(drop=False, inplace=True)
 
-    return df  
+    return df
 
 # Normalize Data
-
 def normalize_data(df):
-    # Identify datetime columns
-    datetime_columns = df.select_dtypes(include=['datetime64']).columns.tolist()
-    
-    # Check for 'date' or 'timestamp' and print which one exists, or raise an error
-    if 'date' in df.columns and 'timestamp' in df.columns:
-        print("Both 'date' and 'timestamp' columns exist.")
+    # Identify datetime columns, focusing on 'timestamp' or 'date' if they exist
+    datetime_columns = []
+    if 'timestamp' in df.columns:
+        datetime_columns.append('timestamp')
+        print("'timestamp' column exists and will be used.")
     elif 'date' in df.columns:
-        print("'date' column exists.")
-        datetime_columns.append('date')  # Ensure 'date' is treated as a datetime column
-    elif 'timestamp' in df.columns:
-        print("'timestamp' column exists.")
-        datetime_columns.append('timestamp')  # Ensure 'timestamp' is treated as a datetime column
+        datetime_columns.append('date')
+        print("'date' column exists and will be used.")
     else:
-        print("Error: No 'date' or 'timestamp' column found.")
-        return df, None
+        print("Neither 'date' nor 'timestamp' column found. Proceeding without datetime normalization.")
 
     # Identify non-numeric columns
     non_numeric_columns = df.select_dtypes(exclude=[np.number]).columns.tolist()
 
-    # Remove overlaps and treat 'created_at' and 'updated_at' as datetime only
+    # Remove overlaps
     non_numeric_columns = [col for col in non_numeric_columns if col not in datetime_columns]
 
     # Separate numeric data for scaling
@@ -2030,31 +2082,41 @@ def normalize_data(df):
 
     return final_df, scaler
 
-
 def preprocess_data(query, table_name):
     df = load_data(query)
 
-    # Step 1: Check if 'date' or 'timestamp' column exists
+    # Step 1: Check if 'id' column exists
     if 'id' not in df.columns:
         raise KeyError(f"The 'id' column must be present in the {table_name} data.")
-    
-    if 'date' not in df.columns and 'timestamp' not in df.columns:
-        raise KeyError(f"Either 'date' or 'timestamp' column must be present in the {table_name} data.")
 
-    # Step 2: Convert 'date' or 'timestamp' to datetime and ensure consistency
-    if 'timestamp' in df.columns:
+    # List of tables that use 'timestamp'
+    timestamp_tables = ['historical_spx', 'historical_spy', 'historical_vix', 'real_time_spx', 'real_time_spy', 'real_time_vix']
+
+    # Step 2: Determine which column to use for datetime operations
+    if table_name in timestamp_tables:
+        # These tables require 'timestamp'
+        if 'timestamp' not in df.columns:
+            raise KeyError(f"The 'timestamp' column must be present in the {table_name} data.")
+        
         df['timestamp'] = pd.to_datetime(df['timestamp'])
-        df['date'] = df['timestamp']  # Create 'date' column from 'timestamp' if not present
-        print("'timestamp' column converted to datetime and 'date' column created.")
-    elif 'date' in df.columns:
+        
+        # Avoid setting 'timestamp' as index multiple times
+        if df.index.name != 'timestamp':
+            df = df.set_index('timestamp', drop=False)
+            print("'timestamp' column used as index.")
+    else:
+        # Other tables use 'date'
+        if 'date' not in df.columns:
+            raise KeyError(f"The 'date' column must be present in the {table_name} data.")
+        
         df['date'] = pd.to_datetime(df['date'])
-        print("'date' column converted to datetime.")
+        
+        # Avoid setting 'date' as index multiple times
+        if df.index.name != 'date':
+            df = df.set_index('date', drop=False)
+            print("'date' column used as index.")
 
-    # Step 3: Set 'date' as index
-    df = df.set_index('date', drop=False)  # Keep 'date' in the DataFrame but use it as an index
-    print("Set 'date' column as index.")
-
-    # Step 4: Perform table-specific cleaning and feature creation
+    # Step 3: Perform table-specific cleaning and feature creation
     cleaning_function = TABLE_CLEANING_FUNCTIONS.get(table_name)
     if cleaning_function:
         df = cleaning_function(df)
@@ -2073,12 +2135,7 @@ def preprocess_data(query, table_name):
     df = df.loc[:, ~df.columns.duplicated()]
     print("Dropped duplicate columns, if any existed.")
 
-    # Reset index to remove 'date' from being an index
-    df.reset_index(drop=True, inplace=True)
-    print("'date' column reset from index to regular column.")
-
     return df
-
 
 # Add a mapping for feature creation functions similar to the cleaning functions
 TABLE_FEATURE_FUNCTIONS = {
