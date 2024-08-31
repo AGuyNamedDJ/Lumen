@@ -23,28 +23,28 @@ def ensure_directory_exists(directory):
     else:
         print(f"Directory already exists: {directory}")
 
-# Filter SPX data
-def filter_spx_data(df):
-    if 'symbol' in df.columns:
-        return df[df['symbol'] == 'SPX']
-    else:
-        print("No 'symbol' column found, returning the original DataFrame.")
-        return df
+# # Filter SPX data
+# def filter_spx_data(df):
+#     if 'symbol' in df.columns:
+#         return df[df['symbol'] == 'SPX']
+#     else:
+#         print("No 'symbol' column found, returning the original DataFrame.")
+#         return df
 
-# Filter SPY data
-def filter_spy_data(df):
-    if 'symbol' in df.columns:
-        return df[df['symbol'] == 'SPY']
-    else:
-        print("No 'symbol' column found, returning the original DataFrame.")
-        return df
+# # Filter SPY data
+# def filter_spy_data(df):
+#     if 'symbol' in df.columns:
+#         return df[df['symbol'] == 'SPY']
+#     else:
+#         print("No 'symbol' column found, returning the original DataFrame.")
+#         return df
 
-# Filter VIX data
-    if 'symbol' in df.columns:
-        return df[df['symbol'] == 'VIX']
-    else:
-        print("No 'symbol' column found, returning the original DataFrame.")
-        return df
+# # Filter VIX data
+#     if 'symbol' in df.columns:
+#         return df[df['symbol'] == 'VIX']
+#     else:
+#         print("No 'symbol' column found, returning the original DataFrame.")
+#         return df
 
 def load_data():
     consumer_confidence_data = pd.read_csv(os.path.join(DATA_DIR, 'processed_consumer_confidence_data.csv'))
@@ -774,21 +774,28 @@ def feature_real_time_indicator_ema_26(df):
         print("Column 'current_price' not found in DataFrame. Skipping feature 'Real_Time_Indicator_EMA_26'.")
     return df
 
-def feature_real_time_indicator_bollinger_bands(df):
-    if 'current_price' in df.columns:
-        sma = df['current_price'].rolling(window=20).mean()
-        std = df['current_price'].rolling(window=20).std()
-        df['Real_Time_Indicator_Bollinger_Upper'] = sma + (std * 2)
-        df['Real_Time_Indicator_Bollinger_Lower'] = sma - (std * 2)
-    else:
-        print("Column 'current_price' not found in DataFrame. Skipping Bollinger Bands features.")
-    return df
-
 # Feature Engineering: Real Time SPX-VIX Correlation
 def feature_real_time_spx_vix_correlation(df_spx, df_vix):
-    # Use the appropriate date column
-    date_column_spx = 'date'
-    date_column_vix = 'timestamp'
+    # Determine the appropriate date column names
+    date_column_spx = 'timestamp' if 'timestamp' in df_spx.columns else 'date'
+    date_column_vix = 'timestamp' if 'timestamp' in df_vix.columns else 'date'
+
+    # Debugging: Check columns in DataFrames
+    print("Columns in df_spx:", df_spx.columns)
+    print("Columns in df_vix:", df_vix.columns)
+
+    # Check if the date column exists in both DataFrames
+    if date_column_spx not in df_spx.columns:
+        print(f"Column '{date_column_spx}' not found in SPX DataFrame. Exiting function.")
+        # Optionally, add a date column based on the index or other logic
+        # Example: Create a 'date' column using a date range if it makes sense for your data
+        # df_spx['date'] = pd.date_range(start='2023-01-01', periods=len(df_spx), freq='D')
+        # df_spx.set_index('date', inplace=True)
+        return pd.DataFrame()  # Return an empty DataFrame or handle as needed
+
+    if date_column_vix not in df_vix.columns:
+        print(f"Column '{date_column_vix}' not found in VIX DataFrame. Exiting function.")
+        return pd.DataFrame()  # Return an empty DataFrame or handle as needed
 
     # Convert to datetime
     df_spx[date_column_spx] = pd.to_datetime(df_spx[date_column_spx], errors='coerce')
@@ -802,6 +809,11 @@ def feature_real_time_spx_vix_correlation(df_spx, df_vix):
     df_spx.set_index('date', inplace=True)
     df_vix.set_index('date', inplace=True)
 
+    # Check if 'current_price' column exists in both DataFrames
+    if 'current_price' not in df_spx.columns or 'current_price' not in df_vix.columns:
+        print("Missing 'current_price' column in SPX or VIX DataFrame.")
+        return pd.DataFrame()  # Return an empty DataFrame or handle as needed
+
     # Concatenate the DataFrames
     df_combined = pd.concat([df_spx['current_price'], df_vix['current_price']], axis=1, keys=['close_spx', 'close_vix'])
 
@@ -809,13 +821,25 @@ def feature_real_time_spx_vix_correlation(df_spx, df_vix):
     df_combined['Real_Time_SPX_VIX_Correlation'] = df_combined['close_spx'].rolling(window=30).corr(df_combined['close_vix'])
 
     return df_combined[['Real_Time_SPX_VIX_Correlation']].reset_index()
-
-
+        
 # Feature Engineering: Real Time SPY-VIX Correlation
 def feature_real_time_spy_vix_correlation(df_spy, df_vix):
-    # Use the appropriate date column
-    date_column_spy = 'timestamp'
-    date_column_vix = 'timestamp'
+    # Determine the appropriate date column names
+    date_column_spy = 'timestamp' if 'timestamp' in df_spy.columns else 'date'
+    date_column_vix = 'timestamp' if 'timestamp' in df_vix.columns else 'date'
+
+    # Debugging: Check columns in DataFrames
+    print("Columns in df_spy:", df_spy.columns)
+    print("Columns in df_vix:", df_vix.columns)
+
+    # Check if the date column exists in both DataFrames
+    if date_column_spy not in df_spy.columns:
+        print(f"Column '{date_column_spy}' not found in SPY DataFrame. Exiting function.")
+        return pd.DataFrame()  # Return an empty DataFrame or handle as needed
+
+    if date_column_vix not in df_vix.columns:
+        print(f"Column '{date_column_vix}' not found in VIX DataFrame. Exiting function.")
+        return pd.DataFrame()  # Return an empty DataFrame or handle as needed
 
     # Convert to datetime
     df_spy[date_column_spy] = pd.to_datetime(df_spy[date_column_spy], errors='coerce')
@@ -829,6 +853,11 @@ def feature_real_time_spy_vix_correlation(df_spy, df_vix):
     df_spy.set_index('date', inplace=True)
     df_vix.set_index('date', inplace=True)
 
+    # Check if 'current_price' column exists in both dataframes
+    if 'current_price' not in df_spy.columns or 'current_price' not in df_vix.columns:
+        print("Missing 'current_price' column in SPY or VIX DataFrame.")
+        return pd.DataFrame()  # Return an empty DataFrame or handle as needed
+
     # Concatenate the DataFrames
     df_combined = pd.concat([df_spy['current_price'], df_vix['current_price']], axis=1, keys=['close_spy', 'close_vix'])
 
@@ -836,8 +865,7 @@ def feature_real_time_spy_vix_correlation(df_spy, df_vix):
     df_combined['Real_Time_SPY_VIX_Correlation'] = df_combined['close_spy'].rolling(window=30).corr(df_combined['close_vix'])
 
     return df_combined[['Real_Time_SPY_VIX_Correlation']].reset_index()
-    
-        
+
 # Main functions for Feature Engineering
 def main_consumer_confidence_features(df):
     df = feature_consumer_confidence_cumulative_sum(df)
@@ -891,8 +919,8 @@ def main_industrial_production_features(df):
     return df
 
 def main_interest_rate_features(df):
-    if 'symbol' in df.columns:
-        df = filter_spx_data(df)  # or filter_spy_data(df) based on the context
+    # if 'symbol' in df.columns:
+        # df = filter_spx_data(df)  # or filter_spy_data(df) based on the context
     df = feature_interest_rate_value(df)
     df = feature_interest_rate_lag(df, [1, 3, 12])
     df = feature_interest_rate_rolling_mean(df, [3, 6, 12])
@@ -903,8 +931,8 @@ def main_interest_rate_features(df):
 
 def main_labor_force_features(df):
     # Check if 'symbol' column exists before filtering
-    if 'symbol' in df.columns:
-        df = filter_spy_data(df)  # Only apply if 'symbol' column exists
+    # if 'symbol' in df.columns:
+    #     df = filter_spy_data(df)  # Only apply if 'symbol' column exists
     df = feature_labor_force_value(df)
     df = feature_labor_force_lag(df, [1, 3, 12])
     df = feature_labor_force_rolling_mean(df, [3, 6, 12])
@@ -970,23 +998,57 @@ def main_spy_market_features(df):
     return df
 
 def main_real_time_spx_features(df):
-    df = filter_spx_data(df)
+    # Reset index if 'timestamp' or 'date' is set as the index
+    if 'timestamp' in df.index.names or 'date' in df.index.names:
+        df.reset_index(inplace=True)
+
+    # Ensure 'timestamp' or 'date' is available and set it as index
+    if 'timestamp' in df.columns:
+        df['date'] = pd.to_datetime(df['timestamp'], errors='coerce')
+        df.set_index('date', inplace=True, drop=True)
+    elif 'date' in df.columns:
+        df['date'] = pd.to_datetime(df['date'], errors='coerce')
+        df.set_index('date', inplace=True, drop=True)
+    else:
+        # Create a placeholder date column if neither exists
+        print("Neither 'timestamp' nor 'date' column found in SPX DataFrame. Exiting function.")
+        df['date'] = pd.date_range(start='2023-01-01', periods=len(df), freq='D')
+        df.set_index('date', inplace=True, drop=True)
+
+    # Proceed with the rest of the feature engineering
     df = feature_real_time_indicator_lag_1(df)
     df = feature_real_time_indicator_sma_20(df)
     df = feature_real_time_indicator_sma_50(df)
     df = feature_real_time_indicator_ema_12(df)
     df = feature_real_time_indicator_ema_26(df)
-    df = feature_real_time_indicator_bollinger_bands(df)
+    
     return df
 
 def main_real_time_spy_features(df):
-    df = filter_spy_data(df)
+    # Reset index if 'timestamp' or 'date' is set as the index
+    if 'timestamp' in df.index.names or 'date' in df.index.names:
+        df.reset_index(inplace=True)
+
+    # Ensure 'timestamp' or 'date' is available and set it as index
+    if 'timestamp' in df.columns:
+        df['date'] = pd.to_datetime(df['timestamp'], errors='coerce')
+        df.set_index('date', inplace=True, drop=True)
+    elif 'date' in df.columns:
+        df['date'] = pd.to_datetime(df['date'], errors='coerce')
+        df.set_index('date', inplace=True, drop=True)
+
+    # Check if 'current_price' exists in the DataFrame
+    if 'current_price' not in df.columns:
+        print("Missing 'current_price' column in SPY DataFrame. Exiting function.")
+        return df  # Early return or handle as needed
+
+    # Proceed with the rest of the feature engineering
     df = feature_real_time_indicator_lag_1(df)
     df = feature_real_time_indicator_sma_20(df)
     df = feature_real_time_indicator_sma_50(df)
     df = feature_real_time_indicator_ema_12(df)
     df = feature_real_time_indicator_ema_26(df)
-    df = feature_real_time_indicator_bollinger_bands(df)
+    
     return df
 
 def main_real_time_vix_correlation_features(df_spx, df_spy, df_vix):
