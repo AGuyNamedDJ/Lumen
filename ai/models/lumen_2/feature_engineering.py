@@ -776,38 +776,33 @@ def feature_real_time_indicator_ema_26(df):
 
 # Feature Engineering: Real Time SPX-VIX Correlation
 def feature_real_time_spx_vix_correlation(df_spx, df_vix):
-    # Determine the appropriate date column names
-    date_column_spx = 'timestamp' if 'timestamp' in df_spx.columns else 'date'
-    date_column_vix = 'timestamp' if 'timestamp' in df_vix.columns else 'date'
+    # Log DataFrame info
+    print("Inspecting df_vix DataFrame for SPX correlation:")
+    print(df_vix.head())  # Print the first few rows
+    print("Columns in df_vix:", df_vix.columns)  # Print columns
 
-    # Debugging: Check columns in DataFrames
-    print("Columns in df_spx:", df_spx.columns)
-    print("Columns in df_vix:", df_vix.columns)
-
-    # Check if the date column exists in both DataFrames
-    if date_column_spx not in df_spx.columns:
-        print(f"Column '{date_column_spx}' not found in SPX DataFrame. Exiting function.")
-        # Optionally, add a date column based on the index or other logic
-        # Example: Create a 'date' column using a date range if it makes sense for your data
-        # df_spx['date'] = pd.date_range(start='2023-01-01', periods=len(df_spx), freq='D')
-        # df_spx.set_index('date', inplace=True)
+    # Check if the 'timestamp' column exists in both DataFrames
+    if 'timestamp' not in df_spx.columns:
+        print("The 'timestamp' column is missing from the SPX DataFrame. Exiting function.")
         return pd.DataFrame()  # Return an empty DataFrame or handle as needed
 
-    if date_column_vix not in df_vix.columns:
-        print(f"Column '{date_column_vix}' not found in VIX DataFrame. Exiting function.")
-        return pd.DataFrame()  # Return an empty DataFrame or handle as needed
+    if 'timestamp' not in df_vix.columns:
+        print("The 'timestamp' column is missing from the VIX DataFrame. Adding default 'timestamp' column.")
+        df_vix['timestamp'] = pd.date_range(start='2023-01-01', periods=len(df_vix), freq='T')
 
     # Convert to datetime
-    df_spx[date_column_spx] = pd.to_datetime(df_spx[date_column_spx], errors='coerce')
-    df_vix[date_column_vix] = pd.to_datetime(df_vix[date_column_vix], errors='coerce')
+    df_spx['timestamp'] = pd.to_datetime(df_spx['timestamp'], errors='coerce')
+    df_vix['timestamp'] = pd.to_datetime(df_vix['timestamp'], errors='coerce')
 
-    # Rename to 'date' for consistency
-    df_spx.rename(columns={date_column_spx: 'date'}, inplace=True)
-    df_vix.rename(columns={date_column_vix: 'date'}, inplace=True)
+    # Remove 'timestamp' column if it is set as the index
+    if df_spx.index.name == 'timestamp':
+        df_spx.reset_index(drop=True, inplace=True)
+    if df_vix.index.name == 'timestamp':
+        df_vix.reset_index(drop=True, inplace=True)
 
-    # Set 'date' as the index
-    df_spx.set_index('date', inplace=True)
-    df_vix.set_index('date', inplace=True)
+    # Set 'timestamp' as the index
+    df_spx.set_index('timestamp', inplace=True, drop=True)
+    df_vix.set_index('timestamp', inplace=True, drop=True)
 
     # Check if 'current_price' column exists in both DataFrames
     if 'current_price' not in df_spx.columns or 'current_price' not in df_vix.columns:
@@ -821,51 +816,85 @@ def feature_real_time_spx_vix_correlation(df_spx, df_vix):
     df_combined['Real_Time_SPX_VIX_Correlation'] = df_combined['close_spx'].rolling(window=30).corr(df_combined['close_vix'])
 
     return df_combined[['Real_Time_SPX_VIX_Correlation']].reset_index()
-        
+
 # Feature Engineering: Real Time SPY-VIX Correlation
 def feature_real_time_spy_vix_correlation(df_spy, df_vix):
-    # Determine the appropriate date column names
-    date_column_spy = 'timestamp' if 'timestamp' in df_spy.columns else 'date'
-    date_column_vix = 'timestamp' if 'timestamp' in df_vix.columns else 'date'
-
-    # Debugging: Check columns in DataFrames
+    # Log DataFrame info
+    print("\n--- Starting SPY-VIX Correlation ---")
+    print("Initial df_spy state:")
+    print(df_spy.head())
     print("Columns in df_spy:", df_spy.columns)
+
+    print("Initial df_vix state:")
+    print(df_vix.head())
     print("Columns in df_vix:", df_vix.columns)
 
-    # Check if the date column exists in both DataFrames
-    if date_column_spy not in df_spy.columns:
-        print(f"Column '{date_column_spy}' not found in SPY DataFrame. Exiting function.")
+    # Check if the 'timestamp' column exists in both DataFrames
+    if 'timestamp' not in df_spy.columns:
+        print("The 'timestamp' column is missing from the SPY DataFrame. Exiting function.")
         return pd.DataFrame()  # Return an empty DataFrame or handle as needed
 
-    if date_column_vix not in df_vix.columns:
-        print(f"Column '{date_column_vix}' not found in VIX DataFrame. Exiting function.")
-        return pd.DataFrame()  # Return an empty DataFrame or handle as needed
+    if 'timestamp' not in df_vix.columns:
+        print("The 'timestamp' column is missing from the VIX DataFrame. Adding default 'timestamp' column.")
+        df_vix['timestamp'] = pd.date_range(start='2023-01-01', periods=len(df_vix), freq='T')
+
+    # Log after adding timestamp column
+    print("State of df_vix after adding timestamp (if applicable):")
+    print(df_vix.head())
+    print("Columns in df_vix:", df_vix.columns)
 
     # Convert to datetime
-    df_spy[date_column_spy] = pd.to_datetime(df_spy[date_column_spy], errors='coerce')
-    df_vix[date_column_vix] = pd.to_datetime(df_vix[date_column_vix], errors='coerce')
+    df_spy['timestamp'] = pd.to_datetime(df_spy['timestamp'], errors='coerce')
+    df_vix['timestamp'] = pd.to_datetime(df_vix['timestamp'], errors='coerce')
 
-    # Rename to 'date' for consistency
-    df_spy.rename(columns={date_column_spy: 'date'}, inplace=True)
-    df_vix.rename(columns={date_column_vix: 'date'}, inplace=True)
+    # Log after datetime conversion
+    print("State of df_spy and df_vix after datetime conversion:")
+    print(df_spy.head())
+    print(df_vix.head())
 
-    # Set 'date' as the index
-    df_spy.set_index('date', inplace=True)
-    df_vix.set_index('date', inplace=True)
+    # Remove 'timestamp' column if it is set as the index
+    if df_spy.index.name == 'timestamp':
+        df_spy.reset_index(drop=True, inplace=True)
+    if df_vix.index.name == 'timestamp':
+        df_vix.reset_index(drop=True, inplace=True)
 
-    # Check if 'current_price' column exists in both dataframes
+    # Set 'timestamp' as the index
+    df_spy.set_index('timestamp', inplace=True, drop=True)
+    df_vix.set_index('timestamp', inplace=True, drop=True)
+
+    # Log before concatenating
+    print("Before concatenating SPY and VIX DataFrames:")
+    print("df_spy head:", df_spy.head())
+    print("df_vix head:", df_vix.head())
+
+    # Check if 'current_price' column exists in both DataFrames
     if 'current_price' not in df_spy.columns or 'current_price' not in df_vix.columns:
         print("Missing 'current_price' column in SPY or VIX DataFrame.")
         return pd.DataFrame()  # Return an empty DataFrame or handle as needed
 
     # Concatenate the DataFrames
-    df_combined = pd.concat([df_spy['current_price'], df_vix['current_price']], axis=1, keys=['close_spy', 'close_vix'])
+    try:
+        df_combined = pd.concat([df_spy['current_price'], df_vix['current_price']], axis=1, keys=['close_spy', 'close_vix'])
+        print("Combined DataFrame:")
+        print(df_combined.head())
 
-    # Calculate the rolling correlation
-    df_combined['Real_Time_SPY_VIX_Correlation'] = df_combined['close_spy'].rolling(window=30).corr(df_combined['close_vix'])
+        # Calculate the rolling correlation
+        df_combined['Real_Time_SPY_VIX_Correlation'] = df_combined['close_spy'].rolling(window=30).corr(df_combined['close_vix'])
+        print("Calculated rolling correlation:")
+        print(df_combined[['Real_Time_SPY_VIX_Correlation']].head())
 
-    return df_combined[['Real_Time_SPY_VIX_Correlation']].reset_index()
+    except Exception as e:
+        print("An error occurred during the concatenation or calculation:")
+        print(e)
+        return pd.DataFrame()  # Return an empty DataFrame or handle as needed
 
+    # Ensure df_combined is defined before returning
+    if 'df_combined' in locals():
+        return df_combined[['Real_Time_SPY_VIX_Correlation']].reset_index()
+    else:
+        print("df_combined is not defined. Returning an empty DataFrame.")
+        return pd.DataFrame()  # Fallback if df_combined is not defined
+        
 # Main functions for Feature Engineering
 def main_consumer_confidence_features(df):
     df = feature_consumer_confidence_cumulative_sum(df)
@@ -998,22 +1027,17 @@ def main_spy_market_features(df):
     return df
 
 def main_real_time_spx_features(df):
-    # Reset index if 'timestamp' or 'date' is set as the index
-    if 'timestamp' in df.index.names or 'date' in df.index.names:
+    # Reset index if 'timestamp' is set as the index
+    if 'timestamp' in df.index.names:
         df.reset_index(inplace=True)
 
-    # Ensure 'timestamp' or 'date' is available and set it as index
+    # Ensure 'timestamp' is available and set it as the index
     if 'timestamp' in df.columns:
-        df['date'] = pd.to_datetime(df['timestamp'], errors='coerce')
-        df.set_index('date', inplace=True, drop=True)
-    elif 'date' in df.columns:
-        df['date'] = pd.to_datetime(df['date'], errors='coerce')
-        df.set_index('date', inplace=True, drop=True)
+        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+        df.set_index('timestamp', inplace=True, drop=False)  # Keep 'timestamp' in columns
     else:
-        # Create a placeholder date column if neither exists
-        print("Neither 'timestamp' nor 'date' column found in SPX DataFrame. Exiting function.")
-        df['date'] = pd.date_range(start='2023-01-01', periods=len(df), freq='D')
-        df.set_index('date', inplace=True, drop=True)
+        print("The 'timestamp' column is missing from SPX DataFrame. Exiting function.")
+        return pd.DataFrame()  # Return an empty DataFrame or handle as needed
 
     # Proceed with the rest of the feature engineering
     df = feature_real_time_indicator_lag_1(df)
@@ -1025,22 +1049,17 @@ def main_real_time_spx_features(df):
     return df
 
 def main_real_time_spy_features(df):
-    # Reset index if 'timestamp' or 'date' is set as the index
-    if 'timestamp' in df.index.names or 'date' in df.index.names:
+    # Reset index if 'timestamp' is set as the index
+    if 'timestamp' in df.index.names:
         df.reset_index(inplace=True)
 
-    # Ensure 'timestamp' or 'date' is available and set it as index
+    # Ensure 'timestamp' is available and set it as the index
     if 'timestamp' in df.columns:
-        df['date'] = pd.to_datetime(df['timestamp'], errors='coerce')
-        df.set_index('date', inplace=True, drop=True)
-    elif 'date' in df.columns:
-        df['date'] = pd.to_datetime(df['date'], errors='coerce')
-        df.set_index('date', inplace=True, drop=True)
-
-    # Check if 'current_price' exists in the DataFrame
-    if 'current_price' not in df.columns:
-        print("Missing 'current_price' column in SPY DataFrame. Exiting function.")
-        return df  # Early return or handle as needed
+        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+        df.set_index('timestamp', inplace=True, drop=False)  # Keep 'timestamp' in columns
+    else:
+        print("The 'timestamp' column is missing from SPY DataFrame. Exiting function.")
+        return pd.DataFrame()  # Return an empty DataFrame or handle as needed
 
     # Proceed with the rest of the feature engineering
     df = feature_real_time_indicator_lag_1(df)
@@ -1098,13 +1117,18 @@ def apply_features(df, dataset_name, real_time_vix=None):
         df = main_real_time_spx_features(df)
         if real_time_vix is not None:
             spx_vix_corr = feature_real_time_spx_vix_correlation(df, real_time_vix)
+            # Drop 'timestamp' column to avoid overlap
+            spx_vix_corr.drop(columns=['timestamp'], inplace=True, errors='ignore')
             df = df.join(spx_vix_corr)
         return df
     elif dataset_name == 'real_time_spy':
         df = main_real_time_spy_features(df)
         if real_time_vix is not None:
             spy_vix_corr = feature_real_time_spy_vix_correlation(df, real_time_vix)
-            df = df.join(spy_vix_corr)
+            if not spy_vix_corr.empty:
+                df = df.join(spy_vix_corr, how='left')
+            else:
+                print("SPY-VIX correlation DataFrame is empty. Skipping join.")
         return df
     else:
         print(f"No specific feature engineering function defined for {dataset_name}.")
@@ -1128,20 +1152,23 @@ def main():
     for data_name, df in data_dict.items():
         print(f"Processing {data_name}...")
 
-        # Ensure the date column is in datetime format
-        if 'date' in df.columns:
-            df['date'] = pd.to_datetime(df['date'])
+        # Determine if the dataset uses 'timestamp' or 'date'
+        if 'timestamp' in df.columns:
+            df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+            df.set_index('timestamp', inplace=True)
+        elif 'date' in df.columns:
+            df['date'] = pd.to_datetime(df['date'], errors='coerce')
             df.set_index('date', inplace=True)
         else:
-            print("No 'date' column found, using default index.")
-        
+            print(f"No 'timestamp' or 'date' column found in {data_name}. Using default index.")
+
         # Apply specific feature engineering based on dataset, passing real_time_vix as needed
         df = apply_features(df, data_name, real_time_vix)
         
         # Save the resulting DataFrame to the featured directory
         enhanced_filename = data_name + '_featured.csv'
         save_enhanced_data(df, enhanced_filename)
-        
+           
     # Ensure the directory exists before running main
 if __name__ == "__main__":
     ensure_directory_exists(FEATURED_DIR)
