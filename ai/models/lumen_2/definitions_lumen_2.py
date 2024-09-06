@@ -1,8 +1,12 @@
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Conv1D, LSTM, Dense, Dropout, Attention, Concatenate
+from tensorflow.keras.layers import Input, Conv1D, LSTM, Dense, Dropout, Concatenate, Layer
 from tensorflow.keras.optimizers import Adam
 import tensorflow as tf
 
+# Custom Layer to wrap tf.reduce_mean
+class ReduceMeanLayer(Layer):
+    def call(self, inputs):
+        return tf.reduce_mean(inputs, axis=1)
 
 def create_hybrid_model(input_shape, num_lstm_layers=2, num_cnn_filters=64, num_transformer_heads=4, dropout_rate=0.2):
     """
@@ -18,8 +22,7 @@ def create_hybrid_model(input_shape, num_lstm_layers=2, num_cnn_filters=64, num_
     inputs = Input(shape=input_shape)
 
     # CNN Layer
-    cnn_out = Conv1D(filters=num_cnn_filters, kernel_size=3,
-                     padding='same', activation='relu')(inputs)
+    cnn_out = Conv1D(filters=num_cnn_filters, kernel_size=3, padding='same', activation='relu')(inputs)
 
     # LSTM Layers
     lstm_out = cnn_out
@@ -30,12 +33,15 @@ def create_hybrid_model(input_shape, num_lstm_layers=2, num_cnn_filters=64, num_
     # Transformer Layer
     transformer_out = tf.keras.layers.MultiHeadAttention(
         num_heads=num_transformer_heads, key_dim=input_shape[-1])(lstm_out, lstm_out)
-    # Aggregating across time steps
-    transformer_out = tf.reduce_mean(transformer_out, axis=1)
+
+    # Use custom ReduceMeanLayer instead of tf.reduce_mean
+    transformer_out = ReduceMeanLayer()(transformer_out)
+
+    # Use ReduceMeanLayer on LSTM output as well
+    lstm_mean_out = ReduceMeanLayer()(lstm_out)
 
     # Concatenate LSTM and Transformer outputs
-    combined = Concatenate()(
-        [tf.reduce_mean(lstm_out, axis=1), transformer_out])
+    combined = Concatenate()([lstm_mean_out, transformer_out])
 
     # Final Dense Layers
     dense_out = Dense(100, activation='relu')(combined)
@@ -43,8 +49,7 @@ def create_hybrid_model(input_shape, num_lstm_layers=2, num_cnn_filters=64, num_
 
     # Compile the model
     model = Model(inputs, outputs)
-    model.compile(optimizer=Adam(learning_rate=0.001),
-                  loss='mean_squared_error')
+    model.compile(optimizer=Adam(learning_rate=0.001), loss='mean_squared_error')
 
     return model
 
@@ -53,6 +58,5 @@ def create_hybrid_model(input_shape, num_lstm_layers=2, num_cnn_filters=64, num_
 if __name__ == "__main__":
     # Example input shape (time steps, features)
     input_shape = (30, 10)  # 30 time steps, 10 features
-    model = create_hybrid_model(input_shape, num_lstm_layers=2,
-                                num_cnn_filters=64, num_transformer_heads=4, dropout_rate=0.3)
+    model = create_hybrid_model(input_shape, num_lstm_layers=2, num_cnn_filters=64, num_transformer_heads=4, dropout_rate=0.3)
     model.summary()
