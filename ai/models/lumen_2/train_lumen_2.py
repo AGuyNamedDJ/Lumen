@@ -181,6 +181,7 @@ def merge_data(data_dict, key_column='date', is_real_time=False):
     
     return combined_df
     
+
 def train_model(X_train, X_test, y_train, y_test):
     """
     Trains the hybrid model on the given training data.
@@ -189,6 +190,10 @@ def train_model(X_train, X_test, y_train, y_test):
 
     # Create the hybrid model (CNN + LSTM + Transformer)
     model = create_hybrid_model(input_shape=(X_train.shape[1], X_train.shape[2]))
+    model.summary() 
+
+    # Debugging: Print model summary and inspect the shapes
+    model.summary()
 
     # Set up model checkpointing (save the best model)
     checkpoint = ModelCheckpoint(os.path.join(MODEL_DIR, MODEL_NAME + '.keras'),
@@ -246,12 +251,16 @@ def main():
     # Split into train and test sets for historical data
     X_train_hist, X_test_hist, y_train_hist, y_test_hist = train_test_split(X_hist, y_hist, test_size=0.2, random_state=42)
 
+    # Save the test data for evaluation later
+    np.save(os.path.join(MODEL_DIR, 'X_test_hist.npy'), X_test_hist)
+    np.save(os.path.join(MODEL_DIR, 'y_test_hist.npy'), y_test_hist)
+
     # Split into train and test sets for real-time data
     X_train_real, X_test_real, y_train_real, y_test_real = train_test_split(X_real_time, y_real_time, test_size=0.2, random_state=42)
 
-    # Train models on historical and real-time data
-    trained_model_hist = train_model(X_train_hist, X_test_hist, y_train_hist, y_test_hist)
-    trained_model_real = train_model(X_train_real, X_test_real, y_train_real, y_test_real)
+    # Save the real-time test data for evaluation later
+    np.save(os.path.join(MODEL_DIR, 'X_test_real.npy'), X_test_real)
+    np.save(os.path.join(MODEL_DIR, 'y_test_real.npy'), y_test_real)
 
     logging.debug("Models trained successfully on both historical and real-time data.")
 
