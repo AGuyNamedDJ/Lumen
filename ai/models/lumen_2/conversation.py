@@ -5,8 +5,10 @@ from datetime import datetime, timedelta
 import pytz
 import random
 import dateparser
-from .predict_with_lumen_2 import predict_next_day_close, predict_other_scenarios
-from .state_manager import get_current_spx_price, get_market_state
+from tensorflow.keras.models import load_model
+from models.lumen_2.load_lumen_2 import load_lumen2_model
+from definitions_lumen_2 import ReduceMeanLayer
+from predict_with_lumen_2 import predict_with_model
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
@@ -20,12 +22,33 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 # Initialize a time zone (assuming the market operates in New York)
 timezone = pytz.timezone('America/Chicago')
 
-# Define SQLAlchemy base and session
+# Base directory settings
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Model directory and name
+MODEL_DIR = os.path.join(BASE_DIR, 'models')
+if not os.path.exists(MODEL_DIR):
+    os.makedirs(MODEL_DIR)
+MODEL_NAME = 'Lumen2'
+
+# Path to Lumen2 model
+model_path = os.path.join(MODEL_DIR, 'Lumen2.keras')
+
+# Debug: Ensure the path exists
+if not os.path.exists(model_path):
+    raise FileNotFoundError(f"The Lumen2 model file {
+                            model_path} does not exist.")
+
+# Load the Lumen2 model
+Lumen2 = load_model(model_path)
+
+
 def get_db_connection():
     db_url = os.getenv('DB_URL')
     engine = create_engine(db_url)
     Session = sessionmaker(bind=engine)
     return Session()
+
 
 # Define state object
 market_state = {
@@ -101,6 +124,7 @@ def get_table_for_symbol(symbol):
     }
     return table_mapping.get(symbol.lower(), None)
 
+
 def update_market_state(symbol):
     """
     Fetches the most recent entry from the database for the given symbol (SPX, SPY, or VIX).
@@ -112,11 +136,13 @@ def update_market_state(symbol):
         # Get the appropriate table for the symbol
         table_name = get_table_for_symbol(symbol)
         if not table_name:
-            logging.error(f"Invalid symbol '{symbol}' provided. Cannot fetch data.")
+            logging.error(f"Invalid symbol '{
+                          symbol}' provided. Cannot fetch data.")
             return
 
         # SQL query to get the most recent current_price and timestamp
-        query = text(f"SELECT current_price, timestamp FROM {table_name} ORDER BY timestamp DESC LIMIT 1")
+        query = text(f"SELECT current_price, timestamp FROM {
+                     table_name} ORDER BY timestamp DESC LIMIT 1")
 
         # Fetch the most recent data for the symbol (SPX, SPY, or VIX)
         result = session.execute(query).fetchone()
@@ -125,20 +151,24 @@ def update_market_state(symbol):
             # Update the market state with the latest price and timestamp
             market_state[symbol]['current_price'] = result['current_price']
             market_state[symbol]['last_updated'] = result['timestamp']
-            logging.debug(f"Market state updated for {symbol.upper()}: {market_state[symbol]}")
+            logging.debug(f"Market state updated for {
+                          symbol.upper()}: {market_state[symbol]}")
         else:
-            logging.error(f"No data found for {symbol.upper()} in the database.")
-        
+            logging.error(f"No data found for {
+                          symbol.upper()} in the database.")
+
     except Exception as e:
         logging.error(f"Error updating market state for {symbol.upper()}: {e}")
     finally:
         session.close()
+
 
 def get_current_timestamp():
     """
     Returns the current timestamp in the appropriate timezone.
     """
     return datetime.now(timezone)
+
 
 def extract_date_from_message(message):
     """
@@ -148,33 +178,44 @@ def extract_date_from_message(message):
     """
     # Log the current timestamp for the incoming query
     current_timestamp = get_current_timestamp()
-    logging.debug(f"Current Timestamp for message: {current_timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
+    logging.debug(f"Current Timestamp for message: {
+                  current_timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
 
     # Extract the date from the message using natural language processing
-    parsed_date = dateparser.parse(message, settings={'PREFER_DATES_FROM': 'future'})
+    parsed_date = dateparser.parse(
+        message, settings={'PREFER_DATES_FROM': 'future'})
 
     if parsed_date:
         return parsed_date.date()
     else:
         return None
-        
+
 # Helper to get the current date and time
+
+
 def get_current_time():
     return datetime.now(timezone)
+
 
 def get_todays_date():
     return get_current_time().strftime('%Y-%m-%d')
 
+
 def get_tomorrows_date():
     return (get_current_time() + timedelta(days=1)).strftime('%Y-%m-%d')
 
+
 def is_market_open():
     now = get_current_time()
-    open_time = datetime.strptime(market_state['market_open'], '%H:%M:%S').time()
-    close_time = datetime.strptime(market_state['market_close'], '%H:%M:%S').time()
+    open_time = datetime.strptime(
+        market_state['market_open'], '%H:%M:%S').time()
+    close_time = datetime.strptime(
+        market_state['market_close'], '%H:%M:%S').time()
     return open_time <= now.time() <= close_time
 
 # Question categorization function with keyword lists for each category
+
+
 def categorize_question(message):
     """
     Categorizes user queries into categories like market analysis, news, general inquiries, options, or others.
@@ -183,50 +224,50 @@ def categorize_question(message):
 
     # Define keyword lists for each category
     market_analysis_keywords = [
-    "price", "prices", "close", "closing", "forecast", "forecasts", "predict", "prediction", 
-    "predictions", "trends", "trend", "movement", "movements", "target", "targets", 
-    "valuation", "valuations", "estimate", "estimates", "outlook", "outlooks", 
-    "future price", "future prices", "closing price", "closing prices", "projections", 
-    "projection", "market direction", "directions", "expected", "expecting", 
-    "anticipation", "anticipating", "next", "upcoming", "evaluation", "evaluations", 
-    "technical analysis", "analyze", "analyzing", "evaluating"]
+        "price", "prices", "close", "closing", "forecast", "forecasts", "predict", "prediction",
+        "predictions", "trends", "trend", "movement", "movements", "target", "targets",
+        "valuation", "valuations", "estimate", "estimates", "outlook", "outlooks",
+        "future price", "future prices", "closing price", "closing prices", "projections",
+        "projection", "market direction", "directions", "expected", "expecting",
+        "anticipation", "anticipating", "next", "upcoming", "evaluation", "evaluations",
+        "technical analysis", "analyze", "analyzing", "evaluating"]
     current_price_keywords = [
-    "current price", "live price", "price now", "real-time price", "latest price", 
-    "price at the moment", "today's price", "price update", "current value", 
-    "price check", "spot price", "market price", "price right now", "present price", 
-    "price as of now", "latest value", "recent price", "live value", "current market value", 
-    "current stock price", "price today", "what's the price", "today’s stock price"]
+        "current price", "live price", "price now", "real-time price", "latest price",
+        "price at the moment", "today's price", "price update", "current value",
+        "price check", "spot price", "market price", "price right now", "present price",
+        "price as of now", "latest value", "recent price", "live value", "current market value",
+        "current stock price", "price today", "what's the price", "today’s stock price"]
     market_hours_keywords = [
-    "market", "open", "close", "trading hours", "market hours", "market open time", 
-    "market close time", "opening bell", "closing bell", "when does the market open", 
-    "when does the market close", "trading start time", "trading end time", 
-    "stock market open", "stock market close", "market schedule", 
-    "market opening", "market closing", "stock market hours", "market session", 
-    "opening time", "closing time", "market timings", "trading session"]
+        "market", "open", "close", "trading hours", "market hours", "market open time",
+        "market close time", "opening bell", "closing bell", "when does the market open",
+        "when does the market close", "trading start time", "trading end time",
+        "stock market open", "stock market close", "market schedule",
+        "market opening", "market closing", "stock market hours", "market session",
+        "opening time", "closing time", "market timings", "trading session"]
     date_keywords = [
-    "date", "today", "tomorrow", "yesterday", "day", "this week", "next week", 
-    "next day", "current date", "what day", "what date", "this month", 
-    "next month", "last week", "last month", "previous day", "previous date", 
-    "day after tomorrow", "day before yesterday", "next trading day", 
-    "last trading day", "weekend", "weekday", "next business day", 
-    "upcoming date", "past date", "historical date"]
+        "date", "today", "tomorrow", "yesterday", "day", "this week", "next week",
+        "next day", "current date", "what day", "what date", "this month",
+        "next month", "last week", "last month", "previous day", "previous date",
+        "day after tomorrow", "day before yesterday", "next trading day",
+        "last trading day", "weekend", "weekday", "next business day",
+        "upcoming date", "past date", "historical date"]
     options_keywords = [
-    "options", "strike price", "expiry", "contract", "call option", "put option", 
-    "option chain", "option premium", "expiration date", "implied volatility", 
-    "open interest", "in the money", "out of the money", "at the money", 
-    "long call", "long put", "short call", "short put", "covered call", 
-    "naked call", "naked put", "iron condor", "butterfly spread", 
-    "vertical spread", "horizontal spread", "bull call spread", "bull put spread", 
-    "bear call spread", "bear put spread", "credit spread", "debit spread", 
-    "calendar spread", "straddle", "strangle", "ratio spread", "protective put", 
-    "synthetic call", "synthetic put", "collar", "covered put", 
-    "exercise", "assignment", "option greeks", "delta", "gamma", "theta", 
-    "vega", "rho", "delta neutral", "volatility skew", "risk reversal", 
-    "synthetic long", "synthetic short", "iron butterfly", "leaps", 
-    "rollover", "expiration cycle", "time decay", "intrinsic value", 
-    "extrinsic value", "bid-ask spread", "gamma squeeze", "vega risk", 
-    "skew", "skewness", "risk premium", "long straddle", "short straddle", 
-    "long strangle", "short strangle", "cash-secured put", "poor man's covered call"]
+        "options", "strike price", "expiry", "contract", "call option", "put option",
+        "option chain", "option premium", "expiration date", "implied volatility",
+        "open interest", "in the money", "out of the money", "at the money",
+        "long call", "long put", "short call", "short put", "covered call",
+        "naked call", "naked put", "iron condor", "butterfly spread",
+        "vertical spread", "horizontal spread", "bull call spread", "bull put spread",
+        "bear call spread", "bear put spread", "credit spread", "debit spread",
+        "calendar spread", "straddle", "strangle", "ratio spread", "protective put",
+        "synthetic call", "synthetic put", "collar", "covered put",
+        "exercise", "assignment", "option greeks", "delta", "gamma", "theta",
+        "vega", "rho", "delta neutral", "volatility skew", "risk reversal",
+        "synthetic long", "synthetic short", "iron butterfly", "leaps",
+        "rollover", "expiration cycle", "time decay", "intrinsic value",
+        "extrinsic value", "bid-ask spread", "gamma squeeze", "vega risk",
+        "skew", "skewness", "risk premium", "long straddle", "short straddle",
+        "long strangle", "short strangle", "cash-secured put", "poor man's covered call"]
 
     # Market analysis category
     if any(keyword in message_lower for keyword in market_analysis_keywords):
@@ -251,12 +292,13 @@ def categorize_question(message):
     # General category (fallback)
     else:
         return "general"
-    
+
 
 # Helper functions
 def choose_random_response(response_list, **kwargs):
     response_template = random.choice(response_list)
     return response_template.format(**kwargs)
+
 
 def use_nlg_model(user_message):
     """
@@ -275,9 +317,11 @@ def use_nlg_model(user_message):
         logging.error(f"Error generating NLG response: {e}")
         return "Sorry, I couldn't generate a response at the moment."
 
-def gpt_40_mini_response(user_message):
+
+def gpt_4o_mini_response(user_message):
     """
     Fallback to GPT-4o-mini if the system cannot find a suitable whitelist response.
+    Returns a dictionary with either the response content or an error.
     """
     try:
         response = openai.ChatCompletion.create(
@@ -286,17 +330,20 @@ def gpt_40_mini_response(user_message):
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": user_message}
             ],
-            max_tokens=200,
+            max_tokens=800,
             temperature=0.7
         )
-        return response['choices'][0]['message']['content'].strip()
+        ai_response = response['choices'][0]['message']['content'].strip()
+        logging.debug(f"GPT-4o-mini response: {ai_response}")
+        return {"success": True, "response": ai_response}
     except Exception as e:
         logging.error(f"Error with GPT-4o-mini: {e}")
-        return "I'm sorry, I'm having trouble processing your request right now."
-    
+        return {"success": False, "error": "Sorry, I'm having trouble processing your request right now."}
+
 
 # In-memory storage for session memory
 session_memory = {}
+
 
 def start_new_session(user_id):
     """
@@ -304,11 +351,13 @@ def start_new_session(user_id):
     """
     session_memory[user_id] = {"history": []}
 
+
 def process_conversation(user_id, user_message):
     """
     Process the user's message within the context of their session.
     """
-    logging.debug(f"Processing conversation for user {user_id} with message: {user_message}")
+    logging.debug(f"Processing conversation for user {
+                  user_id} with message: {user_message}")
 
     # Check if the session exists for the user
     if user_id not in session_memory:
@@ -343,7 +392,7 @@ def process_conversation(user_id, user_message):
         if not requested_date:
             requested_date = get_tomorrows_date()
         response = handle_price_prediction_for_date(symbol, requested_date)
-        
+
     elif question_category == "current_price":
         response = handle_current_price_request(symbol)
 
@@ -355,7 +404,8 @@ def process_conversation(user_id, user_message):
         if requested_date:
             response = f"The date you're asking about is {requested_date}."
         else:
-            response = f"Today is {get_todays_date()} and tomorrow is {get_tomorrows_date()}."
+            response = f"Today is {get_todays_date()} and tomorrow is {
+                get_tomorrows_date()}."
 
     elif question_category == "options":
         response = handle_options_query(user_message)
@@ -370,6 +420,7 @@ def process_conversation(user_id, user_message):
     logging.debug(f"Lumen model response for user {user_id}: {response}")
     return response
 
+
 def retrieve_conversation_history(user_id):
     """
     Retrieve the conversation history for the given user.
@@ -377,6 +428,7 @@ def retrieve_conversation_history(user_id):
     if user_id in session_memory:
         return session_memory[user_id]["history"]
     return []
+
 
 def clear_session(user_id):
     """
@@ -388,9 +440,10 @@ def clear_session(user_id):
     else:
         logging.debug(f"No session found for user {user_id}")
 
-        
+
 def handle_price_prediction_for_date(symbol, requested_date):
-    logging.debug(f"Handling price prediction for {symbol.upper()} at close on {requested_date}")
+    logging.debug(f"Handling price prediction for {
+                  symbol.upper()} at close on {requested_date}")
 
     # Get current price for the symbol
     current_price = market_state[symbol]['current_price']
@@ -398,12 +451,16 @@ def handle_price_prediction_for_date(symbol, requested_date):
         return f"I'm unable to fetch the current {symbol.upper()} price at the moment."
 
     # Predict the closing price for the requested date
-    predicted_price = predict_next_day_close(market_state[symbol], requested_date)
+    predicted_price = predict_next_day_close(
+        market_state[symbol], requested_date)
 
-    response = choose_random_response(price_prediction_responses, symbol_upper=symbol.upper(), predicted_price=predicted_price, requested_date=requested_date)
-    logging.debug(f"Prediction for {symbol.upper()} close on {requested_date}: {predicted_price:.2f}")
+    response = choose_random_response(price_prediction_responses, symbol_upper=symbol.upper(
+    ), predicted_price=predicted_price, requested_date=requested_date)
+    logging.debug(f"Prediction for {symbol.upper()} close on {
+                  requested_date}: {predicted_price:.2f}")
 
     return response
+
 
 def handle_current_price_request(symbol):
     current_price = market_state[symbol]['current_price']
@@ -412,24 +469,33 @@ def handle_current_price_request(symbol):
     else:
         return f"Sorry, I couldn't retrieve the current {symbol.upper()} price."
 
+
 def handle_market_hours_request():
     if is_market_open():
-        return choose_random_response(market_hours_responses[:3])  # Use the open responses
+        # Use the open responses
+        return choose_random_response(market_hours_responses[:3])
     else:
-        return choose_random_response(market_hours_responses[3:])  # Use the closed responses
+        # Use the closed responses
+        return choose_random_response(market_hours_responses[3:])
+
 
 def predict_next_day_close(market_state, target_date):
     """
     Uses the Lumen model to predict the SPX, SPY, or VIX closing price for a given target date based on current data.
     """
     # Get the current price
-    current_price = market_state['current_price']
-    
-    # This should be where you plug in your machine learning model to predict based on indicators
-    # Adjust the prediction logic depending on how far the target_date is from today.
-    
-    # Mock prediction (e.g., simple 1% increase for each day beyond today)
-    days_ahead = (target_date - datetime.strptime(get_todays_date(), '%Y-%m-%d')).days
-    predicted_price = current_price * (1 + 0.01 * days_ahead)
+    current_price = market_state[symbol]['current_price']
+
+    # Prepare input data for Lumen2 (you'd need to customize this based on your model's input format)
+    input_data = {
+        'open': current_price,
+        'high': market_state[symbol]['high'],  # Assuming you have these values
+        'low': market_state[symbol]['low'],
+        'volume': market_state[symbol]['volume'],
+        # Include other necessary features here
+    }
+
+    # Call the Lumen2 model to predict the next day close
+    predicted_price = model.predict(input_data)
 
     return predicted_price

@@ -11,6 +11,7 @@ charset-normalizer==3.3.2
 click==8.1.7
 contourpy==1.2.1
 cycler==0.12.1
+dateparser
 distro==1.9.0
 Flask==3.0.3
 Flask-Cors==4.0.1

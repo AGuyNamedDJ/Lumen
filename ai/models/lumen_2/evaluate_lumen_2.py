@@ -11,28 +11,33 @@ logging.basicConfig(level=logging.DEBUG)
 
 # Paths to saved models
 MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models')
-MODEL_NAME_HIST = 'Lumen2.keras'  # Update to match the existing model name
+MODEL_NAME_HIST = 'Lumen2_historical.keras'  # Historical model name
+MODEL_NAME_REAL = 'Lumen2_real_time.keras'   # Real-time model name
+
 # Load models
-model_hist = load_model(os.path.join(MODEL_DIR, 'Lumen2.keras'))
-model_real = load_model(os.path.join(MODEL_DIR, 'Lumen2.keras'))
+model_hist = load_model(os.path.join(MODEL_DIR, MODEL_NAME_HIST))
+model_real = load_model(os.path.join(MODEL_DIR, MODEL_NAME_REAL))
 
 # Load test data
+
+
 def load_test_data():
     X_test_hist = np.load(os.path.join(MODEL_DIR, 'X_test_hist.npy'))
     y_test_hist = np.load(os.path.join(MODEL_DIR, 'y_test_hist.npy'))
     X_test_real = np.load(os.path.join(MODEL_DIR, 'X_test_real.npy'))
     y_test_real = np.load(os.path.join(MODEL_DIR, 'y_test_real.npy'))
-    
+
     return X_test_hist, y_test_hist, X_test_real, y_test_real
 
-def evaluate_model(model, X_test, y_test, model_name):
-    logging.debug(f"Evaluating model: {model_name}")
-    
-    expected_features = 36  # Adjust this number to match the number of features during training
 
+def evaluate_model(model, X_test, y_test, model_name, expected_features):
+    logging.debug(f"Evaluating model: {model_name}")
+
+    # Check if the test data has the correct number of features, if not, adjust
     if X_test.shape[2] != expected_features:
         logging.debug(f"Trimming test data to {expected_features} features")
-        X_test = X_test[:, :, :expected_features]  # Keep only the first N features
+        # Keep only the first N features
+        X_test = X_test[:, :, :expected_features]
 
     y_pred = model.predict(X_test)
 
@@ -48,6 +53,7 @@ def evaluate_model(model, X_test, y_test, model_name):
 
     return mse, rmse, r2, y_pred
 
+
 def plot_predictions_vs_actual(y_true, y_pred, model_name):
     plt.figure(figsize=(10, 6))
     plt.scatter(y_true, y_pred, alpha=0.5)
@@ -56,6 +62,7 @@ def plot_predictions_vs_actual(y_true, y_pred, model_name):
     plt.xlabel("Actual Values")
     plt.ylabel("Predicted Values")
     plt.show()
+
 
 def plot_residuals(y_true, y_pred, model_name):
     residuals = y_true - y_pred
@@ -66,15 +73,23 @@ def plot_residuals(y_true, y_pred, model_name):
     plt.ylabel("Frequency")
     plt.show()
 
+
 def main():
     X_test_hist, y_test_hist, X_test_real, y_test_real = load_test_data()
 
-    mse_hist, rmse_hist, r2_hist, y_pred_hist = evaluate_model(model_hist, X_test_hist, y_test_hist, "Historical Model")
-    mse_real, rmse_real, r2_real, y_pred_real = evaluate_model(model_real, X_test_real, y_test_real, "Real-Time Model")
+    # Evaluate the historical model with 41 features
+    mse_hist, rmse_hist, r2_hist, y_pred_hist = evaluate_model(
+        model_hist, X_test_hist, y_test_hist, "Historical Model", expected_features=41)
+
+    # Evaluate the real-time model with 36 features
+    mse_real, rmse_real, r2_real, y_pred_real = evaluate_model(
+        model_real, X_test_real, y_test_real, "Real-Time Model", expected_features=36)
 
     print("Evaluation Results:")
-    print(f"Historical Model - MSE: {mse_hist}, RMSE: {rmse_hist}, R²: {r2_hist}")
-    print(f"Real-Time Model - MSE: {mse_real}, RMSE: {rmse_real}, R²: {r2_real}")
+    print(
+        f"Historical Model - MSE: {mse_hist}, RMSE: {rmse_hist}, R²: {r2_hist}")
+    print(
+        f"Real-Time Model - MSE: {mse_real}, RMSE: {rmse_real}, R²: {r2_real}")
 
     # # Plot predictions vs actual
     # plot_predictions_vs_actual(y_test_hist, y_pred_hist, "Historical Model")
@@ -83,6 +98,7 @@ def main():
     # # Plot residuals (errors)
     # plot_residuals(y_test_hist, y_pred_hist, "Historical Model")
     # plot_residuals(y_test_real, y_pred_real, "Real-Time Model")
+
 
 if __name__ == "__main__":
     main()
