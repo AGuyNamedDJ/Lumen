@@ -5,9 +5,20 @@ from openai import OpenAI
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
+from openai_integration.classify import stock_related_keywords, classify_message
+from models.lumen_2.conversation import gpt_4o_mini_response, predict_next_day_close
+from models.lumen_2.load_lumen_2 import load_lumen2_model
+from models.lumen_2.definitions_lumen_2 import ReduceMeanLayer
 
 # Load environment variables
 load_dotenv()
+
+# Load the Lumen2 model
+lumen2_model = load_lumen2_model()
+
+# Check if model is loaded
+if lumen2_model is None:
+    raise RuntimeError("Failed to load Lumen2 model")
 
 # Initialize the OpenAI client
 api_key = os.getenv("OPENAI_API_KEY")
@@ -22,7 +33,7 @@ logging.basicConfig(level=logging.DEBUG)
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": ["http://localhost:3000",
-                                         "https://lumen-1.netlify.app/"]}}, supports_credentials=True)
+     "https://lumen-1.netlify.app/"]}}, supports_credentials=True)
 
 
 def classify_message(message):
@@ -33,15 +44,15 @@ def classify_message(message):
             "Message: " + message + "\nAnswer:"
         )
 
-        response = client.chat.completions.create(model="gpt-4o-mini",
-                                                  messages=[
-                                                      {"role": "system",
-                                                       "content": "You are a helpful assistant."},
-                                                      {"role": "user",
-                                                       "content": content}
-                                                  ],
-                                                  max_tokens=1,
-                                                  temperature=0)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": content}
+            ],
+            max_tokens=1,
+            temperature=0
+        )
         classification = response.choices[0].message.content.strip().lower()
         logging.debug("Classification response: %s", classification)
         return {"is_stock_related": classification == 'true'}
@@ -50,18 +61,10 @@ def classify_message(message):
         return {"is_stock_related": False, "error": str(e)}
 
 
-def get_spx_price():
-    try:
-        response = requests.get('http://localhost:3001/api/spx-price')
-        response.raise_for_status()
-        data = response.json()
-        return data['price']
-    except requests.RequestException as e:
-        logging.error("Error fetching SPX price: %s", e)
-        return None
-
-
 def get_current_spx_price():
+    """
+    Fetches the current SPX price.
+    """
     try:
         response = requests.get(
             'https://lumen-0q0f.onrender.com/api/spx-price')
@@ -73,56 +76,21 @@ def get_current_spx_price():
         return None
 
 
-def process_lumen_model(message, reference_price=None):
+def process_lumen2_model(message, model):
+    """
+    Process the stock-related message using the Lumen2 model.
+    """
     try:
-        data_part = message.split(": ", 1)[1]
-        data_points = data_part.split(", ")
-        data_dict = {}
-        for dp in data_points:
-            try:
-                if ':' in dp:
-                    key, value = dp.split(": ")
-                    data_dict[key.lower()] = float(value)
-                else:
-                    logging.warning("Skipping non-data point: %s", dp)
-            except ValueError as e:
-                logging.error("Error parsing data point '%s': %s", dp, e)
-                raise ValueError("Error parsing data point '%s': %s" % (dp, e))
+        # Extract features from the message (this step will depend on how your data is structured)
+        input_data = extract_features_from_message(message)
 
-        logging.debug("Extracted data: %s", data_dict)
+        # Predict using the Lumen2 model
+        prediction = model.predict(input_data)
 
-        default_values = {
-            'open': 1.0,
-            'high': 1.0,
-            'low': 1.0,
-            'close': 1.0,
-            'volume': 0.0,
-            'ema_10': 1.0,
-            'ema_50': 1.0
-        }
-
-        for key, default_value in default_values.items():
-            data_dict.setdefault(key, default_value)
-
-        logging.debug("Data with defaults: %s", data_dict)
-
-        normalized_closing_price = 0.999
-
-        if reference_price:
-            predicted_price = normalized_closing_price * reference_price
-            current_close = data_dict['close'] * reference_price
-            percentage_change = (
-                (predicted_price - current_close) / current_close) * 100
-        else:
-            predicted_price = normalized_closing_price
-            percentage_change = None
-
-        return {
-            "predicted_closing_price": round(predicted_price, 2),
-            "percentage_change": round(percentage_change, 2) if percentage_change is not None else None
-        }
+        # Return the result in a user-friendly format
+        return {"predicted_closing_price": prediction[0]}
     except Exception as e:
-        logging.error("Error processing conversation with Lumen model: %s", e)
+        logging.error(f"Error processing with Lumen2 model: {e}")
         return {"error": str(e)}
 
 
@@ -150,52 +118,68 @@ def classify():
 
 @app.route('/conversation', methods=['POST'])
 def conversation():
-    request_data = request.get_json()
-    message = request_data.get('message')
-    logging.debug("Received a request at /conversation endpoint")
-    logging.debug("Request JSON data: %s", request_data)
-
-    if not message:
-        return jsonify({"error": "No message provided"}), 400
-
-    # Fetch the current SPX price
-    current_spx_price = get_current_spx_price()
-    if not current_spx_price:
-        return jsonify({"error": "Could not fetch current SPX price"}), 500
-
-    classification_result = classify_message(message)
-    logging.debug("Classification result: %s", classification_result)
-
-    if classification_result.get('is_stock_related'):
-        logging.debug("Message is stock-related, processing with Lumen model")
-        lumen_result = process_lumen_model(message, current_spx_price)
-        if 'error' in lumen_result:
-            logging.debug(
-                "Lumen model encountered an error, falling back to ChatGPT-4o-mini")
-            return fallback_to_gpt(message)
-
-        # Convert dictionary response to a string
-        lumen_response_text = "Predicted closing price: {}, Percentage change: {}".format(
-            lumen_result['predicted_closing_price'], lumen_result['percentage_change'])
-        return jsonify({"response": lumen_response_text}), 200
-    else:
-        return fallback_to_gpt(message)
-
-
-def fallback_to_gpt(message):
-    logging.debug("Falling back to ChatGPT-4o-mini")
+    """
+    Main conversation endpoint for Lumen 2 model interaction.
+    """
     try:
-        response = client.chat.completions.create(model="gpt-4o-mini",
-                                                  messages=[
-                                                      {"role": "user", "content": message}],
-                                                  max_tokens=800,
-                                                  temperature=0.7)
-        ai_response = response.choices[0].message.content.strip()
-        logging.debug("AI response: %s", ai_response)
-        return jsonify({"response": ai_response}), 200
+        # Log the start of the request
+        logging.debug("Received a request at /conversation endpoint")
+
+        # Extract request data and message
+        request_data = request.get_json()
+        logging.debug("Request JSON data: %s", request_data)
+
+        message = request_data.get('message')
+        if not message:
+            logging.error("No message provided in the request")
+            return jsonify({"error": "No message provided"}), 400
+
+        # Classify the message to determine if it’s stock-related
+        logging.debug("Classifying message: %s", message)
+        classification_result = classify_message(message)
+        logging.debug(f"Classification result: {classification_result}")
+
+        # Fetch the current SPX price if the message is stock-related
+        if classification_result.get('is_stock_related'):
+            logging.debug(
+                "Message classified as stock-related, processing with Lumen 2 model")
+
+            # Fetch current SPX price
+            current_spx_price = get_current_spx_price()
+            logging.debug(f"Current SPX price: {current_spx_price}")
+
+            if not current_spx_price:
+                logging.error("Could not fetch current SPX price")
+                return jsonify({"error": "Could not fetch current SPX price"}), 500
+
+            # Now use Lumen2 model to predict the next day's close or any other task
+            input_data = {
+                'current_price': current_spx_price,
+                # Add other input features required by the model
+            }
+
+            # Make the prediction using Lumen2
+            predicted_price = lumen2_model.predict(input_data)
+            logging.debug(f"Predicted closing price: {predicted_price}")
+
+            # Return the Lumen2 model result
+            return jsonify({"response": f"The predicted closing price is {predicted_price}."}), 200
+
+        else:
+            # If not stock-related, fall back to GPT-4o-mini
+            logging.debug(
+                "Message not stock-related, falling back to GPT-4o-mini")
+            gpt_result = gpt_4o_mini_response(message)
+            logging.debug(f"GPT-4o-mini result: {gpt_result}")
+
+            if 'success' in gpt_result and gpt_result['success']:
+                return jsonify({"response": gpt_result['response']}), 200
+            else:
+                logging.error(f"GPT-4o-mini error: {gpt_result.get('error')}")
+                return jsonify({"error": gpt_result.get('error', 'Unknown error')}), 500
+
     except Exception as e:
-        logging.error(
-            "Error processing conversation with ChatGPT-4o-mini: %s", e)
+        logging.error(f"Unexpected error in /conversation: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
