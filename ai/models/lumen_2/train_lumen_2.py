@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import joblib
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -100,54 +101,57 @@ def load_data():
     }
 
 
-def prepare_data(df, expected_features=41, target_column='close'):
+def prepare_data(df, expected_features, target_column='close', sequence_length=30):
     """
-    Prepares the data for training by removing unnecessary columns and 
-    standardizing the features for LSTM compatibility.
+    Prepares the data for training by creating sequences of a specified length,
+    removing unnecessary columns, and standardizing the features.
     """
     # Remove unwanted columns and keep only numeric columns
     columns_to_keep = df.select_dtypes(include=[np.number]).columns.tolist()
 
-    # Log the columns to make sure the target column exists
-    print(f"Available columns in the dataset: {df.columns}")
-
-    # Check if the target column exists in the DataFrame
+    # Ensure the target column exists
     if target_column not in df.columns:
-        print(f"Warning: {target_column} column not found in the dataset!")
-        return None, None  # Return None if target column is missing
+        raise ValueError(f"{target_column} not found in the data!")
 
-    # Ensure that we keep only the expected number of features
+    # Remove the target column from features
+    if target_column in columns_to_keep:
+        columns_to_keep.remove(target_column)
+
+    # Limit the number of features if necessary
     if len(columns_to_keep) > expected_features:
         columns_to_keep = columns_to_keep[:expected_features]
 
-    # Drop the datetime/timestamp column if it exists
-    if 'date' in df.columns or 'timestamp' in df.columns:
-        df = df.drop(columns=['date', 'timestamp'], errors='ignore')
+    # Handle missing values
+    df.fillna(method='ffill', inplace=True)
+    df.fillna(method='bfill', inplace=True)
+    df.fillna(0, inplace=True)  # Fill any remaining NaNs with 0
 
-    # Fill missing values in X and y with forward fill and drop any rows that still contain NaNs
-    df.ffill(inplace=True)
-    df.bfill(inplace=True)
-
-    # Prepare features (X) and target (y)
+    # Extract features and target
     X = df[columns_to_keep].values
     y = df[target_column].values
 
-    # Ensure X and y have the same length
-    if len(X) != len(y):
-        min_length = min(len(X), len(y))
-        X, y = X[:min_length], y[:min_length]
-
-    # Standardize features (X)
+    # Standardize features (fit scaler on training data)
     scaler = StandardScaler()
     X = scaler.fit_transform(X)
 
-    # Reshape for LSTM, with dimensions (samples, timesteps, features)
-    X = X.reshape((X.shape[0], 1, X.shape[1]))
+    # Save the scaler for later use (e.g., in testing)
+    scaler_filename = f'scaler_{target_column}.joblib'
+    joblib.dump(scaler, scaler_filename)
+
+    # Create sequences
+    X_sequences = []
+    y_sequences = []
+    for i in range(len(X) - sequence_length):
+        X_sequences.append(X[i:i + sequence_length])
+        y_sequences.append(y[i + sequence_length])
+
+    X_sequences = np.array(X_sequences)
+    y_sequences = np.array(y_sequences)
 
     # Log shapes of X and y to debug
-    print(f"X shape: {X.shape}, y shape: {y.shape}")
+    print(f"X shape: {X_sequences.shape}, y shape: {y_sequences.shape}")
 
-    return X, y
+    return X_sequences, y_sequences
 
 
 def merge_data(data_dict, key_column='date', is_real_time=False):
@@ -156,15 +160,12 @@ def merge_data(data_dict, key_column='date', is_real_time=False):
     for key, df in data_dict.items():
         # Print the first few rows of each DataFrame to inspect before merging
         print(f"First few rows of {key} before merging:")
-        print(df.head())  # Debug: Check what columns exist
+        print(df.head())
 
         if key_column in df.columns:
-            # Convert to datetime if needed
-            if df[key_column].dtype != 'datetime64[ns]':
-                df[key_column] = pd.to_datetime(
-                    df[key_column], errors='coerce')
+            # Convert key column to datetime
+            df[key_column] = pd.to_datetime(df[key_column], errors='coerce')
 
-            # Perform the merge
             if combined_df is None:
                 combined_df = df
             else:
@@ -172,34 +173,30 @@ def merge_data(data_dict, key_column='date', is_real_time=False):
                     combined_df,
                     df,
                     on=key_column,
-                    how='left',
+                    how='outer',  # Use outer join to include all data points
                     suffixes=('', f'_{key}')
                 )
                 print(f"Combined DataFrame shape after merging {
-                      key}: {combined_df.shape}")  # Debug
-
-        # Check if 'close' column is present after each merge (only for historical data)
-        if not is_real_time and 'close' in df.columns:
-            print(f"Found 'close' column in {key}")
-        elif not is_real_time:
-            print(f"Warning: 'close' column not found in {key}")
+                      key}: {combined_df.shape}")
+        else:
+            print(f"Key column '{key_column}' not found in {key}, skipping.")
 
     if combined_df is not None:
-        # Check missing data in each column
-        missing_data = combined_df.isnull().mean() * 100
-        print("Percentage of missing values per column before dropping columns:")
-        print(missing_data)
-
-        # Impute missing data (forward-fill and backward-fill)
+        # Handle missing data
+        combined_df.sort_values(by=key_column, inplace=True)
+        combined_df.reset_index(drop=True, inplace=True)
         combined_df.fillna(method='ffill', inplace=True)
         combined_df.fillna(method='bfill', inplace=True)
 
-        # Drop columns with excessive missing data
-        threshold = 0.7  # Keep columns with at least 70% non-NaN values
-        combined_df.dropna(axis=1, thresh=int(
-            threshold * combined_df.shape[0]), inplace=True)
+        # Save the combined DataFrame to CSV
+        if is_real_time:
+            filename = 'combined_real_time_data.csv'
+        else:
+            filename = 'combined_historical_data.csv'
+        combined_df.to_csv(filename, index=False)
+        print(f"Final combined data saved to '{filename}' for inspection.")
 
-        # Optionally save the combined DataFrame to CSV for further inspection
+        # Also save the combined data as 'final_combined_data.csv' for overall inspection
         combined_df.to_csv('final_combined_data.csv', index=False)
         print("Final combined data saved to 'final_combined_data.csv' for inspection.")
 
@@ -229,30 +226,36 @@ def main():
     # Load the data
     data_dict = load_data()
 
+    # Separate historical and real-time data keys
+    historical_keys = {k: v for k, v in data_dict.items()
+                       if 'historical' in k or k.startswith('historical')}
+    real_time_keys = {k: v for k, v in data_dict.items()
+                      if 'real_time' in k or k.startswith('real_time')}
+
     # Merge historical data on 'date' column
     combined_historical_df = merge_data(
-        data_dict, key_column='date', is_real_time=False)
-    if combined_historical_df.empty:
+        historical_keys, key_column='date', is_real_time=False)
+    if combined_historical_df is None or combined_historical_df.empty:
         print("No historical data available after merging.")
         return
 
     # Prepare data for training (X, y for historical) - use 'close' for historical data
     X_hist, y_hist = prepare_data(
-        combined_historical_df, target_column='close')
+        combined_historical_df, expected_features=41, target_column='close', sequence_length=30)
     if X_hist is None or y_hist is None:
         print("Historical data preparation failed.")
         return
 
     # Merge real-time data on 'timestamp' column
     combined_real_time_df = merge_data(
-        data_dict, key_column='timestamp', is_real_time=True)
-    if combined_real_time_df.empty:
+        real_time_keys, key_column='timestamp', is_real_time=True)
+    if combined_real_time_df is None or combined_real_time_df.empty:
         print("No real-time data available after merging.")
         return
 
     # Prepare data for training (X, y for real-time) - use 'current_price' for real-time data
     X_real_time, y_real_time = prepare_data(
-        combined_real_time_df, target_column='current_price')
+        combined_real_time_df, expected_features=36, target_column='current_price', sequence_length=30)
     if X_real_time is None or y_real_time is None:
         print("Real-time data preparation failed.")
         return

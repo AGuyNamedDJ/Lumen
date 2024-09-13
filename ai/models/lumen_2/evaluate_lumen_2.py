@@ -41,6 +41,21 @@ def evaluate_model(model, X_test, y_test, model_name, expected_features):
 
     y_pred = model.predict(X_test)
 
+    # Check for NaNs in y_test and y_pred
+    if np.isnan(y_test).any():
+        logging.error(f"NaN values found in y_test for {model_name}")
+    if np.isnan(y_pred).any():
+        logging.error(f"NaN values found in y_pred for {model_name}")
+        raise ValueError(f"Cannot compute metrics due to NaN values in {
+                         model_name} predictions.")
+    if np.isinf(y_pred).any():
+        logging.error(f"Infinite values found in y_pred for {model_name}")
+
+    # Proceed only if y_test and y_pred are free of NaNs and Infs
+    if np.isnan(y_test).any() or np.isnan(y_pred).any() or np.isinf(y_pred).any():
+        raise ValueError(f"Cannot compute metrics due to NaN or Inf values in {
+                         model_name} predictions or test data.")
+
     mse = mean_squared_error(y_test, y_pred)
     rmse = np.sqrt(mse)
     r2 = r2_score(y_test, y_pred)

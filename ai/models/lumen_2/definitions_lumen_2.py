@@ -1,27 +1,32 @@
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Conv1D, LSTM, Dense, Dropout, Concatenate, Layer
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.saving import register_keras_serializable
+from keras.saving import register_keras_serializable
 import tensorflow as tf
 
 # Custom Layer to wrap tf.reduce_mean
 
 
-@register_keras_serializable()
+@register_keras_serializable(package="Custom", name="ReduceMeanLayer")
 class ReduceMeanLayer(Layer):
+    def __init__(self, **kwargs):
+        super(ReduceMeanLayer, self).__init__(**kwargs)
+
     def call(self, inputs):
         return tf.reduce_mean(inputs, axis=1)
 
     def get_config(self):
-        config = super(ReduceMeanLayer, self).get_config()
-        return config
+        base_config = super(ReduceMeanLayer, self).get_config()
+        return base_config
 
 
-def create_hybrid_model(input_shape, num_lstm_layers=2, num_cnn_filters=64, num_transformer_heads=4, dropout_rate=0.2):
+def create_hybrid_model(input_shape, num_lstm_layers=2, num_cnn_filters=64,
+                        num_transformer_heads=4, dropout_rate=0.2):
     """
     Create a hybrid model combining CNN, LSTM, and Transformer layers.
     """
-    inputs = Input(shape=input_shape)  # Modify to match your input shape
+    inputs = Input(
+        shape=input_shape)  # input_shape now includes sequence_length
 
     # CNN Layer
     cnn_out = Conv1D(filters=num_cnn_filters, kernel_size=3,
@@ -35,7 +40,7 @@ def create_hybrid_model(input_shape, num_lstm_layers=2, num_cnn_filters=64, num_
 
     # Transformer Layer
     transformer_out = tf.keras.layers.MultiHeadAttention(
-        num_heads=num_transformer_heads, key_dim=input_shape[-1])(lstm_out, lstm_out)
+        num_heads=num_transformer_heads, key_dim=inputs.shape[-1])(lstm_out, lstm_out)
 
     # Use custom ReduceMeanLayer instead of tf.reduce_mean
     transformer_out = ReduceMeanLayer()(transformer_out)
@@ -46,6 +51,7 @@ def create_hybrid_model(input_shape, num_lstm_layers=2, num_cnn_filters=64, num_
 
     # Final Dense Layers
     dense_out = Dense(100, activation='relu')(combined)
+    # Output layer for regression with linear activation
     outputs = Dense(1)(dense_out)
 
     # Compile the model
@@ -58,23 +64,39 @@ def create_hybrid_model(input_shape, num_lstm_layers=2, num_cnn_filters=64, num_
 
 # Main function to test model creation
 if __name__ == "__main__":
-    # Example input shapes (features)
-    hist_input_shape = (1, 41)  # 41 features for historical data
-    real_time_input_shape = (1, 36)  # 36 features for real-time data
+    # Example input shapes (sequence_length, features)
+    sequence_length = 30  # Adjust the sequence length as needed
+    hist_input_shape = (sequence_length, 41)  # 41 features for historical data
+    # 36 features for real-time data
+    real_time_input_shape = (sequence_length, 36)
 
-    model = create_hybrid_model(hist_input_shape, real_time_input_shape, num_lstm_layers=2,
-                                num_cnn_filters=64, num_transformer_heads=4, dropout_rate=0.3)
+    # Create and save the historical model
+    hist_model = create_hybrid_model(hist_input_shape, num_lstm_layers=2,
+                                     num_cnn_filters=64, num_transformer_heads=4, dropout_rate=0.3)
+    hist_model.save('Lumen2_historical.keras')
 
-    # Save the model for testing
-    model.save('Lumen2.keras')
+    # Create and save the real-time model
+    real_time_model = create_hybrid_model(real_time_input_shape, num_lstm_layers=2,
+                                          num_cnn_filters=64, num_transformer_heads=4, dropout_rate=0.3)
+    real_time_model.save('Lumen2_real_time.keras')
 
-    # Print the model summary
-    model.summary()
+    # Print the model summaries
+    print("Historical Model Summary:")
+    hist_model.summary()
 
-    # Load the model back to test deserialization with custom layer
+    print("\nReal-Time Model Summary:")
+    real_time_model.summary()
+
+    # Load the models back to test deserialization with custom layer
     from tensorflow.keras.models import load_model
-    loaded_model = load_model('Lumen2.keras', custom_objects={
-                              'ReduceMeanLayer': ReduceMeanLayer})
+    loaded_hist_model = load_model('Lumen2_historical.keras', custom_objects={
+                                   'ReduceMeanLayer': ReduceMeanLayer})
+    loaded_real_time_model = load_model('Lumen2_real_time.keras', custom_objects={
+                                        'ReduceMeanLayer': ReduceMeanLayer})
 
-    # Check if the loaded model works
-    loaded_model.summary()
+    # Check if the loaded models work
+    print("\nLoaded Historical Model Summary:")
+    loaded_hist_model.summary()
+
+    print("\nLoaded Real-Time Model Summary:")
+    loaded_real_time_model.summary()

@@ -1,31 +1,42 @@
 import os
+from openai import OpenAI
 import logging
 import requests
-from openai import OpenAI
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
-from openai_integration.classify import stock_related_keywords, classify_message
-from models.lumen_2.conversation import gpt_4o_mini_response, predict_next_day_close
-from models.lumen_2.load_lumen_2 import load_lumen2_model
-from models.lumen_2.definitions_lumen_2 import ReduceMeanLayer
+from models.lumen_2.conversation import select_model_for_prediction, gpt_4o_mini_response, categorize_question
+
+# Log the current directory and contents
+current_dir = os.path.dirname(os.path.abspath(__file__))
+logging.basicConfig(level=logging.DEBUG)
+logging.debug(f"Current directory: {current_dir}")
+logging.debug(f"Files in current directory: {os.listdir(current_dir)}")
+
+# Check and log models/lumen_2 directory
+models_dir = os.path.join(current_dir, 'models', 'lumen_2')
+logging.debug(f"Files in models/lumen_2: {os.listdir(models_dir)}")
+
+# Try to import definitions_lumen_2 and catch any errors
+try:
+    from models.lumen_2.definitions_lumen_2 import ReduceMeanLayer
+    logging.debug(
+        "Successfully imported ReduceMeanLayer from definitions_lumen_2")
+except ImportError as e:
+    logging.error(f"Error importing ReduceMeanLayer: {e}")
 
 # Load environment variables
+logging.debug("Loading environment variables from .env...")
 load_dotenv()
-
-# Load the Lumen2 model
-lumen2_model = load_lumen2_model()
-
-# Check if model is loaded
-if lumen2_model is None:
-    raise RuntimeError("Failed to load Lumen2 model")
 
 # Initialize the OpenAI client
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
     raise ValueError("The OPENAI_API_KEY environment variable is not set")
 
-client = OpenAI(api_key=api_key)
+client = OpenAI(
+    api_key=api_key
+)
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -37,28 +48,49 @@ CORS(app, resources={r"/*": {"origins": ["http://localhost:3000",
 
 
 def classify_message(message):
-    logging.debug("Classifying message: %s", message)
+    logging.debug("Classifying message using categorize_question function.")
     try:
-        content = (
-            "Is the following message related to stocks? Answer with 'True' or 'False'.\n"
-            "Message: " + message + "\nAnswer:"
-        )
+        category = categorize_question(message)
 
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": content}
-            ],
-            max_tokens=1,
-            temperature=0
-        )
-        classification = response.choices[0].message.content.strip().lower()
-        logging.debug("Classification response: %s", classification)
-        return {"is_stock_related": classification == 'true'}
+        # Treat categories like "market_analysis" and "current_price" as stock-related
+        if category in ["market_analysis", "current_price"]:
+            logging.debug(f"Message classified as stock-related: {category}")
+            return {"is_stock_related": True}
+        else:
+            logging.debug(
+                f"Message classified as non-stock-related: {category}")
+            return {"is_stock_related": False}
     except Exception as e:
-        logging.error("Error in message classification: %s", e)
+        logging.error(f"Error in message classification: {e}")
         return {"is_stock_related": False, "error": str(e)}
+
+# def classify_message(message):
+#     logging.debug("Classifying message: %s", message)
+#     try:
+#         content = (
+#             "Is the following message related to stocks? Answer with 'True' or 'False'.\n"
+#             "Message: " + message + "\nAnswer:"
+#         )
+
+#         response = client.chat.completions.create(
+#             model="gpt-4o-mini",
+#             messages=[
+#                 {"role": "system", "content": "You are a helpful assistant."},
+#                 {"role": "user", "content": content}
+#             ],
+#             max_tokens=1,
+#             temperature=0
+#         )
+
+#         # Ensure you're using the right attribute for the response:
+#         # Correct attribute
+#         classification = response.choices[0].message['content'].strip().lower()
+
+#         logging.debug("Classification response: %s", classification)
+#         return {"is_stock_related": classification == 'true'}
+#     except Exception as e:
+#         logging.error("Error in message classification: %s", e)
+#         return {"is_stock_related": False, "error": str(e)}
 
 
 def get_current_spx_price():
@@ -158,12 +190,13 @@ def conversation():
                 # Add other input features required by the model
             }
 
-            # Make the prediction using Lumen2
-            predicted_price = lumen2_model.predict(input_data)
-            logging.debug(f"Predicted closing price: {predicted_price}")
+            # Determine which model to use
+            if select_model_for_prediction:  # Define your logic for when to use the real-time model
+                predicted_price = Lumen2_real_time.predict(input_data)
+            else:
+                predicted_price = Lumen2_historic.predict(input_data)
 
-            # Return the Lumen2 model result
-            return jsonify({"response": f"The predicted closing price is {predicted_price}."}), 200
+            logging.debug(f"Predicted closing price: {predicted_price}")
 
         else:
             # If not stock-related, fall back to GPT-4o-mini

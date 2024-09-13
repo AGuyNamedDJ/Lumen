@@ -1,14 +1,14 @@
 import os
 import logging
-import openai
+from openai import OpenAI
 from datetime import datetime, timedelta
 import pytz
 import random
 import dateparser
 from tensorflow.keras.models import load_model
 from models.lumen_2.load_lumen_2 import load_lumen2_model
-from definitions_lumen_2 import ReduceMeanLayer
-from predict_with_lumen_2 import predict_with_model
+from .definitions_lumen_2 import ReduceMeanLayer
+from .predict_with_lumen_2 import predict_with_model
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
@@ -16,8 +16,12 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Set up OpenAI API key
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Initialize OpenAI client
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    raise ValueError("The OPENAI_API_KEY environment variable is not set")
+
+client = OpenAI(api_key=api_key)
 
 # Initialize a time zone (assuming the market operates in New York)
 timezone = pytz.timezone('America/Chicago')
@@ -27,20 +31,27 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Model directory and name
 MODEL_DIR = os.path.join(BASE_DIR, 'models')
-if not os.path.exists(MODEL_DIR):
-    os.makedirs(MODEL_DIR)
-MODEL_NAME = 'Lumen2'
 
-# Path to Lumen2 model
-model_path = os.path.join(MODEL_DIR, 'Lumen2.keras')
+# Path to Lumen2 models
+historic_model_path = os.path.join(MODEL_DIR, 'Lumen2_historical.keras')
+real_time_model_path = os.path.join(MODEL_DIR, 'Lumen2_real_time.keras')
 
-# Debug: Ensure the path exists
-if not os.path.exists(model_path):
-    raise FileNotFoundError(f"The Lumen2 model file {
-                            model_path} does not exist.")
+# Check that both model paths exist
+if not os.path.exists(historic_model_path):
+    raise FileNotFoundError(f"The Lumen2 historic model file {
+                            historic_model_path} does not exist.")
+if not os.path.exists(real_time_model_path):
+    raise FileNotFoundError(
+        f"The Lumen2 real-time model file {real_time_model_path} does not exist.")
 
-# Load the Lumen2 model
-Lumen2 = load_model(model_path)
+# Load the Lumen2 models
+logging.debug(f"Loading Lumen2 models: {
+              historic_model_path} and {real_time_model_path}")
+Lumen2_historic = load_model(historic_model_path, custom_objects={
+                             'ReduceMeanLayer': ReduceMeanLayer})
+Lumen2_real_time = load_model(real_time_model_path, custom_objects={
+                              'ReduceMeanLayer': ReduceMeanLayer})
+logging.debug("Lumen2 models loaded successfully")
 
 
 def get_db_connection():
@@ -48,6 +59,18 @@ def get_db_connection():
     engine = create_engine(db_url)
     Session = sessionmaker(bind=engine)
     return Session()
+
+
+def select_model_for_prediction(is_real_time):
+    """
+    Selects the appropriate Lumen2 model based on whether the prediction is for real-time or historical data.
+    """
+    if is_real_time:
+        logging.debug("Using real-time model for prediction")
+        return Lumen2_real_time
+    else:
+        logging.debug("Using historic model for prediction")
+        return Lumen2_historic
 
 
 # Define state object
@@ -131,24 +154,17 @@ def update_market_state(symbol):
     Updates the market_state for that symbol with the current price and timestamp.
     """
     session = get_db_connection()
-
     try:
-        # Get the appropriate table for the symbol
         table_name = get_table_for_symbol(symbol)
         if not table_name:
             logging.error(f"Invalid symbol '{
                           symbol}' provided. Cannot fetch data.")
             return
-
-        # SQL query to get the most recent current_price and timestamp
         query = text(f"SELECT current_price, timestamp FROM {
                      table_name} ORDER BY timestamp DESC LIMIT 1")
-
-        # Fetch the most recent data for the symbol (SPX, SPY, or VIX)
         result = session.execute(query).fetchone()
 
         if result:
-            # Update the market state with the latest price and timestamp
             market_state[symbol]['current_price'] = result['current_price']
             market_state[symbol]['last_updated'] = result['timestamp']
             logging.debug(f"Market state updated for {
@@ -156,7 +172,6 @@ def update_market_state(symbol):
         else:
             logging.error(f"No data found for {
                           symbol.upper()} in the database.")
-
     except Exception as e:
         logging.error(f"Error updating market state for {symbol.upper()}: {e}")
     finally:
@@ -164,9 +179,7 @@ def update_market_state(symbol):
 
 
 def get_current_timestamp():
-    """
-    Returns the current timestamp in the appropriate timezone.
-    """
+    """Returns the current timestamp in the appropriate timezone."""
     return datetime.now(timezone)
 
 
@@ -174,23 +187,13 @@ def extract_date_from_message(message):
     """
     Extracts a date from a user message and returns the parsed date.
     If no valid date is found, it returns None.
-    Automatically logs the current timestamp when the function is called.
     """
-    # Log the current timestamp for the incoming query
     current_timestamp = get_current_timestamp()
     logging.debug(f"Current Timestamp for message: {
                   current_timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
-
-    # Extract the date from the message using natural language processing
     parsed_date = dateparser.parse(
         message, settings={'PREFER_DATES_FROM': 'future'})
-
-    if parsed_date:
-        return parsed_date.date()
-    else:
-        return None
-
-# Helper to get the current date and time
+    return parsed_date.date() if parsed_date else None
 
 
 def get_current_time():
@@ -308,7 +311,7 @@ def use_nlg_model(user_message):
         response = openai.Completion.create(
             model="gpt-4o-mini",
             prompt=user_message,
-            max_tokens=150,
+            max_tokens=800,
             temperature=0.7
         )
         generated_text = response.choices[0].text.strip()
@@ -324,7 +327,7 @@ def gpt_4o_mini_response(user_message):
     Returns a dictionary with either the response content or an error.
     """
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
@@ -333,12 +336,10 @@ def gpt_4o_mini_response(user_message):
             max_tokens=800,
             temperature=0.7
         )
-        ai_response = response['choices'][0]['message']['content'].strip()
-        logging.debug(f"GPT-4o-mini response: {ai_response}")
+        ai_response = response.choices[0].message.content.strip()
         return {"success": True, "response": ai_response}
     except Exception as e:
-        logging.error(f"Error with GPT-4o-mini: {e}")
-        return {"success": False, "error": "Sorry, I'm having trouble processing your request right now."}
+        return {"success": False, "error": f"Error processing GPT-4o-mini request: {e}"}
 
 
 # In-memory storage for session memory
@@ -479,23 +480,21 @@ def handle_market_hours_request():
         return choose_random_response(market_hours_responses[3:])
 
 
-def predict_next_day_close(market_state, target_date):
+def predict_next_day_close(market_state, is_real_time):
     """
-    Uses the Lumen model to predict the SPX, SPY, or VIX closing price for a given target date based on current data.
+    Uses the Lumen2 model to predict the SPX, SPY, or VIX closing price for the next day.
     """
-    # Get the current price
-    current_price = market_state[symbol]['current_price']
+    current_price = market_state['current_price']
+    if current_price is None:
+        raise ValueError("Current price is not available")
 
-    # Prepare input data for Lumen2 (you'd need to customize this based on your model's input format)
-    input_data = {
-        'open': current_price,
-        'high': market_state[symbol]['high'],  # Assuming you have these values
-        'low': market_state[symbol]['low'],
-        'volume': market_state[symbol]['volume'],
-        # Include other necessary features here
-    }
+    # Select the appropriate model based on whether this is a real-time prediction
+    model = select_model_for_prediction(is_real_time)
 
-    # Call the Lumen2 model to predict the next day close
+    # Assuming the model uses the current price as input
+    # Adapt this format as needed for your model
+    input_data = [[current_price]]
+
+    # Call the selected model to predict the next day close
     predicted_price = model.predict(input_data)
-
-    return predicted_price
+    return predicted_price[0]

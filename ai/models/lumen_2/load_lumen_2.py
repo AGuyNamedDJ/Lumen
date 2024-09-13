@@ -1,7 +1,8 @@
 import os
+import sys
 import logging
 from tensorflow.keras.models import load_model
-from definitions_lumen_2 import ReduceMeanLayer
+from models.lumen_2.definitions_lumen_2 import ReduceMeanLayer
 from dotenv import load_dotenv
 
 # Load environment variables

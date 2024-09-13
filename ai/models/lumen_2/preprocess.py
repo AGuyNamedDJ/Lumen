@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 def get_db_connection():
     db_url = os.getenv('DB_URL')
     print(f"Connecting to DB with URL: {db_url}")
@@ -20,6 +21,7 @@ def get_db_connection():
     except Exception as e:
         print(f"Error connecting to the database: {e}")
         raise e
+
 
 def load_data(query):
     try:
@@ -69,6 +71,7 @@ def clean_average_hourly_earnings_data(df):
 
     return df
 
+
 def clean_consumer_confidence_data(df):
     # Debug: Print the DataFrame before any operation
     print("Initial DataFrame:")
@@ -100,7 +103,8 @@ def clean_consumer_confidence_data(df):
     if 'id' in df.columns and 'value' in df.columns:
         df = df[['id', 'date', 'value']]
     else:
-        raise KeyError("Required columns ('id', 'date', 'value') are missing from the data.")
+        raise KeyError(
+            "Required columns ('id', 'date', 'value') are missing from the data.")
 
     # Handle missing values by dropping rows where 'value' is NaN
     if df['value'].isnull().sum() > 0:
@@ -134,11 +138,11 @@ def clean_consumer_sentiment_data(df):
 
     # Drop unnecessary columns if they exist
     df = df.drop(columns=['created_at', 'updated_at'], errors='ignore')
-    
+
     # Ensure the 'date' column exists; if not, rename 'timestamp' to 'date' for consistency
     if 'date' not in df.columns and 'timestamp' in df.columns:
         df = df.rename(columns={'timestamp': 'date'})
-    
+
     # If neither 'date' nor 'timestamp' exists, raise an error
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
@@ -146,7 +150,7 @@ def clean_consumer_sentiment_data(df):
     # Convert 'date' to datetime format
     df['date'] = pd.to_datetime(df['date'])
     print("Converted 'date' column to datetime format.")
-    
+
     # Check for duplicate columns and drop them
     df = df.loc[:, ~df.columns.duplicated()]
     print("Dropped duplicate columns, if any existed.")
@@ -190,7 +194,7 @@ def clean_consumer_sentiment_data(df):
     print("Final cleaned DataFrame:")
     print(df.head())
 
-    return df    
+    return df
 
 
 def clean_core_inflation_data(df):
@@ -203,10 +207,11 @@ def clean_core_inflation_data(df):
     # Ensure the 'date' column exists; if not, rename 'timestamp' to 'date' for consistency
     if 'date' not in df.columns and 'timestamp' in df.columns:
         df = df.rename(columns={'timestamp': 'date'})
-    
+
     # If neither 'date' nor 'timestamp' exists, raise an error
     if 'date' not in df.columns:
-        raise KeyError("The 'date' column is missing from the core inflation data.")
+        raise KeyError(
+            "The 'date' column is missing from the core inflation data.")
 
     # Convert 'date' to datetime format
     df['date'] = pd.to_datetime(df['date'])
@@ -226,9 +231,10 @@ def clean_core_inflation_data(df):
     lower_bound = df['value'].mean() - 3 * df['value'].std()
     df = df[(df['value'] >= lower_bound) & (df['value'] <= upper_bound)]
 
-    return df    
+    return df
 
 # Data Cleaning: CPI Data
+
 
 def clean_cpi_data(df):
     # Drop the 'created_at' and 'updated_at' columns if they exist
@@ -313,7 +319,7 @@ def clean_industrial_production_data(df):
     # Ensure the 'date' column exists; if not, rename 'timestamp' to 'date' for consistency
     if 'date' not in df.columns and 'timestamp' in df.columns:
         df = df.rename(columns={'timestamp': 'date'})
-    
+
     # If neither 'date' nor 'timestamp' exists, raise an error
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
@@ -358,7 +364,7 @@ def clean_interest_rate_data(df):
     # Ensure the 'date' column exists; if not, rename 'timestamp' to 'date' for consistency
     if 'date' not in df.columns and 'timestamp' in df.columns:
         df = df.rename(columns={'timestamp': 'date'})
-    
+
     # If neither 'date' nor 'timestamp' exists, raise an error
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
@@ -388,7 +394,7 @@ def clean_interest_rate_data(df):
     df = df[(z_scores > -3) & (z_scores < 3)]
 
     return df
-    
+
 # Data Cleaning: Labor Force Participation Rate Data
 
 
@@ -404,7 +410,7 @@ def clean_labor_force_participation_rate_data(df):
 
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
-    
+
     df['date'] = pd.to_datetime(df['date'])
     print("Converted 'date' column to datetime format.")
 
@@ -428,6 +434,7 @@ def clean_labor_force_participation_rate_data(df):
 
 # Data Cleaning: Nonfarm Payroll Employment Data
 
+
 def clean_nonfarm_payroll_employment_data(df):
     print("Beginning to Nonfarm Payroll Employment Data.")
 
@@ -440,7 +447,7 @@ def clean_nonfarm_payroll_employment_data(df):
 
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
-    
+
     df['date'] = pd.to_datetime(df['date'])
     print("Converted 'date' column to datetime format.")
 
@@ -478,7 +485,7 @@ def clean_personal_consumption_expenditures_data(df):
 
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
-    
+
     df['date'] = pd.to_datetime(df['date'])
     print("Converted 'date' column to datetime format.")
 
@@ -516,7 +523,7 @@ def clean_ppi_data(df):
 
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
-    
+
     df['date'] = pd.to_datetime(df['date'])
     print("Converted 'date' column to datetime format.")
 
@@ -554,7 +561,7 @@ def clean_unemployment_rate_data(df):
 
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
-    
+
     df['date'] = pd.to_datetime(df['date'])
     print("Converted 'date' column to datetime format.")
 
@@ -576,7 +583,7 @@ def clean_unemployment_rate_data(df):
 
     return df
 
-    
+
 # Data Cleaning: Historical SPX
 
 def clean_historical_spx_data(df):
@@ -585,7 +592,7 @@ def clean_historical_spx_data(df):
         raise KeyError("The 'id' column is missing from the data.")
     if 'timestamp' not in df.columns:
         raise KeyError("The 'timestamp' column is missing from the data.")
-    
+
     # Convert 'id' to integer if necessary
     df['id'] = df['id'].astype(int)
 
@@ -625,7 +632,7 @@ def clean_historical_spy_data(df):
         raise KeyError("The 'id' column is missing from the data.")
     if 'timestamp' not in df.columns:
         raise KeyError("The 'timestamp' column is missing from the data.")
-    
+
     # Convert 'id' to integer if necessary
     df['id'] = df['id'].astype(int)
 
@@ -657,7 +664,7 @@ def clean_historical_vix_data(df):
         raise KeyError("The 'id' column is missing from the data.")
     if 'timestamp' not in df.columns:
         raise KeyError("The 'timestamp' column is missing from the data.")
-    
+
     # Convert 'id' to integer if necessary
     df['id'] = df['id'].astype(int)
 
@@ -672,7 +679,8 @@ def clean_historical_vix_data(df):
 
     # Handle missing values more carefully
     # If the entire row is NaN for critical columns, drop it
-    df = df.dropna(subset=['open', 'high', 'low', 'close', 'volume'], how='all')
+    df = df.dropna(subset=['open', 'high', 'low',
+                   'close', 'volume'], how='all')
 
     # Forward fill NaN values to handle missing data points in critical columns
     df = df.fillna(method='ffill')
@@ -733,6 +741,8 @@ def clean_real_time_spx_data(df):
     return df
 
 # Data Cleaning: Real Time SPY
+
+
 def clean_real_time_spy_data(df):
     # Ensure 'id' and 'timestamp' columns exist
     if 'id' not in df.columns:
@@ -828,11 +838,11 @@ def clean_real_time_vix_data(df):
 def create_features_for_average_hourly_earnings(df):
     # Log the beginning of the function
     print("Beginning create features for average hourly earnings data.")
-    
+
     # Ensure 'date' is retained and is a column
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
-    
+
     # Set 'id' as the index
     if 'id' in df.columns:
         df.set_index('id', inplace=True)
@@ -856,7 +866,8 @@ def create_features_for_average_hourly_earnings(df):
     df['MACD'] = short_ema - long_ema
 
     # Seasonal Decomposition
-    decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
+    decomposition = seasonal_decompose(
+        df['value'], model='multiplicative', period=12)
     df['Trend'] = decomposition.trend
     df['Seasonal'] = decomposition.seasonal
     df['Residual'] = decomposition.resid
@@ -877,8 +888,10 @@ def create_features_for_average_hourly_earnings(df):
     trough_idx = df['value'].expanding().apply(lambda x: x.idxmin())
 
     # Instead of using loc, handle duplicates and use .at or .iat for safe access
-    peak_idx_timestamps = peak_idx.dropna().map(lambda x: df.at[x, 'date'] if x in df.index else pd.NaT)
-    trough_idx_timestamps = trough_idx.dropna().map(lambda x: df.at[x, 'date'] if x in df.index else pd.NaT)
+    peak_idx_timestamps = peak_idx.dropna().map(
+        lambda x: df.at[x, 'date'] if x in df.index else pd.NaT)
+    trough_idx_timestamps = trough_idx.dropna().map(
+        lambda x: df.at[x, 'date'] if x in df.index else pd.NaT)
 
     # Calculate days since peak/trough and handle NaN values
     df['Days_Since_Peak'] = (df['date'].map(pd.Timestamp.timestamp) - peak_idx_timestamps.map(pd.Timestamp.timestamp)).apply(
@@ -898,7 +911,6 @@ def create_features_for_average_hourly_earnings(df):
     return df
 
 
-
 # Features: Consumer Confidence Data````
 
 
@@ -906,12 +918,13 @@ def create_features_for_consumer_confidence_data(df):
     # Ensure the 'date' column exists and set it as the index
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
-    
+
     # Convert 'date' to datetime format if not already converted
     df['date'] = pd.to_datetime(df['date'])
 
     # Set 'date' as the index for easier time series operations
-    df = df.set_index('date', drop=False)  # Keep 'date' in the DataFrame but use it as an index
+    # Keep 'date' in the DataFrame but use it as an index
+    df = df.set_index('date', drop=False)
     print("Set 'date' column as index for time series operations.")
 
     # Lag Features
@@ -937,7 +950,8 @@ def create_features_for_consumer_confidence_data(df):
 
     # Seasonal Decomposition
     if len(df) >= 24:  # Ensure there's at least 24 months of data
-        decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
+        decomposition = seasonal_decompose(
+            df['value'], model='multiplicative', period=12)
         df['Trend'] = decomposition.trend
         df['Seasonal'] = decomposition.seasonal
         df['Residual'] = decomposition.resid
@@ -966,10 +980,14 @@ def create_features_for_consumer_confidence_data(df):
     df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
 
     # Days Since Last Peak/Trough
-    peak_idx = df['value'].expanding().apply(lambda x: x.idxmax().timestamp(), raw=False)
-    trough_idx = df['value'].expanding().apply(lambda x: x.idxmin().timestamp(), raw=False)
-    df['Days_Since_Peak'] = (df.index.map(pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-    df['Days_Since_Trough'] = (df.index.map(pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    peak_idx = df['value'].expanding().apply(
+        lambda x: x.idxmax().timestamp(), raw=False)
+    trough_idx = df['value'].expanding().apply(
+        lambda x: x.idxmin().timestamp(), raw=False)
+    df['Days_Since_Peak'] = (df.index.map(
+        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Trough'] = (df.index.map(
+        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
 
     # Reset the index to make 'date' a column again
     df.reset_index(drop=True, inplace=True)
@@ -982,10 +1000,11 @@ def create_features_for_consumer_confidence_data(df):
 
 def create_features_for_consumer_sentiment_data(df):
     print("Beginning create features for consumer sentiment data.")
-    
+
     # Ensure 'date' is set as index for easier time series operations
     if not pd.api.types.is_datetime64_any_dtype(df.index):
-        df = df.set_index('date', drop=False)  # Set 'date' as index but keep as a column
+        # Set 'date' as index but keep as a column
+        df = df.set_index('date', drop=False)
 
     # Monthly and Annual Percentage Change
     df['Monthly_Percentage_Change'] = df['value'].pct_change()
@@ -1014,14 +1033,15 @@ def create_features_for_consumer_sentiment_data(df):
 
     return df
 
-    
+
 # Features: Core Inflation Data
 
 
 def create_features_for_core_inflation_data(df):
     # Ensure 'date' is retained
     if 'date' not in df.columns:
-        raise KeyError("The 'date' column is missing from the core inflation data.")
+        raise KeyError(
+            "The 'date' column is missing from the core inflation data.")
 
     # Set 'date' as the index
     df = df.set_index('date', drop=False)  # Keep 'date' column in the data
@@ -1060,7 +1080,8 @@ def create_features_for_core_inflation_data(df):
 
     # Seasonal Decomposition
     if len(df) >= 24:  # Ensure there's at least 24 months of data
-        decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
+        decomposition = seasonal_decompose(
+            df['value'], model='multiplicative', period=12)
         df['Trend'] = decomposition.trend
         df['Seasonal'] = decomposition.seasonal
         df['Residual'] = decomposition.resid
@@ -1074,8 +1095,8 @@ def create_features_for_core_inflation_data(df):
     df.reset_index(drop=True, inplace=True)
 
     return df
-    
-    
+
+
 # Features: CPI Data
 
 
@@ -1083,7 +1104,7 @@ def create_features_for_cpi_data(df):
     # Ensure 'date' is set as index for easier time series operations
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
-    
+
     # Set 'date' as the index
     df = df.set_index('date', drop=False)
 
@@ -1100,7 +1121,8 @@ def create_features_for_cpi_data(df):
     df['MACD'] = short_ema - long_ema
 
     # Seasonal Decomposition
-    decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
+    decomposition = seasonal_decompose(
+        df['value'], model='multiplicative', period=12)
     df['Trend'] = decomposition.trend
     df['Seasonal'] = decomposition.seasonal
     df['Residual'] = decomposition.resid
@@ -1117,11 +1139,15 @@ def create_features_for_cpi_data(df):
     df['CPI_Ratio_12M'] = df['value'] / df['value'].rolling(window=12).mean()
 
     # Days Since Last Peak/Trough
-    peak_idx = df['value'].expanding().apply(lambda x: x.idxmax().timestamp(), raw=False)
-    trough_idx = df['value'].expanding().apply(lambda x: x.idxmin().timestamp(), raw=False)
+    peak_idx = df['value'].expanding().apply(
+        lambda x: x.idxmax().timestamp(), raw=False)
+    trough_idx = df['value'].expanding().apply(
+        lambda x: x.idxmin().timestamp(), raw=False)
 
-    df['Days_Since_Peak'] = (df.index.map(pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-    df['Days_Since_Trough'] = (df.index.map(pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Peak'] = (df.index.map(
+        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Trough'] = (df.index.map(
+        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
 
     # RSI
     delta = df['value'].diff(1)
@@ -1168,7 +1194,8 @@ def create_features_for_gdp_data(df):
     df['Cumulative_Product'] = (1 + df['value'].pct_change()).cumprod()
 
     # Seasonal Decomposition
-    decomposition = seasonal_decompose(df['value'], model='multiplicative', period=4)
+    decomposition = seasonal_decompose(
+        df['value'], model='multiplicative', period=4)
     df['Trend'] = decomposition.trend
     df['Seasonal'] = decomposition.seasonal
     df['Residual'] = decomposition.resid
@@ -1199,7 +1226,8 @@ def create_features_for_gdp_data(df):
 def create_features_for_industrial_production_data(df):
     # Ensure 'date' is set as index for easier time series operations
     if 'date' not in df.index.names:
-        df = df.set_index('date', drop=False)  # Use 'date' as the index but keep it as a column
+        # Use 'date' as the index but keep it as a column
+        df = df.set_index('date', drop=False)
 
     # Lag Features
     df['Lag_1'] = df['value'].shift(1)
@@ -1223,7 +1251,8 @@ def create_features_for_industrial_production_data(df):
     df['Cumulative_Product'] = (1 + df['value'].pct_change()).cumprod()
 
     # Seasonal Decomposition
-    decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
+    decomposition = seasonal_decompose(
+        df['value'], model='multiplicative', period=12)
     df['Trend'] = decomposition.trend
     df['Seasonal'] = decomposition.seasonal
     df['Residual'] = decomposition.resid
@@ -1247,9 +1276,11 @@ def create_features_for_industrial_production_data(df):
     df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
 
     # Days Since Last Peak/Trough
-    peak_idx = df['value'].expanding().apply(lambda x: x.idxmax().timestamp() if pd.notnull(x.idxmax()) else None, raw=False)
-    trough_idx = df['value'].expanding().apply(lambda x: x.idxmin().timestamp() if pd.notnull(x.idxmin()) else None, raw=False)
-    
+    peak_idx = df['value'].expanding().apply(lambda x: x.idxmax(
+    ).timestamp() if pd.notnull(x.idxmax()) else None, raw=False)
+    trough_idx = df['value'].expanding().apply(lambda x: x.idxmin(
+    ).timestamp() if pd.notnull(x.idxmin()) else None, raw=False)
+
     df['Days_Since_Peak'] = df.index.map(pd.Timestamp.timestamp) - peak_idx
     df['Days_Since_Trough'] = df.index.map(pd.Timestamp.timestamp) - trough_idx
 
@@ -1258,8 +1289,8 @@ def create_features_for_industrial_production_data(df):
 
     return df
 
-
     # Features: Interest Rate Data
+
 
 def create_features_for_interest_rate_data(df):
     # Ensure 'date' is set as index for easier time series operations
@@ -1290,7 +1321,8 @@ def create_features_for_interest_rate_data(df):
     df['Cumulative_Product'] = (1 + df['value'].pct_change()).cumprod()
 
     # Seasonal Decomposition
-    decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
+    decomposition = seasonal_decompose(
+        df['value'], model='multiplicative', period=12)
     df['Trend'] = decomposition.trend
     df['Seasonal'] = decomposition.seasonal
     df['Residual'] = decomposition.resid
@@ -1314,10 +1346,14 @@ def create_features_for_interest_rate_data(df):
     df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
 
     # Days Since Last Peak/Trough
-    peak_idx = df['value'].expanding().apply(lambda x: x.idxmax().timestamp(), raw=False)
-    trough_idx = df['value'].expanding().apply(lambda x: x.idxmin().timestamp(), raw=False)
-    df['Days_Since_Peak'] = (df.index.map(pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-    df['Days_Since_Trough'] = (df.index.map(pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    peak_idx = df['value'].expanding().apply(
+        lambda x: x.idxmax().timestamp(), raw=False)
+    trough_idx = df['value'].expanding().apply(
+        lambda x: x.idxmin().timestamp(), raw=False)
+    df['Days_Since_Peak'] = (df.index.map(
+        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Trough'] = (df.index.map(
+        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
 
     # Reset index to remove 'date' from being an index
     df.reset_index(drop=True, inplace=True)
@@ -1326,10 +1362,13 @@ def create_features_for_interest_rate_data(df):
     return df
 
 # Feature: Labor Force Participation Data
+
+
 def create_features_for_labor_force_participation_rate_data(df):
     # Ensure 'date' is set as index for easier time series operations
     if 'date' not in df.index.names:
-        df = df.set_index('date', drop=False)  # Use 'date' as the index but keep it as a column
+        # Use 'date' as the index but keep it as a column
+        df = df.set_index('date', drop=False)
 
     # Lag Features
     df['Lag_1'] = df['value'].shift(1)
@@ -1353,7 +1392,8 @@ def create_features_for_labor_force_participation_rate_data(df):
     df['Cumulative_Product'] = (1 + df['value'].pct_change()).cumprod()
 
     # Seasonal Decomposition
-    decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
+    decomposition = seasonal_decompose(
+        df['value'], model='multiplicative', period=12)
     df['Trend'] = decomposition.trend
     df['Seasonal'] = decomposition.seasonal
     df['Residual'] = decomposition.resid
@@ -1377,9 +1417,11 @@ def create_features_for_labor_force_participation_rate_data(df):
     df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
 
     # Days Since Last Peak/Trough
-    peak_idx = df['value'].expanding().apply(lambda x: x.idxmax().timestamp() if pd.notnull(x.idxmax()) else None, raw=False)
-    trough_idx = df['value'].expanding().apply(lambda x: x.idxmin().timestamp() if pd.notnull(x.idxmin()) else None, raw=False)
-    
+    peak_idx = df['value'].expanding().apply(lambda x: x.idxmax(
+    ).timestamp() if pd.notnull(x.idxmax()) else None, raw=False)
+    trough_idx = df['value'].expanding().apply(lambda x: x.idxmin(
+    ).timestamp() if pd.notnull(x.idxmin()) else None, raw=False)
+
     df['Days_Since_Peak'] = df.index.map(pd.Timestamp.timestamp) - peak_idx
     df['Days_Since_Trough'] = df.index.map(pd.Timestamp.timestamp) - trough_idx
 
@@ -1396,12 +1438,13 @@ def create_features_for_nonfarm_payroll_employment_data(df):
     # Ensure the 'date' column exists and set it as the index
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
-    
+
     # Convert 'date' to datetime format if not already converted
     df['date'] = pd.to_datetime(df['date'])
 
     # Set 'date' as the index for easier time series operations
-    df = df.set_index('date', drop=False)  # Keep 'date' in the DataFrame but use it as an index
+    # Keep 'date' in the DataFrame but use it as an index
+    df = df.set_index('date', drop=False)
     print("Set 'date' column as index for time series operations.")
 
     # Lag Features
@@ -1427,7 +1470,8 @@ def create_features_for_nonfarm_payroll_employment_data(df):
 
     # Seasonal Decomposition
     if len(df) >= 24:  # Ensure there's at least 24 months of data
-        decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
+        decomposition = seasonal_decompose(
+            df['value'], model='multiplicative', period=12)
         df['Trend'] = decomposition.trend
         df['Seasonal'] = decomposition.seasonal
         df['Residual'] = decomposition.resid
@@ -1456,10 +1500,14 @@ def create_features_for_nonfarm_payroll_employment_data(df):
     df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
 
     # Days Since Last Peak/Trough
-    peak_idx = df['value'].expanding().apply(lambda x: x.idxmax().timestamp(), raw=False)
-    trough_idx = df['value'].expanding().apply(lambda x: x.idxmin().timestamp(), raw=False)
-    df['Days_Since_Peak'] = (df.index.map(pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-    df['Days_Since_Trough'] = (df.index.map(pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    peak_idx = df['value'].expanding().apply(
+        lambda x: x.idxmax().timestamp(), raw=False)
+    trough_idx = df['value'].expanding().apply(
+        lambda x: x.idxmin().timestamp(), raw=False)
+    df['Days_Since_Peak'] = (df.index.map(
+        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Trough'] = (df.index.map(
+        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
 
     # Reset the index to make 'date' a column again
     df.reset_index(drop=True, inplace=True)
@@ -1467,7 +1515,7 @@ def create_features_for_nonfarm_payroll_employment_data(df):
 
     return df
 
-    
+
 # Features: Personal Consumption Expenditures Data
 
 
@@ -1475,12 +1523,13 @@ def create_features_for_personal_consumption_expenditures(df):
     # Ensure the 'date' column exists and set it as the index
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
-    
+
     # Convert 'date' to datetime format if not already converted
     df['date'] = pd.to_datetime(df['date'])
 
     # Set 'date' as the index for easier time series operations
-    df = df.set_index('date', drop=False)  # Keep 'date' in the DataFrame but use it as an index
+    # Keep 'date' in the DataFrame but use it as an index
+    df = df.set_index('date', drop=False)
     print("Set 'date' column as index for time series operations.")
 
     # Lag Features
@@ -1506,7 +1555,8 @@ def create_features_for_personal_consumption_expenditures(df):
 
     # Seasonal Decomposition
     if len(df) >= 24:  # Ensure there's at least 24 months of data
-        decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
+        decomposition = seasonal_decompose(
+            df['value'], model='multiplicative', period=12)
         df['Trend'] = decomposition.trend
         df['Seasonal'] = decomposition.seasonal
         df['Residual'] = decomposition.resid
@@ -1535,10 +1585,14 @@ def create_features_for_personal_consumption_expenditures(df):
     df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
 
     # Days Since Last Peak/Trough
-    peak_idx = df['value'].expanding().apply(lambda x: x.idxmax().timestamp(), raw=False)
-    trough_idx = df['value'].expanding().apply(lambda x: x.idxmin().timestamp(), raw=False)
-    df['Days_Since_Peak'] = (df.index.map(pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-    df['Days_Since_Trough'] = (df.index.map(pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    peak_idx = df['value'].expanding().apply(
+        lambda x: x.idxmax().timestamp(), raw=False)
+    trough_idx = df['value'].expanding().apply(
+        lambda x: x.idxmin().timestamp(), raw=False)
+    df['Days_Since_Peak'] = (df.index.map(
+        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Trough'] = (df.index.map(
+        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
 
     # Reset the index to make 'date' a column again
     df.reset_index(drop=True, inplace=True)
@@ -1553,12 +1607,13 @@ def create_features_for_ppi_data(df):
     # Ensure the 'date' column exists and set it as the index
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
-    
+
     # Convert 'date' to datetime format if not already converted
     df['date'] = pd.to_datetime(df['date'])
 
     # Set 'date' as the index for easier time series operations
-    df = df.set_index('date', drop=False)  # Keep 'date' in the DataFrame but use it as an index
+    # Keep 'date' in the DataFrame but use it as an index
+    df = df.set_index('date', drop=False)
     print("Set 'date' column as index for time series operations.")
 
     # Lag Features
@@ -1584,7 +1639,8 @@ def create_features_for_ppi_data(df):
 
     # Seasonal Decomposition
     if len(df) >= 24:  # Ensure there's at least 24 months of data
-        decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
+        decomposition = seasonal_decompose(
+            df['value'], model='multiplicative', period=12)
         df['Trend'] = decomposition.trend
         df['Seasonal'] = decomposition.seasonal
         df['Residual'] = decomposition.resid
@@ -1613,10 +1669,14 @@ def create_features_for_ppi_data(df):
     df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
 
     # Days Since Last Peak/Trough
-    peak_idx = df['value'].expanding().apply(lambda x: x.idxmax().timestamp(), raw=False)
-    trough_idx = df['value'].expanding().apply(lambda x: x.idxmin().timestamp(), raw=False)
-    df['Days_Since_Peak'] = (df.index.map(pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-    df['Days_Since_Trough'] = (df.index.map(pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    peak_idx = df['value'].expanding().apply(
+        lambda x: x.idxmax().timestamp(), raw=False)
+    trough_idx = df['value'].expanding().apply(
+        lambda x: x.idxmin().timestamp(), raw=False)
+    df['Days_Since_Peak'] = (df.index.map(
+        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Trough'] = (df.index.map(
+        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
 
     # Reset the index to make 'date' a column again
     df.reset_index(drop=True, inplace=True)
@@ -1631,12 +1691,13 @@ def create_features_for_unemployment_rate_data(df):
     # Ensure the 'date' column exists and set it as the index
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
-    
+
     # Convert 'date' to datetime format if not already converted
     df['date'] = pd.to_datetime(df['date'])
 
     # Set 'date' as the index for easier time series operations
-    df = df.set_index('date', drop=False)  # Keep 'date' in the DataFrame but use it as an index
+    # Keep 'date' in the DataFrame but use it as an index
+    df = df.set_index('date', drop=False)
     print("Set 'date' column as index for time series operations.")
 
     # Lag Features
@@ -1662,7 +1723,8 @@ def create_features_for_unemployment_rate_data(df):
 
     # Seasonal Decomposition
     if len(df) >= 24:  # Ensure there's at least 24 months of data
-        decomposition = seasonal_decompose(df['value'], model='multiplicative', period=12)
+        decomposition = seasonal_decompose(
+            df['value'], model='multiplicative', period=12)
         df['Trend'] = decomposition.trend
         df['Seasonal'] = decomposition.seasonal
         df['Residual'] = decomposition.resid
@@ -1691,10 +1753,14 @@ def create_features_for_unemployment_rate_data(df):
     df['Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
 
     # Days Since Last Peak/Trough
-    peak_idx = df['value'].expanding().apply(lambda x: x.idxmax().timestamp(), raw=False)
-    trough_idx = df['value'].expanding().apply(lambda x: x.idxmin().timestamp(), raw=False)
-    df['Days_Since_Peak'] = (df.index.map(pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
-    df['Days_Since_Trough'] = (df.index.map(pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    peak_idx = df['value'].expanding().apply(
+        lambda x: x.idxmax().timestamp(), raw=False)
+    trough_idx = df['value'].expanding().apply(
+        lambda x: x.idxmin().timestamp(), raw=False)
+    df['Days_Since_Peak'] = (df.index.map(
+        pd.Timestamp.timestamp) - peak_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
+    df['Days_Since_Trough'] = (df.index.map(
+        pd.Timestamp.timestamp) - trough_idx).apply(lambda x: pd.Timedelta(seconds=x).days)
 
     # Reset the index to make 'date' a column again
     df.reset_index(drop=True, inplace=True)
@@ -1857,6 +1923,8 @@ def create_features_for_historical_vix(df):
     return df
 
 # Features: Real Time SPX
+
+
 def create_features_for_real_time_spx(df):
     # Ensure the 'timestamp' column exists
     if 'timestamp' not in df.columns:
@@ -1877,8 +1945,10 @@ def create_features_for_real_time_spx(df):
     df['EMA_26'] = df['current_price'].ewm(span=26, adjust=False).mean()
 
     # Bollinger Bands
-    df['Bollinger_Upper'] = df['SMA_20'] + 2 * df['current_price'].rolling(window=20).std()
-    df['Bollinger_Lower'] = df['SMA_20'] - 2 * df['current_price'].rolling(window=20).std()
+    df['Bollinger_Upper'] = df['SMA_20'] + 2 * \
+        df['current_price'].rolling(window=20).std()
+    df['Bollinger_Lower'] = df['SMA_20'] - 2 * \
+        df['current_price'].rolling(window=20).std()
 
     # MACD
     df['MACD'] = df['EMA_12'] - df['EMA_26']
@@ -1902,14 +1972,16 @@ def create_features_for_real_time_spx(df):
     df = df.dropna()
 
     return dfdef
-    
+
+
 def create_features_for_real_time_spx(df):
     # Ensure the 'timestamp' column exists
     if 'timestamp' not in df.columns:
         raise KeyError("The 'timestamp' column is missing from the SPX data.")
 
     # Set 'timestamp' as the index
-    df.set_index('timestamp', drop=False, inplace=True)  # Keep 'timestamp' column in the data
+    # Keep 'timestamp' column in the data
+    df.set_index('timestamp', drop=False, inplace=True)
 
     # Ensure the index is a datetime type
     df.index = pd.to_datetime(df.index)
@@ -1920,8 +1992,10 @@ def create_features_for_real_time_spx(df):
     df['SMA_50'] = df['current_price'].rolling(window=50).mean()
     df['EMA_12'] = df['current_price'].ewm(span=12, adjust=False).mean()
     df['EMA_26'] = df['current_price'].ewm(span=26, adjust=False).mean()
-    df['Bollinger_Upper'] = df['SMA_20'] + 2 * df['current_price'].rolling(window=20).std()
-    df['Bollinger_Lower'] = df['SMA_20'] - 2 * df['current_price'].rolling(window=20).std()
+    df['Bollinger_Upper'] = df['SMA_20'] + 2 * \
+        df['current_price'].rolling(window=20).std()
+    df['Bollinger_Lower'] = df['SMA_20'] - 2 * \
+        df['current_price'].rolling(window=20).std()
     df['MACD'] = df['EMA_12'] - df['EMA_26']
     df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
     delta = df['current_price'].diff(1)
@@ -1942,15 +2016,18 @@ def create_features_for_real_time_spx(df):
         print("Dropped rows with NaN values.")
 
     return df
-    
+
 # Features: Real Time SPY
+
+
 def create_features_for_real_time_spy(df):
     # Ensure the 'timestamp' column exists
     if 'timestamp' not in df.columns:
         raise KeyError("The 'timestamp' column is missing from the SPX data.")
 
     # Set 'timestamp' as the index
-    df.set_index('timestamp', drop=False, inplace=True)  # Keep 'timestamp' column in the data
+    # Keep 'timestamp' column in the data
+    df.set_index('timestamp', drop=False, inplace=True)
 
     # Ensure the index is a datetime type
     df.index = pd.to_datetime(df.index)
@@ -1961,8 +2038,10 @@ def create_features_for_real_time_spy(df):
     df['SMA_50'] = df['current_price'].rolling(window=50).mean()
     df['EMA_12'] = df['current_price'].ewm(span=12, adjust=False).mean()
     df['EMA_26'] = df['current_price'].ewm(span=26, adjust=False).mean()
-    df['Bollinger_Upper'] = df['SMA_20'] + 2 * df['current_price'].rolling(window=20).std()
-    df['Bollinger_Lower'] = df['SMA_20'] - 2 * df['current_price'].rolling(window=20).std()
+    df['Bollinger_Upper'] = df['SMA_20'] + 2 * \
+        df['current_price'].rolling(window=20).std()
+    df['Bollinger_Lower'] = df['SMA_20'] - 2 * \
+        df['current_price'].rolling(window=20).std()
     df['MACD'] = df['EMA_12'] - df['EMA_26']
     df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
     delta = df['current_price'].diff(1)
@@ -1983,8 +2062,10 @@ def create_features_for_real_time_spy(df):
         print("Dropped rows with NaN values.")
 
     return df
-    
+
 # Features: Real Time VIX
+
+
 def create_features_for_real_time_vix(df):
     # Ensure the 'timestamp' column exists
     if 'timestamp' not in df.columns:
@@ -2030,7 +2111,8 @@ def create_features_for_real_time_vix(df):
     df['Cumulative_Sum'] = df['current_price'].cumsum()
 
     # Feature 8: Z-Score normalization for volatility spikes
-    df['Z_Score'] = (df['current_price'] - df['current_price'].mean()) / df['current_price'].std()
+    df['Z_Score'] = (df['current_price'] -
+                     df['current_price'].mean()) / df['current_price'].std()
 
     # Feature 9: Bollinger Bands (upper and lower)
     rolling_mean = df['current_price'].rolling(window=20).mean()
@@ -2039,7 +2121,8 @@ def create_features_for_real_time_vix(df):
     df['Bollinger_Lower'] = rolling_mean - (rolling_std * 2)
 
     # Feature 10: Rate of Change (ROC)
-    df['Rate_Of_Change'] = df['current_price'].diff(5) / df['current_price'].shift(5)
+    df['Rate_Of_Change'] = df['current_price'].diff(
+        5) / df['current_price'].shift(5)
 
     # Reset the index to keep 'timestamp' as a column (if necessary for other operations)
     df.reset_index(drop=False, inplace=True)
@@ -2047,6 +2130,8 @@ def create_features_for_real_time_vix(df):
     return df
 
 # Normalize Data
+
+
 def normalize_data(df):
     # Identify datetime columns, focusing on 'timestamp' or 'date' if they exist
     datetime_columns = []
@@ -2060,20 +2145,23 @@ def normalize_data(df):
         print("Neither 'date' nor 'timestamp' column found. Proceeding without datetime normalization.")
 
     # Identify non-numeric columns
-    non_numeric_columns = df.select_dtypes(exclude=[np.number]).columns.tolist()
+    non_numeric_columns = df.select_dtypes(
+        exclude=[np.number]).columns.tolist()
 
     # Remove overlaps
-    non_numeric_columns = [col for col in non_numeric_columns if col not in datetime_columns]
+    non_numeric_columns = [
+        col for col in non_numeric_columns if col not in datetime_columns]
 
     # Separate numeric data for scaling
-    numeric_df = df.drop(columns=datetime_columns + non_numeric_columns, errors='ignore')
+    numeric_df = df.drop(columns=datetime_columns +
+                         non_numeric_columns, errors='ignore')
 
     # Initialize the scaler
     scaler = MinMaxScaler(feature_range=(0, 1))
 
     # Scale the numeric data
-    scaled_numeric_df = pd.DataFrame(scaler.fit_transform(numeric_df), 
-                                     columns=numeric_df.columns, 
+    scaled_numeric_df = pd.DataFrame(scaler.fit_transform(numeric_df),
+                                     columns=numeric_df.columns,
                                      index=numeric_df.index)
 
     # Reattach the datetime and non-numeric columns without scaling
@@ -2082,24 +2170,28 @@ def normalize_data(df):
 
     return final_df, scaler
 
+
 def preprocess_data(query, table_name):
     df = load_data(query)
 
     # Step 1: Check if 'id' column exists
     if 'id' not in df.columns:
-        raise KeyError(f"The 'id' column must be present in the {table_name} data.")
+        raise KeyError(f"The 'id' column must be present in the {
+                       table_name} data.")
 
     # List of tables that use 'timestamp'
-    timestamp_tables = ['historical_spx', 'historical_spy', 'historical_vix', 'real_time_spx', 'real_time_spy', 'real_time_vix']
+    timestamp_tables = ['historical_spx', 'historical_spy',
+                        'historical_vix', 'real_time_spx', 'real_time_spy', 'real_time_vix']
 
     # Step 2: Determine which column to use for datetime operations
     if table_name in timestamp_tables:
         # These tables require 'timestamp'
         if 'timestamp' not in df.columns:
-            raise KeyError(f"The 'timestamp' column must be present in the {table_name} data.")
-        
+            raise KeyError(f"The 'timestamp' column must be present in the {
+                           table_name} data.")
+
         df['timestamp'] = pd.to_datetime(df['timestamp'])
-        
+
         # Avoid setting 'timestamp' as index multiple times
         if df.index.name != 'timestamp':
             df = df.set_index('timestamp', drop=False)
@@ -2107,10 +2199,11 @@ def preprocess_data(query, table_name):
     else:
         # Other tables use 'date'
         if 'date' not in df.columns:
-            raise KeyError(f"The 'date' column must be present in the {table_name} data.")
-        
+            raise KeyError(f"The 'date' column must be present in the {
+                           table_name} data.")
+
         df['date'] = pd.to_datetime(df['date'])
-        
+
         # Avoid setting 'date' as index multiple times
         if df.index.name != 'date':
             df = df.set_index('date', drop=False)
@@ -2136,6 +2229,7 @@ def preprocess_data(query, table_name):
     print("Dropped duplicate columns, if any existed.")
 
     return df
+
 
 # Add a mapping for feature creation functions similar to the cleaning functions
 TABLE_FEATURE_FUNCTIONS = {
@@ -2183,11 +2277,11 @@ TABLE_CLEANING_FUNCTIONS = {
     "real_time_vix": clean_real_time_vix_data,
 }
 
-# Main Execution Block
+# Main Block
 if __name__ == "__main__":
     # Set the correct path for saving the processed data
-    processed_dir = os.path.join(os.getcwd(), 'data', 'lumen_2', 'processed')
-    os.makedirs(processed_dir, exist_ok=True)
+    processed_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__)))), 'data', 'lumen_2', 'processed')
 
     for table_name, cleaning_function in TABLE_CLEANING_FUNCTIONS.items():
         print(f"Processing table: {table_name}")
@@ -2199,11 +2293,13 @@ if __name__ == "__main__":
         processed_df = preprocess_data(query, table_name)
 
         if processed_df.empty:
-            print(f"Warning: The feature DataFrame for {table_name} is empty. Skipping normalization and saving.")
+            print(f"Warning: The feature DataFrame for {
+                  table_name} is empty. Skipping normalization and saving.")
             continue
 
         # Save the cleaned data to the processed directory
-        output_path = os.path.join(processed_dir, f"processed_{table_name}.csv")
+        output_path = os.path.join(
+            processed_dir, f"processed_{table_name}.csv")
 
         # Delete the file if it already exists
         if os.path.exists(output_path):
