@@ -1097,9 +1097,6 @@ def create_features_for_core_inflation_data(df):
     return df
 
 
-# Features: CPI Data
-
-
 def create_features_for_cpi_data(df):
     # Ensure 'date' is set as index for easier time series operations
     if 'date' not in df.columns:
@@ -1120,12 +1117,27 @@ def create_features_for_cpi_data(df):
     long_ema = df['value'].ewm(span=26, adjust=False).mean()
     df['MACD'] = short_ema - long_ema
 
-    # Seasonal Decomposition
-    decomposition = seasonal_decompose(
-        df['value'], model='multiplicative', period=12)
-    df['Trend'] = decomposition.trend
-    df['Seasonal'] = decomposition.seasonal
-    df['Residual'] = decomposition.resid
+    # Seasonal Decomposition (Add Error Handling)
+    period = 12  # Define the period for monthly data
+    if len(df) >= 2 * period:  # Ensure we have enough data for decomposition
+        try:
+            decomposition = seasonal_decompose(
+                df['value'], model='multiplicative', period=period)
+            df['Trend'] = decomposition.trend
+            df['Seasonal'] = decomposition.seasonal
+            df['Residual'] = decomposition.resid
+        except ValueError as e:
+            print(f"Error during seasonal decomposition: {e}")
+            # Use rolling mean as a fallback
+            df['Trend'] = df['value'].rolling(window=period).mean()
+            df['Seasonal'] = 0
+            df['Residual'] = 0
+    else:
+        print(f"Not enough data points for seasonal decomposition. Minimum required: {
+              2 * period}, found: {len(df)}")
+        df['Trend'] = df['value'].rolling(window=period).mean()  # Fallback
+        df['Seasonal'] = 0
+        df['Residual'] = 0
 
     # Cumulative Sum of Changes
     df['Cumulative_Sum'] = df['value'].cumsum()
@@ -2133,6 +2145,11 @@ def create_features_for_real_time_vix(df):
 
 
 def normalize_data(df):
+    # Check if the DataFrame is empty before proceeding
+    if df.empty:
+        print("Warning: DataFrame is empty. Skipping normalization.")
+        return df, None  # Return the original DataFrame without scaling
+
     # Identify datetime columns, focusing on 'timestamp' or 'date' if they exist
     datetime_columns = []
     if 'timestamp' in df.columns:
@@ -2148,13 +2165,19 @@ def normalize_data(df):
     non_numeric_columns = df.select_dtypes(
         exclude=[np.number]).columns.tolist()
 
-    # Remove overlaps
+    # Remove overlaps with datetime columns
     non_numeric_columns = [
         col for col in non_numeric_columns if col not in datetime_columns]
 
     # Separate numeric data for scaling
     numeric_df = df.drop(columns=datetime_columns +
                          non_numeric_columns, errors='ignore')
+
+    # Check for NaN or Inf values and handle them
+    numeric_df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    if numeric_df.isnull().values.any():
+        print(f"Warning: NaN or Inf values found in the data. These will be replaced with column means.")
+    numeric_df.fillna(numeric_df.mean(), inplace=True)
 
     # Initialize the scaler
     scaler = MinMaxScaler(feature_range=(0, 1))
@@ -2174,7 +2197,7 @@ def normalize_data(df):
 def preprocess_data(query, table_name):
     df = load_data(query)
 
-    # Step 1: Check if 'id' column exists
+    # Step 1: Check if 'id' column exists (if needed for merging)
     if 'id' not in df.columns:
         raise KeyError(f"The 'id' column must be present in the {
                        table_name} data.")
@@ -2190,24 +2213,24 @@ def preprocess_data(query, table_name):
             raise KeyError(f"The 'timestamp' column must be present in the {
                            table_name} data.")
 
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
 
         # Avoid setting 'timestamp' as index multiple times
         if df.index.name != 'timestamp':
             df = df.set_index('timestamp', drop=False)
-            print("'timestamp' column used as index.")
+            print(f"'timestamp' column used as index for {table_name}.")
     else:
         # Other tables use 'date'
         if 'date' not in df.columns:
             raise KeyError(f"The 'date' column must be present in the {
                            table_name} data.")
 
-        df['date'] = pd.to_datetime(df['date'])
+        df['date'] = pd.to_datetime(df['date'], errors='coerce')
 
         # Avoid setting 'date' as index multiple times
         if df.index.name != 'date':
             df = df.set_index('date', drop=False)
-            print("'date' column used as index.")
+            print(f"'date' column used as index for {table_name}.")
 
     # Step 3: Perform table-specific cleaning and feature creation
     cleaning_function = TABLE_CLEANING_FUNCTIONS.get(table_name)
@@ -2220,13 +2243,13 @@ def preprocess_data(query, table_name):
         df = feature_creation_function(df)
         print(f"Features created for {table_name} data.")
 
-    # Normalize the data if the DataFrame is not empty
-    if not df.empty:
-        df, scaler = normalize_data(df)
-
     # Step 5: Check for duplicate columns and drop them
     df = df.loc[:, ~df.columns.duplicated()]
-    print("Dropped duplicate columns, if any existed.")
+    print(f"Dropped duplicate columns, if any, for {table_name}.")
+
+    # Step 6: Normalize the data
+    df, _ = normalize_data(df)
+    print(f"Data normalized for {table_name}.")
 
     return df
 

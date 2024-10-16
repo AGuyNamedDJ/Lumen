@@ -1,11 +1,17 @@
-import numpy as np
 import os
+import sys
+import pandas as pd
+from dotenv import load_dotenv
+from sklearn.preprocessing import LabelEncoder
+import numpy as np
 import logging
 from tensorflow.keras.models import load_model
-from .definitions_lumen_2 import ReduceMeanLayer
-from sklearn.preprocessing import LabelEncoder
-from dotenv import load_dotenv
-import pandas as pd
+# from definitions_lumen_2 import ReduceMeanLayer
+from models.lumen_2.definitions_lumen_2 import ReduceMeanLayer
+
+# Add the correct path for module discovery
+sys.path.append(os.path.abspath(
+    os.path.join(os.path.dirname(__file__), '../../')))
 
 # Load environment variables
 load_dotenv()
@@ -115,11 +121,11 @@ if __name__ == "__main__":
     # === Predict for Historical Model ===
     # Load test sequences
     X_test_hist = np.load(os.path.join(
-        current_dir, 'models', 'X_test_hist.npy'))
+        current_dir, 'X_test_hist.npy'))
 
     # Load the historical model
     hist_model_file = os.path.join(
-        current_dir, 'models', 'Lumen2_historical.keras')
+        current_dir, 'Lumen2_historical.keras')
     hist_model = load_trained_model(hist_model_file)
 
     if hist_model is not None:
@@ -128,8 +134,7 @@ if __name__ == "__main__":
         print(hist_predictions)
 
         # Save historical predictions to a file
-        np.save(os.path.join(current_dir, 'models',
-                'predictions_hist.npy'), hist_predictions)
+        np.save(os.path.join(current_dir, 'predictions_hist.npy'), hist_predictions)
         logging.debug(
             f"Historical predictions saved to models/predictions_hist.npy")
     else:
@@ -138,11 +143,11 @@ if __name__ == "__main__":
     # === Predict for Real-Time Model ===
     # Load test sequences
     X_test_real = np.load(os.path.join(
-        current_dir, 'models', 'X_test_real.npy'))
+        current_dir, 'X_test_real.npy'))
 
     # Load the real-time model
     real_time_model_file = os.path.join(
-        current_dir, 'models', 'Lumen2_real_time.keras')
+        current_dir, 'Lumen2_real_time.keras')
     real_time_model = load_trained_model(real_time_model_file)
 
     if real_time_model is not None:
@@ -151,8 +156,8 @@ if __name__ == "__main__":
         print(real_time_predictions)
 
         # Save real-time predictions to a file
-        np.save(os.path.join(current_dir, 'models',
-                'predictions_real.npy'), real_time_predictions)
+        np.save(os.path.join(current_dir, 'predictions_real.npy'),
+                real_time_predictions)
         logging.debug(
             f"Real-time predictions saved to models/predictions_real.npy")
     else:

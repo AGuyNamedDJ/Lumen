@@ -10,9 +10,9 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 
 # Paths to saved models
-MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models')
-MODEL_NAME_HIST = 'Lumen2_historical.keras'  # Historical model name
-MODEL_NAME_REAL = 'Lumen2_real_time.keras'   # Real-time model name
+MODEL_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_NAME_HIST = 'Lumen2_historical.keras'
+MODEL_NAME_REAL = 'Lumen2_real_time.keras'
 
 # Load models
 model_hist = load_model(os.path.join(MODEL_DIR, MODEL_NAME_HIST))
@@ -22,23 +22,29 @@ model_real = load_model(os.path.join(MODEL_DIR, MODEL_NAME_REAL))
 
 
 def load_test_data():
-    X_test_hist = np.load(os.path.join(MODEL_DIR, 'X_test_hist.npy'))
-    y_test_hist = np.load(os.path.join(MODEL_DIR, 'y_test_hist.npy'))
-    X_test_real = np.load(os.path.join(MODEL_DIR, 'X_test_real.npy'))
-    y_test_real = np.load(os.path.join(MODEL_DIR, 'y_test_real.npy'))
-
+    try:
+        X_test_hist = np.load(os.path.join(MODEL_DIR, 'X_test_hist.npy'))
+        y_test_hist = np.load(os.path.join(MODEL_DIR, 'y_test_hist.npy'))
+        X_test_real = np.load(os.path.join(MODEL_DIR, 'X_test_real.npy'))
+        y_test_real = np.load(os.path.join(MODEL_DIR, 'y_test_real.npy'))
+    except FileNotFoundError as e:
+        logging.error(f"Test data file not found: {e}")
+        raise e
     return X_test_hist, y_test_hist, X_test_real, y_test_real
+
+# Evaluate model function
 
 
 def evaluate_model(model, X_test, y_test, model_name, expected_features):
     logging.debug(f"Evaluating model: {model_name}")
 
-    # Check if the test data has the correct number of features, if not, adjust
+    # Check if the feature trimming is required
     if X_test.shape[2] != expected_features:
         logging.debug(f"Trimming test data to {expected_features} features")
-        # Keep only the first N features
+        # This line ensures only the first `expected_features` columns are selected
         X_test = X_test[:, :, :expected_features]
 
+    # If trimming is needed, ensure the dataset contains at least 41 features.
     y_pred = model.predict(X_test)
 
     # Check for NaNs in y_test and y_pred
@@ -68,6 +74,8 @@ def evaluate_model(model, X_test, y_test, model_name, expected_features):
 
     return mse, rmse, r2, y_pred
 
+# Plot predictions vs actual
+
 
 def plot_predictions_vs_actual(y_true, y_pred, model_name):
     plt.figure(figsize=(10, 6))
@@ -78,6 +86,8 @@ def plot_predictions_vs_actual(y_true, y_pred, model_name):
     plt.ylabel("Predicted Values")
     plt.show()
 
+# Plot residuals
+
 
 def plot_residuals(y_true, y_pred, model_name):
     residuals = y_true - y_pred
@@ -87,6 +97,8 @@ def plot_residuals(y_true, y_pred, model_name):
     plt.xlabel("Residual")
     plt.ylabel("Frequency")
     plt.show()
+
+# Main function to evaluate both models
 
 
 def main():
@@ -106,11 +118,11 @@ def main():
     print(
         f"Real-Time Model - MSE: {mse_real}, RMSE: {rmse_real}, R²: {r2_real}")
 
-    # # Plot predictions vs actual
+    # Plot predictions vs actual
     # plot_predictions_vs_actual(y_test_hist, y_pred_hist, "Historical Model")
     # plot_predictions_vs_actual(y_test_real, y_pred_real, "Real-Time Model")
 
-    # # Plot residuals (errors)
+    # Plot residuals (errors)
     # plot_residuals(y_test_hist, y_pred_hist, "Historical Model")
     # plot_residuals(y_test_real, y_pred_real, "Real-Time Model")
 

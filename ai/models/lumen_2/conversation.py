@@ -30,7 +30,7 @@ timezone = pytz.timezone('America/Chicago')
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Model directory and name
-MODEL_DIR = os.path.join(BASE_DIR, 'models')
+MODEL_DIR = os.path.join(BASE_DIR, '..', 'lumen_2')
 
 # Path to Lumen2 models
 historic_model_path = os.path.join(MODEL_DIR, 'Lumen2_historical.keras')

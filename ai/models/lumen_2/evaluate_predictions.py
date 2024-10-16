@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 # Set the absolute paths for predictions and true values
 current_dir = os.path.dirname(os.path.abspath(__file__))
-models_dir = os.path.join(current_dir, 'models')
+models_dir = os.path.join(current_dir, '..', 'lumen_2')
 
 # Paths for real-time predictions and true values
 predictions_real_path = os.path.join(models_dir, 'predictions_real.npy')
