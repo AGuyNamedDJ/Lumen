@@ -672,94 +672,64 @@ def clean_historical_vix_data(df):
 
 # Data Cleaning: Real Time SPX
 def clean_real_time_spx_data(df):
-    # Ensure 'id' and 'timestamp' columns exist
     if 'id' not in df.columns:
-        raise KeyError("The 'id' column is missing from the data.")
+        raise KeyError("Missing 'id'.")
     if 'timestamp' not in df.columns:
-        raise KeyError("The 'timestamp' column is missing from the data.")
+        raise KeyError("Missing 'timestamp'.")
 
-    # Convert 'id' to integer if necessary
+    # Convert timestamp to datetime
     df['id'] = df['id'].astype(int)
-
-    # Convert 'timestamp' to datetime format
     df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
 
-    # Set 'timestamp' as the index but keep it as a column
-    if df.index.name != 'timestamp':
-        df.set_index('timestamp', inplace=True, drop=False)
-        print("'timestamp' column used as index.")
-
-    # Remove duplicates based on index (timestamp)
+    # Set index once
+    df.set_index('timestamp', inplace=True)
+    df.sort_index(inplace=True)
     df = df[~df.index.duplicated(keep='first')]
 
-    # Sort by index (timestamp) to ensure chronological order
-    df.sort_index(inplace=True)
-    print("DataFrame sorted by timestamp index.")
+    # Resample once
+    df = df.resample('3T').last()
 
-    # Reset index to keep 'timestamp' in the DataFrame as a column
-    if 'timestamp' not in df.columns:
-        df.reset_index(drop=False, inplace=True)
-        print("Index reset, 'timestamp' kept as a column.")
-    else:
-        # If 'timestamp' is already a column, reset without keeping it as a column again
-        df.reset_index(drop=True, inplace=True)
-        print("Index reset without duplicating 'timestamp' column.")
+    # Forward-fill so 'current_price' isn't dropped
+    df['current_price'] = df['current_price'].ffill()
 
-    # Now set 'id' as the index
-    df.set_index('id', inplace=True)
-    print("ID column set as index.")
+    # Drop any rows still missing crucial columns
+    df.dropna(subset=['current_price'], inplace=True)
 
-    # Debugging: Print the final state of the DataFrame
-    print("Final DataFrame state:\n", df.head())
+    # Convert index back to normal column
+    df.reset_index(drop=False, inplace=True)
+    df.rename(columns={'index': 'timestamp'}, errors='ignore')  # If needed
 
     return df
-
 # Data Cleaning: Real Time SPY
-
-
 def clean_real_time_spy_data(df):
-    # Ensure 'id' and 'timestamp' columns exist
     if 'id' not in df.columns:
-        raise KeyError("The 'id' column is missing from the data.")
+        raise KeyError("Missing 'id'.")
     if 'timestamp' not in df.columns:
-        raise KeyError("The 'timestamp' column is missing from the data.")
+        raise KeyError("Missing 'timestamp'.")
 
-    # Convert 'id' to integer if necessary
+    # Convert timestamp to datetime
     df['id'] = df['id'].astype(int)
-
-    # Convert 'timestamp' to datetime format
     df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
 
-    # Set 'timestamp' as the index but keep it as a column
-    if df.index.name != 'timestamp':
-        df.set_index('timestamp', inplace=True, drop=False)
-        print("'timestamp' column used as index.")
-
-    # Remove duplicates based on index (timestamp)
+    # Set index once
+    df.set_index('timestamp', inplace=True)
+    df.sort_index(inplace=True)
     df = df[~df.index.duplicated(keep='first')]
 
-    # Sort by index (timestamp) to ensure chronological order
-    df.sort_index(inplace=True)
-    print("DataFrame sorted by timestamp index.")
+    # Resample once
+    df = df.resample('3T').last()
 
-    # Reset index to keep 'timestamp' in the DataFrame as a column
-    if 'timestamp' not in df.columns:
-        df.reset_index(drop=False, inplace=True)
-        print("Index reset, 'timestamp' kept as a column.")
-    else:
-        # If 'timestamp' is already a column, reset without keeping it as a column again
-        df.reset_index(drop=True, inplace=True)
-        print("Index reset without duplicating 'timestamp' column.")
+    # Forward-fill so 'current_price' isn't dropped
+    df['current_price'] = df['current_price'].ffill()
 
-    # Now set 'id' as the index
-    df.set_index('id', inplace=True)
-    print("ID column set as index.")
+    # Drop any rows still missing crucial columns
+    df.dropna(subset=['current_price'], inplace=True)
 
-    # Debugging: Print the final state of the DataFrame
-    print("Final DataFrame state:\n", df.head())
+    # Convert index back to normal column
+    df.reset_index(drop=False, inplace=True)
+    df.rename(columns={'index': 'timestamp'}, errors='ignore')  # If needed
 
     return df
-
 
 # Data Cleaning: Real Time VIX
 def clean_real_time_vix_data(df):
@@ -1907,10 +1877,6 @@ def create_features_for_real_time_spx(df):
     if 'timestamp' not in df.columns:
         raise KeyError("The 'timestamp' column is missing from the SPX data.")
 
-    # Set 'timestamp' as the index
-    # Keep 'timestamp' column in the data
-    df.set_index('timestamp', drop=False, inplace=True)
-
     # Ensure the index is a datetime type
     df.index = pd.to_datetime(df.index)
 
@@ -1920,17 +1886,17 @@ def create_features_for_real_time_spx(df):
     df['SMA_50'] = df['current_price'].rolling(window=50).mean()
     df['EMA_12'] = df['current_price'].ewm(span=12, adjust=False).mean()
     df['EMA_26'] = df['current_price'].ewm(span=26, adjust=False).mean()
-    df['Bollinger_Upper'] = df['SMA_20'] + 2 * \
-        df['current_price'].rolling(window=20).std()
-    df['Bollinger_Lower'] = df['SMA_20'] - 2 * \
-        df['current_price'].rolling(window=20).std()
+    df['Bollinger_Upper'] = df['SMA_20'] + 2 * df['current_price'].rolling(window=20).std()
+    df['Bollinger_Lower'] = df['SMA_20'] - 2 * df['current_price'].rolling(window=20).std()
     df['MACD'] = df['EMA_12'] - df['EMA_26']
     df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+
     delta = df['current_price'].diff(1)
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / loss
     df['RSI'] = 100 - (100 / (1 + rs))
+
     df['ATR'] = df['current_price'].rolling(window=14).std()
 
     # Check DataFrame after feature creation
@@ -1952,10 +1918,6 @@ def create_features_for_real_time_spy(df):
     # Ensure the 'timestamp' column exists
     if 'timestamp' not in df.columns:
         raise KeyError("The 'timestamp' column is missing from the SPX data.")
-
-    # Set 'timestamp' as the index
-    # Keep 'timestamp' column in the data
-    df.set_index('timestamp', drop=False, inplace=True)
 
     # Ensure the index is a datetime type
     df.index = pd.to_datetime(df.index)
@@ -2100,73 +2062,49 @@ def preprocess_data(query, table_name):
     if 'id' not in df.columns:
         raise KeyError(f"The 'id' column must be present in the {table_name} data.")
 
-    timestamp_tables = ['historical_spx', 'historical_spy', 'historical_vix', 'real_time_spx', 'real_time_spy', 'real_time_vix']
-
-    # Step 2: Determine which column to use for datetime operations
+    timestamp_tables = [
+        'historical_spx', 'historical_spy', 'historical_vix',
+        'real_time_spx', 'real_time_spy', 'real_time_vix'
+    ]
     if table_name in timestamp_tables:
-        # Must have 'timestamp'
         if 'timestamp' not in df.columns:
             raise KeyError(f"{table_name} requires a 'timestamp' column.")
-        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
-        df.set_index('timestamp', drop=False, inplace=True)
-        print(f"Set index to 'timestamp' for {table_name}.")
-
     else:
-        # Must have 'date'
         if 'date' not in df.columns:
             raise KeyError(f"{table_name} requires a 'date' column.")
-        df['date'] = pd.to_datetime(df['date'], errors='coerce')
-        df.set_index('date', drop=False, inplace=True)
-        print(f"Set index to 'date' for {table_name}.")
-    
-        # Cleaning
+
     cleaning_function = TABLE_CLEANING_FUNCTIONS.get(table_name)
     if cleaning_function:
         df = cleaning_function(df)
         print(f"Cleaned {table_name} data.")
 
-    # **Resample step for real_time_spx and real_time_spy**
     if table_name in ['real_time_spx', 'real_time_spy']:
-        # Ensure 'timestamp' is a proper DatetimeIndex before resampling
-        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
-        df.set_index('timestamp', inplace=True, drop=True)
-
-        # Resample to 3-minute intervals and drop rows with NaNs
-        df = df.resample('3T').last().dropna()
-
-        # Reset index so 'timestamp' is a column again
+        if df.index.name != 'timestamp':
+            df.set_index('timestamp', drop=False, inplace=True)
+        df = df.resample('3T').last()
+        df.dropna(subset=['current_price'], how='any', inplace=True)
+        df.index.name = 'tmp_index'
         df.reset_index(drop=False, inplace=True)
-
-        # === Keep only the 1-hour target ===
+        df.rename(columns={'tmp_index': 'timestamp'}, inplace=True)
         df['target_1h'] = df['current_price'].shift(-20)
-        # (Removed the 3h, 6h, 1d, 3d shifts)
-
         print(f"Added single horizon (1h) to {table_name}.")
 
-    # Feature Engineering
     feature_creation_function = TABLE_FEATURE_FUNCTIONS.get(table_name)
     if feature_creation_function:
         df = feature_creation_function(df)
         print(f"Features created for {table_name} data.")
 
-    # Drop duplicate columns if any
     df = df.loc[:, ~df.columns.duplicated()]
     print(f"Dropped duplicate columns, if any, for {table_name}.")
 
-    # Normalize the data
     df, _ = normalize_data(df)
     print(f"Data normalized for {table_name}.")
 
-    # Prepare sequences (if needed)
-    # Use numeric columns for modeling
     numeric_columns = df.select_dtypes(include=[np.number]).columns
     X = df[numeric_columns].values
-
-    sequence_length = 60  # or adjust if needed
-    X_3D = create_sequences(X, sequence_length)
+    X_3D = create_sequences(X, seq_len=60)
 
     return df, X_3D
-
 
 # Add a mapping for feature creation functions similar to the cleaning functions
 TABLE_FEATURE_FUNCTIONS = {

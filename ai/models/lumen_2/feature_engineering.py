@@ -904,10 +904,6 @@ def main_real_time_spx_features(df):
 
     if 'current_price' in df.columns:
         df['target_1h'] = df['current_price'].shift(-20)
-        df['target_3h'] = df['current_price'].shift(-60)
-        df['target_6h'] = df['current_price'].shift(-120)
-        df['target_1d'] = df['current_price'].shift(-480)
-        df['target_3d'] = df['current_price'].shift(-1440)
     else:
         logging.warning("[main_real_time_spx_features] 'current_price' not found, cannot create targets.")
 
@@ -934,15 +930,9 @@ def main_real_time_spy_features(df):
         return pd.DataFrame()
 
     df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
-    logging.info("[main_real_time_spy_features] 'timestamp' column processed.")
-    logging.info(f"[main_real_time_spy_features] Columns after timestamp processing: {df.columns.tolist()}")
 
     if 'current_price' in df.columns:
         df['target_1h'] = df['current_price'].shift(-20)
-        df['target_3h'] = df['current_price'].shift(-60)
-        df['target_6h'] = df['current_price'].shift(-120)
-        df['target_1d'] = df['current_price'].shift(-480)
-        df['target_3d'] = df['current_price'].shift(-1440)
     else:
         logging.warning("[main_real_time_spy_features] 'current_price' not found, cannot create targets.")
 
@@ -1212,10 +1202,10 @@ def create_XY_sequences(df, seq_len=60, single_horizon_target=None):
     3) If neither multi-horizon columns nor a single_horizon_target is found, we produce only X (no Y).
     """
     import logging
-    horizon_cols = ['target_1h','target_3h','target_6h','target_1d','target_3d']
+    horizon_cols = ['target_1h', 'target_3h', 'target_6h', 'target_1d', 'target_3d']
     available_horizons = [col for col in horizon_cols if col in df.columns]
 
-    # 1) Check if we have *all* multi-horizon columns
+    # 1) Multi-horizon case
     if len(available_horizons) == 5:
         logging.info("Creating multi-horizon Y with shape=(...,5).")
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
@@ -1224,21 +1214,23 @@ def create_XY_sequences(df, seq_len=60, single_horizon_target=None):
                 numeric_cols.remove(hc)
         X_array = df[numeric_cols].values
         y_array = df[horizon_cols].values  # shape => (N, 5)
-    else:
-        # 2) Otherwise, single horizon fallback
-        if single_horizon_target and single_horizon_target in df.columns:
-            logging.info(f"Creating single-horizon Y using {single_horizon_target}.")
-            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-            if single_horizon_target in numeric_cols:
-                numeric_cols.remove(single_horizon_target)
-            X_array = df[numeric_cols].values
-            y_array = df[single_horizon_target].values.reshape(-1,1)
-        else:
-            # 3) No valid target => only X
-            logging.warning("No multi-horizon or single-horizon target found; only X will be returned.")
-            X_array = df.select_dtypes(include=[np.number]).values
-            y_array = None
 
+    # 2) Single-horizon fallback
+    elif single_horizon_target and single_horizon_target in df.columns:
+        logging.info(f"Creating single-horizon Y using {single_horizon_target}.")
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        if single_horizon_target in numeric_cols:
+            numeric_cols.remove(single_horizon_target)
+        X_array = df[numeric_cols].values
+        y_array = df[single_horizon_target].values.reshape(-1, 1)
+
+    # 3) No valid target => only X
+    else:
+        logging.warning("No multi-horizon or single-horizon target found; only X will be returned.")
+        X_array = df.select_dtypes(include=[np.number]).values
+        y_array = None
+
+    # If not enough data for a single sequence:
     if len(X_array) < seq_len:
         logging.warning("Not enough rows to form even one sequence.")
         return None, None
@@ -1248,7 +1240,6 @@ def create_XY_sequences(df, seq_len=60, single_horizon_target=None):
     for i in range(len(X_array) - seq_len):
         X_seq.append(X_array[i : i + seq_len])
         if y_array is not None:
-            # multi-horizon => shape (5,) ; single-horizon => shape (1,)
             y_seq.append(y_array[i + seq_len])  # offset
 
     X_seq = np.array(X_seq, dtype=np.float32)
@@ -1262,7 +1253,7 @@ def save_sequences_in_parts(X, Y, prefix, chunk_size=10000):
     num_chunks = (X.shape[0] + chunk_size - 1) // chunk_size
     for i in range(num_chunks):
         start = i * chunk_size
-        end = min((i+1)*chunk_size, X.shape[0])
+        end = min((i + 1) * chunk_size, X.shape[0])
         X_part = X[start:end]
         X_part_filename = os.path.join(SEQUENCES_DIR, f'{prefix}_X_3D_part{i}.npy')
         np.save(X_part_filename, X_part)
@@ -1271,12 +1262,12 @@ def save_sequences_in_parts(X, Y, prefix, chunk_size=10000):
         num_chunks = (Y.shape[0] + chunk_size - 1) // chunk_size
         for i in range(num_chunks):
             start = i * chunk_size
-            end = min((i+1)*chunk_size, Y.shape[0])
+            end = min((i + 1) * chunk_size, Y.shape[0])
             Y_part = Y[start:end]
             Y_part_filename = os.path.join(SEQUENCES_DIR, f'{prefix}_Y_3D_part{i}.npy')
             np.save(Y_part_filename, Y_part)
 
-        
+
 def scale_all_features(df, dataset_name, target_column=None):
     datetime_columns_local = [col for col in ['timestamp', 'date'] if col in df.columns]
     multi_target_cols = [col for col in df.columns if col.startswith('target_')]
@@ -1285,6 +1276,7 @@ def scale_all_features(df, dataset_name, target_column=None):
         target_columns_local.append(target_column)
     target_columns_local = list(set(target_columns_local + multi_target_cols))
 
+    # For real_time data, drop columns that are entirely NaN
     if dataset_name in ['real_time_spx', 'real_time_spy', 'real_time_vix']:
         df.dropna(axis=1, how='all', inplace=True)
 
@@ -1301,8 +1293,11 @@ def scale_all_features(df, dataset_name, target_column=None):
             feature_df[col] = pd.to_numeric(feature_df[col], downcast='integer')
 
     if feature_df.empty:
-        return pd.concat([datetime_df, target_df], axis=1) if not (datetime_df.empty and target_df.empty) else df
+        if not (datetime_df.empty and target_df.empty):
+            return pd.concat([datetime_df, target_df], axis=1)
+        return df
 
+    # Replace inf with NaN, then fill them with column mean
     feature_df.replace([np.inf, -np.inf], np.nan, inplace=True)
     feature_df.fillna(feature_df.mean(numeric_only=True), inplace=True)
 
@@ -1311,8 +1306,14 @@ def scale_all_features(df, dataset_name, target_column=None):
         try:
             scaled_vals = scaler.fit_transform(feature_df)
         except ValueError:
-            return pd.concat([datetime_df, target_df], axis=1) if not (datetime_df.empty and target_df.empty) else df
-        scaled_feature_df = pd.DataFrame(scaled_vals.astype('float32'), columns=feature_df.columns, index=feature_df.index)
+            if not (datetime_df.empty and target_df.empty):
+                return pd.concat([datetime_df, target_df], axis=1)
+            return df
+        scaled_feature_df = pd.DataFrame(
+            scaled_vals.astype('float32'),
+            columns=feature_df.columns,
+            index=feature_df.index
+        )
     else:
         scaled_feature_df = feature_df
 
@@ -1328,11 +1329,13 @@ def scale_all_features(df, dataset_name, target_column=None):
 
     return pd.concat(parts, axis=1)
 
+
 def save_enhanced_data(df, filename):
     enhanced_filename = f"featured_{filename}"
     filepath = os.path.join(FEATURED_DIR, enhanced_filename)
     df.to_csv(filepath, index=False)
     logging.info(f"Saved enhanced data to {filepath}")
+
 
 def extract_and_save_feature_list(data_dict: dict, output_file: str, datetime_columns: list, target_columns: dict):
     feature_list = []
@@ -1354,7 +1357,8 @@ def extract_and_save_feature_list(data_dict: dict, output_file: str, datetime_co
 
     summary = feature_df.groupby('Dataset').agg(
         Total_Features=('Feature_Name', 'count'),
-        Feature_Names=('Feature_Name', lambda x: ', '.join(x[:5]) + ('...' if len(x) > 5 else ''))
+        Feature_Names=('Feature_Name',
+                       lambda x: ', '.join(x[:5]) + ('...' if len(x) > 5 else ''))
     ).reset_index()
 
     logging.info("=== Feature Summary ===")
@@ -1362,6 +1366,7 @@ def extract_and_save_feature_list(data_dict: dict, output_file: str, datetime_co
         logging.info(f"Dataset '{row['Dataset']}': {row['Total_Features']} features.")
         logging.info(f"Sample Features: {row['Feature_Names']}")
     logging.info("========================")
+
 
 datetime_columns = ['timestamp', 'date']
 target_columns = {
@@ -1372,20 +1377,22 @@ target_columns = {
     'unemployment_rate_data': 'unemployment_rate',
 }
 
+
 def create_sequences(data, seq_len=60):
     sequences = []
     for i in range(len(data) - seq_len + 1):
-        seq = data[i:i+seq_len]
+        seq = data[i : i + seq_len]
         sequences.append(seq)
     return np.array(sequences)
 
+
 def create_and_save_sequences_in_chunks(df, data_name, seq_len, target_column, chunk_size=10000):
     """
-    Create sequences for X and Y arrays in small increments rather than all at once.
-    This prevents loading massive arrays all at once into memory.
+    Create sequences for X and Y arrays in small increments rather than all at once,
+    preventing massive memory usage.
     """
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-    has_target = target_column and target_column in df.columns
+    has_target = target_column and (target_column in df.columns)
 
     if has_target:
         numeric_cols.remove(target_column)
@@ -1400,49 +1407,49 @@ def create_and_save_sequences_in_chunks(df, data_name, seq_len, target_column, c
         logging.warning(f"[{data_name}] Not enough data to create sequences of length {seq_len}. Skipping.")
         return
 
-    # We'll create and save sequences in manageable chunks
     start = 0
     x_part_count = 0
     y_part_count = 0
 
     while start + seq_len <= total_length:
         end = min(start + chunk_size, total_length - seq_len + 1)
-        # Create partial sequences for this chunk
+
         X_seq_list = []
         Y_seq_list = []
-        
+
         for i in range(start, end):
-            X_seq_list.append(X_array[i:i+seq_len])
+            X_seq_list.append(X_array[i : i + seq_len])
             if has_target:
-                Y_seq_list.append(y_array[i+seq_len-1])  # predict value at the end of the sequence
+                # e.g. predict value at the last step of the 60-length sequence
+                Y_seq_list.append(y_array[i + seq_len - 1])
 
         X_seq_arr = np.array(X_seq_list, dtype=np.float32)
         Y_seq_arr = np.array(Y_seq_list, dtype=np.float32) if has_target else None
 
-        # Save partial sequences
-        X_part_filename = os.path.join(FEATURED_DIR, f'{data_name}_X_3D_part{x_part_count}.npy')
+        # Save partial sequences into SEQUENCES_DIR
+        X_part_filename = os.path.join(SEQUENCES_DIR, f'{data_name}_X_3D_part{x_part_count}.npy')
         np.save(X_part_filename, X_seq_arr)
         x_part_count += 1
 
         if has_target:
-            Y_part_filename = os.path.join(FEATURED_DIR, f'{data_name}_Y_3D_part{y_part_count}.npy')
+            Y_part_filename = os.path.join(SEQUENCES_DIR, f'{data_name}_Y_3D_part{y_part_count}.npy')
             np.save(Y_part_filename, Y_seq_arr)
             y_part_count += 1
 
-        # Move to next chunk
         start = end
 
-def main():
-    # 1) Ensure both FEATURED_DIR and SEQUENCES_DIR exist
-    ensure_directory_exists(FEATURED_DIR)
-    ensure_directory_exists(SEQUENCES_DIR)  # Make sure your "sequences" subfolder exists
 
+def main():
+    ensure_directory_exists(FEATURED_DIR)
+    ensure_directory_exists(SEQUENCES_DIR)
     logging.info("[main] Starting feature engineering process.")
-    data_dict = load_data()
+
+    data_dict = load_data()  # Your custom load_data function
 
     for data_name, df in data_dict.items():
         logging.info(f"[main] Processing {data_name}...")
 
+        # Convert existing timestamp/date
         if 'timestamp' in df.columns:
             df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
             logging.info(f"[main] 'timestamp' column converted for {data_name}.")
@@ -1452,17 +1459,25 @@ def main():
         else:
             logging.warning(f"[main] No 'timestamp' or 'date' column in {data_name}.")
 
-        # Apply feature engineering
+        # Apply cleaning + features
         try:
             df = apply_features(df, data_name, data_dict)
         except Exception as e:
             logging.error(f"[main] Error applying features for {data_name}: {e}", exc_info=True)
             continue
 
-        # Identify which column (if any) is the primary target for this dataset
-        target_column = target_columns.get(data_name, None)
+        # If real_time_spx or real_time_spy, we do special target creation & then drop NaNs
+        if data_name in ['real_time_spx', 'real_time_spy']:
+            # After shift, any row without a future target is NaN → drop them
+            if 'target_1h' in df.columns:
+                before_drop = len(df)
+                df.dropna(subset=['target_1h'], inplace=True)
+                after_drop = len(df)
+                dropped = before_drop - after_drop
+                logging.info(f"[main] {data_name} => dropped {dropped} rows lacking valid target_1h.")
 
-        # Scale all features in the DataFrame
+        # Scale
+        target_column = target_columns.get(data_name, None)
         try:
             df = scale_all_features(df, data_name, target_column)
         except Exception as e:
@@ -1473,14 +1488,21 @@ def main():
             logging.warning(f"[main] {data_name} is empty after scaling. Skipping saving.")
             continue
 
-        # Save the CSV with the enhanced features
-        try:
-            save_enhanced_data(df, f'{data_name}.csv')
-        except Exception as e:
-            logging.error(f"[main] Error saving enhanced data for {data_name}: {e}", exc_info=True)
-            continue
+        # Check NaNs
+        df_numeric = df.select_dtypes(include=[np.number])
+        nan_counts = df_numeric.isna().sum()
+        total_nans = nan_counts.sum()
+        if total_nans > 0:
+            logging.warning(f"[main] {data_name} contains {total_nans} NaNs across numeric columns!")
+            nan_columns = nan_counts[nan_counts > 0]
+            logging.warning(f"NaN details for {data_name}:\n{nan_columns.to_string()}")
 
-        # Create sequences in chunks (to reduce memory usage), then save them
+        logging.info(f"[main] {data_name} final shape: {df.shape}")
+
+        # Save enhanced CSV
+        save_enhanced_data(df, f'{data_name}.csv')
+
+        # Optionally build sequences
         create_and_save_sequences_in_chunks(
             df,
             data_name,
@@ -1489,7 +1511,8 @@ def main():
             chunk_size=10000
         )
 
-    # Finally, extract and save the full feature list
+
+    # Extract and save the full feature list
     output_file = os.path.join(BASE_DIR, 'feature_list.csv')
     extract_and_save_feature_list(data_dict, output_file, datetime_columns, target_columns)
 
@@ -1501,6 +1524,7 @@ def main():
         logging.info("==============================")
 
     logging.info("[main] Feature engineering process completed.")
+
 
 if __name__ == "__main__":
     ensure_directory_exists(FEATURED_DIR)
