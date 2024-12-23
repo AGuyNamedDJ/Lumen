@@ -587,114 +587,88 @@ def clean_unemployment_rate_data(df):
 # Data Cleaning: Historical SPX
 
 def clean_historical_spx_data(df):
-    # Ensure 'id' and 'timestamp' columns exist
     if 'id' not in df.columns:
         raise KeyError("The 'id' column is missing from the data.")
     if 'timestamp' not in df.columns:
         raise KeyError("The 'timestamp' column is missing from the data.")
 
-    # Convert 'id' to integer if necessary
     df['id'] = df['id'].astype(int)
+    # Convert timestamp to datetime
+    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
 
-    # Handle missing values
-    df.dropna(inplace=True)
+    # Drop rows with NaNs in critical price columns
+    df.dropna(subset=['open', 'high', 'low', 'close', 'volume'], how='any', inplace=True)
 
-    # Convert 'timestamp' to datetime format
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
-
-    # Add a 'date' column based on 'timestamp'
-    df['date'] = df['timestamp'].dt.date
-
-    # Remove duplicates based on 'timestamp'
-    df.drop_duplicates(subset=['timestamp'], inplace=True)
-
-    # Handle outliers in price data
+    # Handle outliers
     for column in ['open', 'high', 'low', 'close']:
         upper_bound = df[column].mean() + 3 * df[column].std()
         lower_bound = df[column].mean() - 3 * df[column].std()
         df = df[(df[column] >= lower_bound) & (df[column] <= upper_bound)]
 
-    # Ensure volume is a positive integer
     df = df[df['volume'] > 0]
 
-    # Set 'id' as the index
-    df.set_index('id', inplace=True)
-    print("ID column set as index")
+    # No dropping duplicates on timestamp here.
+    # df.drop_duplicates(subset=['timestamp'], inplace=True) # Removed
 
+    df.set_index('id', inplace=True)
     return df
+
 
 # Data Cleaning: Historical SPY
 
-
 def clean_historical_spy_data(df):
-    # Ensure 'id' and 'timestamp' columns exist
     if 'id' not in df.columns:
         raise KeyError("The 'id' column is missing from the data.")
     if 'timestamp' not in df.columns:
         raise KeyError("The 'timestamp' column is missing from the data.")
 
-    # Convert 'id' to integer if necessary
     df['id'] = df['id'].astype(int)
+    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
 
-    # Handle missing values
-    if df.isnull().sum().sum() > 0:
-        df = df.dropna()
+    # Drop rows with NaNs in critical columns
+    df.dropna(subset=['open', 'high', 'low', 'close', 'volume'], how='any', inplace=True)
 
-    # Convert 'timestamp' to datetime format
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    # If needed, handle outliers similar to SPX
+    for column in ['open', 'high', 'low', 'close']:
+        upper_bound = df[column].mean() + 3 * df[column].std()
+        lower_bound = df[column].mean() - 3 * df[column].std()
+        df = df[(df[column] >= lower_bound) & (df[column] <= upper_bound)]
 
-    # Add a 'date' column based on 'timestamp'
-    df['date'] = df['timestamp'].dt.date
+    df = df[df['volume'] > 0]
 
-    # Remove duplicates based on 'timestamp'
-    df = df.drop_duplicates(subset=['timestamp'])
+    # No dropping duplicates on timestamp here.
+    # df.drop_duplicates(subset=['timestamp'], inplace=True) # Removed
 
-    # Set 'id' as the index
     df.set_index('id', inplace=True)
-    print("ID column set as index")
-
     return df
 
 # Data Cleaning: Historical VIX
 
-
 def clean_historical_vix_data(df):
-    # Ensure 'id' and 'timestamp' columns exist
     if 'id' not in df.columns:
         raise KeyError("The 'id' column is missing from the data.")
     if 'timestamp' not in df.columns:
         raise KeyError("The 'timestamp' column is missing from the data.")
 
-    # Convert 'id' to integer if necessary
     df['id'] = df['id'].astype(int)
+    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
 
-    # Convert 'timestamp' to datetime format
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    # Drop rows where open, high, low, close are all NaN
+    df.dropna(subset=['open', 'high', 'low', 'close'], how='all', inplace=True)
 
-    # Add a 'date' column based on 'timestamp'
-    df['date'] = df['timestamp'].dt.date
+    # Forward fill missing values if necessary
+    df.fillna(method='ffill', inplace=True)
 
-    # Remove duplicates based on 'timestamp'
-    df = df.drop_duplicates(subset=['timestamp'])
+    # If desired, handle outliers for 'close':
+    upper_bound = df['close'].mean() + 3 * df['close'].std()
+    lower_bound = df['close'].mean() - 3 * df['close'].std()
+    df = df[(df['close'] >= lower_bound) & (df['close'] <= upper_bound)]
 
-    # Handle missing values more carefully
-    # If the entire row is NaN for critical columns, drop it
-    df = df.dropna(subset=['open', 'high', 'low',
-                   'close', 'volume'], how='all')
+    # No dropping duplicates on timestamp here.
+    # df.drop_duplicates(subset=['timestamp'], inplace=True) # Removed
 
-    # Forward fill NaN values to handle missing data points in critical columns
-    df = df.fillna(method='ffill')
-
-    # Re-check for NaNs after filling
-    if df.isnull().sum().sum() > 0:
-        print("Warning: Some NaN values remain after filling. They may affect feature generation.")
-
-    # Set 'id' as the index
     df.set_index('id', inplace=True)
-    print("ID column set as index")
-
     return df
-
 
 # Data Cleaning: Real Time SPX
 def clean_real_time_spx_data(df):
@@ -1781,12 +1755,15 @@ def create_features_for_unemployment_rate_data(df):
     return df
 
 # Features: Historical SPX
-
-
 def create_features_for_historical_spx(df):
-    # Ensure 'timestamp' is set as index for easier time series operations
-    if not pd.api.types.is_datetime64_any_dtype(df.index):
-        df = df.set_index('timestamp')
+    # Ensure 'timestamp' column exists and is of datetime type
+    if 'timestamp' not in df.columns:
+        raise KeyError("The 'timestamp' column must be present in historical_spx data.")
+    if not pd.api.types.is_datetime64_any_dtype(df['timestamp']):
+        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+
+    # Set 'timestamp' as index temporarily (but keep it as a column)
+    df.set_index('timestamp', drop=False, inplace=True)
 
     # Simple Moving Averages (SMA)
     df['SMA_20'] = df['close'].rolling(window=20).mean()
@@ -1798,10 +1775,8 @@ def create_features_for_historical_spx(df):
     df['EMA_26'] = df['close'].ewm(span=26, adjust=False).mean()
 
     # Bollinger Bands
-    df['Bollinger_Upper'] = df['SMA_20'] + 2 * \
-        df['close'].rolling(window=20).std()
-    df['Bollinger_Lower'] = df['SMA_20'] - 2 * \
-        df['close'].rolling(window=20).std()
+    df['Bollinger_Upper'] = df['SMA_20'] + 2 * df['close'].rolling(window=20).std()
+    df['Bollinger_Lower'] = df['SMA_20'] - 2 * df['close'].rolling(window=20).std()
 
     # Relative Strength Index (RSI)
     delta = df['close'].diff(1)
@@ -1814,9 +1789,8 @@ def create_features_for_historical_spx(df):
     df['MACD'] = df['EMA_12'] - df['EMA_26']
     df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
-    # ATR (Average True Range)
-    df['ATR'] = df['high'].combine(
-        df['low'], max) - df['low'].combine(df['close'].shift(1), min)
+    # Average True Range (ATR)
+    df['ATR'] = df['high'].combine(df['low'], max) - df['low'].combine(df['close'].shift(1), min)
     df['ATR_14'] = df['ATR'].rolling(window=14).mean()
 
     # On-Balance Volume (OBV)
@@ -1825,18 +1799,22 @@ def create_features_for_historical_spx(df):
     # Stochastic Oscillator
     low_min = df['low'].rolling(window=14).min()
     high_max = df['high'].rolling(window=14).max()
-    df['Stochastic_Oscillator'] = 100 * \
-        ((df['close'] - low_min) / (high_max - low_min))
+    df['Stochastic_Oscillator'] = 100 * ((df['close'] - low_min) / (high_max - low_min))
 
+    # Reset index so that 'timestamp' is a normal column again
+    df.reset_index(drop=True, inplace=True)
     return df
-
-# Features: Historical SPY
 
 
 def create_features_for_historical_spy(df):
-    # Ensure 'timestamp' is set as index for easier time series operations
-    if not pd.api.types.is_datetime64_any_dtype(df.index):
-        df = df.set_index('timestamp')
+    # Ensure 'timestamp' column exists and is of datetime type
+    if 'timestamp' not in df.columns:
+        raise KeyError("The 'timestamp' column must be present in historical_spy data.")
+    if not pd.api.types.is_datetime64_any_dtype(df['timestamp']):
+        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+
+    # Set 'timestamp' as index temporarily (but keep it as a column)
+    df.set_index('timestamp', drop=False, inplace=True)
 
     # Simple Moving Averages (SMA)
     df['SMA_20'] = df['close'].rolling(window=20).mean()
@@ -1848,10 +1826,8 @@ def create_features_for_historical_spy(df):
     df['EMA_26'] = df['close'].ewm(span=26, adjust=False).mean()
 
     # Bollinger Bands
-    df['Bollinger_Upper'] = df['SMA_20'] + 2 * \
-        df['close'].rolling(window=20).std()
-    df['Bollinger_Lower'] = df['SMA_20'] - 2 * \
-        df['close'].rolling(window=20).std()
+    df['Bollinger_Upper'] = df['SMA_20'] + 2 * df['close'].rolling(window=20).std()
+    df['Bollinger_Lower'] = df['SMA_20'] - 2 * df['close'].rolling(window=20).std()
 
     # Relative Strength Index (RSI)
     delta = df['close'].diff(1)
@@ -1865,8 +1841,7 @@ def create_features_for_historical_spy(df):
     df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
     # ATR (Average True Range)
-    df['ATR'] = df['high'].combine(
-        df['low'], max) - df['low'].combine(df['close'].shift(1), min)
+    df['ATR'] = df['high'].combine(df['low'], max) - df['low'].combine(df['close'].shift(1), min)
     df['ATR_14'] = df['ATR'].rolling(window=14).mean()
 
     # On-Balance Volume (OBV)
@@ -1875,31 +1850,25 @@ def create_features_for_historical_spy(df):
     # Stochastic Oscillator
     low_min = df['low'].rolling(window=14).min()
     high_max = df['high'].rolling(window=14).max()
-    df['Stochastic_Oscillator'] = 100 * \
-        ((df['close'] - low_min) / (high_max - low_min))
+    df['Stochastic_Oscillator'] = 100 * ((df['close'] - low_min) / (high_max - low_min))
 
+    # Reset index so that 'timestamp' is a normal column again
+    df.reset_index(drop=True, inplace=True)
     return df
-
-# Features: Historical VIX
 
 
 def create_features_for_historical_vix(df):
-    # Ensure 'timestamp' is set as index for easier time series operations
-    if not pd.api.types.is_datetime64_any_dtype(df.index):
-        df = df.set_index('timestamp')
+    # Ensure 'timestamp' column exists and is of datetime type
+    if 'timestamp' not in df.columns:
+        raise KeyError("The 'timestamp' column must be present in historical_vix data.")
+    if not pd.api.types.is_datetime64_any_dtype(df['timestamp']):
+        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
 
-    # Debug: Print the DataFrame after loading
-    print("Loaded DataFrame from DB:")
-    print(df.head())
+    # Set 'timestamp' as index temporarily (but keep it as a column)
+    df.set_index('timestamp', drop=False, inplace=True)
 
     # Drop rows with NaN in 'close' to ensure valid data for indicators
     df = df.dropna(subset=['close'])
-    print(f"DataFrame after dropping NaNs in 'close' column: {
-          df.shape[0]} rows")
-
-    if df.empty:
-        print("Warning: DataFrame is empty after dropping NaNs. Exiting function.")
-        return df  # Exit if DataFrame is empty
 
     # Exponential Moving Averages (EMA)
     df['EMA_12'] = df['close'].ewm(span=12, adjust=False).mean()
@@ -1920,70 +1889,17 @@ def create_features_for_historical_vix(df):
     high_low = df['high'] - df['low']
     high_close = (df['high'] - df['close'].shift()).abs()
     low_close = (df['low'] - df['close'].shift()).abs()
-    df['ATR'] = high_low.combine(high_close, max).combine(
-        low_close, max).rolling(window=14).mean()
+    df['ATR'] = high_low.combine(high_close, max).combine(low_close, max).rolling(window=14).mean()
 
-    # Drop columns we no longer need
-    df = df.drop(columns=['open', 'high', 'low', 'volume'], errors='ignore')
+    # Drop columns no longer needed
+    df.drop(columns=['open', 'high', 'low', 'volume'], errors='ignore', inplace=True)
 
-    # Forward fill to handle any NaN values that could be present
-    df = df.ffill()
+    # Forward fill any remaining NaNs
+    df.ffill(inplace=True)
 
-    # Debug: Print final DataFrame
-    print(f"Final DataFrame after processing: {df.head()}")
-
+    # Reset index so that 'timestamp' is a normal column again
+    df.reset_index(drop=True, inplace=True)
     return df
-
-# Features: Real Time SPX
-
-
-def create_features_for_real_time_spx(df):
-    # Ensure the 'timestamp' column exists
-    if 'timestamp' not in df.columns:
-        raise KeyError("The 'timestamp' column is missing from the SPX data.")
-
-    # Use 'timestamp' for sorting and as a reference, but do not set it as the primary index
-    # Any operation requiring 'timestamp' as an index should use it temporarily
-
-    # Lag Features
-    df['Lag_1'] = df['current_price'].shift(1)
-
-    # Simple Moving Averages (SMA)
-    df['SMA_20'] = df['current_price'].rolling(window=20).mean()
-    df['SMA_50'] = df['current_price'].rolling(window=50).mean()
-
-    # Exponential Moving Averages (EMA)
-    df['EMA_12'] = df['current_price'].ewm(span=12, adjust=False).mean()
-    df['EMA_26'] = df['current_price'].ewm(span=26, adjust=False).mean()
-
-    # Bollinger Bands
-    df['Bollinger_Upper'] = df['SMA_20'] + 2 * \
-        df['current_price'].rolling(window=20).std()
-    df['Bollinger_Lower'] = df['SMA_20'] - 2 * \
-        df['current_price'].rolling(window=20).std()
-
-    # MACD
-    df['MACD'] = df['EMA_12'] - df['EMA_26']
-    df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
-
-    # RSI (Relative Strength Index)
-    delta = df['current_price'].diff(1)
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / loss
-    df['RSI'] = 100 - (100 / (1 + rs))
-
-    # ATR (Average True Range)
-    df['ATR'] = df['current_price'].rolling(window=14).std()
-
-    # Check DataFrame after feature creation
-    print("DataFrame after feature creation:")
-    print(df.isna().sum())
-
-    # Drop NaNs generated by feature creation
-    df = df.dropna()
-
-    return dfdef
 
 
 def create_features_for_real_time_spx(df):
@@ -2145,113 +2061,111 @@ def create_features_for_real_time_vix(df):
 
 
 def normalize_data(df):
-    # Check if the DataFrame is empty before proceeding
     if df.empty:
         print("Warning: DataFrame is empty. Skipping normalization.")
-        return df, None  # Return the original DataFrame without scaling
+        return df, None
 
-    # Identify datetime columns, focusing on 'timestamp' or 'date' if they exist
     datetime_columns = []
     if 'timestamp' in df.columns:
         datetime_columns.append('timestamp')
-        print("'timestamp' column exists and will be used.")
     elif 'date' in df.columns:
         datetime_columns.append('date')
-        print("'date' column exists and will be used.")
-    else:
-        print("Neither 'date' nor 'timestamp' column found. Proceeding without datetime normalization.")
 
-    # Identify non-numeric columns
-    non_numeric_columns = df.select_dtypes(
-        exclude=[np.number]).columns.tolist()
+    non_numeric_columns = df.select_dtypes(exclude=[np.number]).columns.tolist()
+    non_numeric_columns = [col for col in non_numeric_columns if col not in datetime_columns]
 
-    # Remove overlaps with datetime columns
-    non_numeric_columns = [
-        col for col in non_numeric_columns if col not in datetime_columns]
-
-    # Separate numeric data for scaling
-    numeric_df = df.drop(columns=datetime_columns +
-                         non_numeric_columns, errors='ignore')
-
-    # Check for NaN or Inf values and handle them
+    numeric_df = df.drop(columns=datetime_columns + non_numeric_columns, errors='ignore')
     numeric_df.replace([np.inf, -np.inf], np.nan, inplace=True)
-    if numeric_df.isnull().values.any():
-        print(f"Warning: NaN or Inf values found in the data. These will be replaced with column means.")
     numeric_df.fillna(numeric_df.mean(), inplace=True)
 
-    # Initialize the scaler
     scaler = MinMaxScaler(feature_range=(0, 1))
-
-    # Scale the numeric data
     scaled_numeric_df = pd.DataFrame(scaler.fit_transform(numeric_df),
                                      columns=numeric_df.columns,
                                      index=numeric_df.index)
 
-    # Reattach the datetime and non-numeric columns without scaling
-    final_df = pd.concat(
-        [df[datetime_columns], df[non_numeric_columns], scaled_numeric_df], axis=1)
-
+    final_df = pd.concat([df[datetime_columns], df[non_numeric_columns], scaled_numeric_df], axis=1)
     return final_df, scaler
+
+def create_sequences(data, seq_len=60):
+    sequences = []
+    for i in range(len(data) - seq_len + 1):
+        seq = data[i:i+seq_len]
+        sequences.append(seq)
+    return np.array(sequences)
 
 
 def preprocess_data(query, table_name):
     df = load_data(query)
 
-    # Step 1: Check if 'id' column exists (if needed for merging)
     if 'id' not in df.columns:
-        raise KeyError(f"The 'id' column must be present in the {
-                       table_name} data.")
+        raise KeyError(f"The 'id' column must be present in the {table_name} data.")
 
-    # List of tables that use 'timestamp'
-    timestamp_tables = ['historical_spx', 'historical_spy',
-                        'historical_vix', 'real_time_spx', 'real_time_spy', 'real_time_vix']
+    timestamp_tables = ['historical_spx', 'historical_spy', 'historical_vix', 'real_time_spx', 'real_time_spy', 'real_time_vix']
 
     # Step 2: Determine which column to use for datetime operations
     if table_name in timestamp_tables:
-        # These tables require 'timestamp'
+        # Must have 'timestamp'
         if 'timestamp' not in df.columns:
-            raise KeyError(f"The 'timestamp' column must be present in the {
-                           table_name} data.")
-
+            raise KeyError(f"{table_name} requires a 'timestamp' column.")
         df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+        df.set_index('timestamp', drop=False, inplace=True)
+        print(f"Set index to 'timestamp' for {table_name}.")
 
-        # Avoid setting 'timestamp' as index multiple times
-        if df.index.name != 'timestamp':
-            df = df.set_index('timestamp', drop=False)
-            print(f"'timestamp' column used as index for {table_name}.")
     else:
-        # Other tables use 'date'
+        # Must have 'date'
         if 'date' not in df.columns:
-            raise KeyError(f"The 'date' column must be present in the {
-                           table_name} data.")
-
+            raise KeyError(f"{table_name} requires a 'date' column.")
         df['date'] = pd.to_datetime(df['date'], errors='coerce')
-
-        # Avoid setting 'date' as index multiple times
-        if df.index.name != 'date':
-            df = df.set_index('date', drop=False)
-            print(f"'date' column used as index for {table_name}.")
-
-    # Step 3: Perform table-specific cleaning and feature creation
+        df.set_index('date', drop=False, inplace=True)
+        print(f"Set index to 'date' for {table_name}.")
+    
+        # Cleaning
     cleaning_function = TABLE_CLEANING_FUNCTIONS.get(table_name)
     if cleaning_function:
         df = cleaning_function(df)
         print(f"Cleaned {table_name} data.")
 
+    # **Resample step for real_time_spx and real_time_spy**
+    if table_name in ['real_time_spx', 'real_time_spy']:
+        # Ensure 'timestamp' is a proper DatetimeIndex before resampling
+        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+        df.set_index('timestamp', inplace=True, drop=True)
+
+        # Resample to 3-minute intervals and drop rows with NaNs
+        df = df.resample('3T').last().dropna()
+
+        # Reset index so 'timestamp' is a column again
+        df.reset_index(drop=False, inplace=True)
+
+        # === Keep only the 1-hour target ===
+        df['target_1h'] = df['current_price'].shift(-20)
+        # (Removed the 3h, 6h, 1d, 3d shifts)
+
+        print(f"Added single horizon (1h) to {table_name}.")
+
+    # Feature Engineering
     feature_creation_function = TABLE_FEATURE_FUNCTIONS.get(table_name)
     if feature_creation_function:
         df = feature_creation_function(df)
         print(f"Features created for {table_name} data.")
 
-    # Step 5: Check for duplicate columns and drop them
+    # Drop duplicate columns if any
     df = df.loc[:, ~df.columns.duplicated()]
     print(f"Dropped duplicate columns, if any, for {table_name}.")
 
-    # Step 6: Normalize the data
+    # Normalize the data
     df, _ = normalize_data(df)
     print(f"Data normalized for {table_name}.")
 
-    return df
+    # Prepare sequences (if needed)
+    # Use numeric columns for modeling
+    numeric_columns = df.select_dtypes(include=[np.number]).columns
+    X = df[numeric_columns].values
+
+    sequence_length = 60  # or adjust if needed
+    X_3D = create_sequences(X, sequence_length)
+
+    return df, X_3D
 
 
 # Add a mapping for feature creation functions similar to the cleaning functions
@@ -2300,36 +2214,24 @@ TABLE_CLEANING_FUNCTIONS = {
     "real_time_vix": clean_real_time_vix_data,
 }
 
-# Main Block
 if __name__ == "__main__":
-    # Set the correct path for saving the processed data
     processed_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__)))), 'data', 'lumen_2', 'processed')
 
     for table_name, cleaning_function in TABLE_CLEANING_FUNCTIONS.items():
         print(f"Processing table: {table_name}")
-
-        # Construct the query to fetch the data for the current table
         query = f"SELECT * FROM {table_name}"
-
-        # Load, clean, and process the data
-        processed_df = preprocess_data(query, table_name)
+        processed_df, processed_array = preprocess_data(query, table_name)
 
         if processed_df.empty:
-            print(f"Warning: The feature DataFrame for {
-                  table_name} is empty. Skipping normalization and saving.")
+            print(f"Warning: The feature DataFrame for {table_name} is empty. Skipping saving.")
             continue
 
-        # Save the cleaned data to the processed directory
-        output_path = os.path.join(
-            processed_dir, f"processed_{table_name}.csv")
-
-        # Delete the file if it already exists
+        output_path = os.path.join(processed_dir, f"processed_{table_name}.csv")
         if os.path.exists(output_path):
             os.remove(output_path)
             print(f"Deleted existing file: {output_path}")
 
         print(f"Saving file to {output_path}")
         processed_df.to_csv(output_path, index=False)
-        print(f"File exists: {os.path.exists(output_path)}")
         print(f"{table_name} processing completed and saved to {output_path}")

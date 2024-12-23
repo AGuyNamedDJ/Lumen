@@ -4,9 +4,8 @@ import logging
 import joblib
 import numpy as np
 from dotenv import load_dotenv
-from sklearn.preprocessing import MinMaxScaler, LabelEncoder
+from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.optimizers import Adam
-
 
 # Load environment variables
 load_dotenv()
@@ -21,11 +20,8 @@ FEATURED_DIR = os.path.join(BASE_DIR, 'data/lumen_2/featured')
 MODEL_DIR = os.getenv('MODEL_DIR', 'models/lumen_2')
 MODEL_NAME = 'lumen_2'
 
-# Initialize logging to log messages with detailed context
+# Initialize logging
 logging.basicConfig(level=logging.INFO)
-
-# Function to ensure the directory exists
-
 
 def ensure_directory_exists(directory):
     if not os.path.exists(directory):
@@ -34,29 +30,23 @@ def ensure_directory_exists(directory):
     else:
         print(f"Directory already exists: {directory}")
 
-# # Filter SPX data
-# def filter_spx_data(df):
-#     if 'symbol' in df.columns:
-#         return df[df['symbol'] == 'SPX']
-#     else:
-#         print("No 'symbol' column found, returning the original DataFrame.")
-#         return df
+# 1) Define a folder for sequences inside FEATURED_DIR
+SEQUENCES_DIR = os.path.join(FEATURED_DIR, 'sequences')
 
-# # Filter SPY data
-# def filter_spy_data(df):
-#     if 'symbol' in df.columns:
-#         return df[df['symbol'] == 'SPY']
-#     else:
-#         print("No 'symbol' column found, returning the original DataFrame.")
-#         return df
 
-# # Filter VIX data
-#     if 'symbol' in df.columns:
-#         return df[df['symbol'] == 'VIX']
-#     else:
-#         print("No 'symbol' column found, returning the original DataFrame.")
-#         return df
-
+def ensure_timestamp_column(df, dataset_name):
+    if dataset_name == 'real_time_vix':
+        if 'timestamp' not in df.columns:
+            if 'date' in df.columns:
+                df.rename(columns={'date': 'timestamp'}, inplace=True)
+                logging.info(f"{dataset_name}: Renamed 'date' column to 'timestamp'.")
+            else:
+                logging.warning(f"{dataset_name}: No 'timestamp' or 'date' column found. Creating dummy timestamps.")
+                df['timestamp'] = pd.date_range(start='2000-01-01', periods=len(df), freq='D')
+    elif dataset_name == 'historical_vix':
+        if 'timestamp' not in df.columns and 'date' not in df.columns:
+            logging.warning(f"{dataset_name}: No 'timestamp' or 'date' column found. Leaving as is.")
+    return df
 
 def load_data():
     consumer_confidence_data = pd.read_csv(os.path.join(
@@ -90,8 +80,17 @@ def load_data():
         DATA_DIR, 'processed_real_time_spy.csv'))
     real_time_vix = pd.read_csv(os.path.join(
         DATA_DIR, 'processed_real_time_vix.csv'))
+
+    logging.info("[load_data - Immediately After Reading real_time_vix] Columns: %s", real_time_vix.columns.tolist())
+    logging.info("[load_data - Immediately After Reading real_time_vix] Head:\n%s", real_time_vix.head().to_string())
+
+    real_time_vix = ensure_timestamp_column(real_time_vix, 'real_time_vix')
+
+    logging.info("[load_data - After Ensuring Timestamp] real_time_vix head:")
+    logging.info(real_time_vix.head().to_string())
     unemployment_rate_data = pd.read_csv(os.path.join(
         DATA_DIR, 'processed_unemployment_rate_data.csv'))
+    
 
     return {
         'consumer_confidence_data': consumer_confidence_data,
@@ -114,765 +113,460 @@ def load_data():
         'unemployment_rate_data': unemployment_rate_data,
     }
 
-# Feature Engineering
-# Feature Engineering: Consumer Confidence
-
+def memory_friendly_rolling_corr(x, y, window):
+    import collections
+    from math import sqrt
+    x = x.astype('float32')
+    y = y.astype('float32')
+    n = len(x)
+    result = np.full(n, np.nan, dtype='float32')
+    if window > n:
+        return pd.Series(result, index=x.index)
+    window_x = collections.deque()
+    window_y = collections.deque()
+    sum_x = sum_y = sum_xy = sum_x2 = sum_y2 = 0.0
+    for i in range(n):
+        xx = x[i]
+        yy = y[i]
+        window_x.append(xx)
+        window_y.append(yy)
+        sum_x += xx
+        sum_y += yy
+        sum_xy += xx*yy
+        sum_x2 += xx*xx
+        sum_y2 += yy*yy
+        if i >= window:
+            oldx = window_x.popleft()
+            oldy = window_y.popleft()
+            sum_x -= oldx
+            sum_y -= oldy
+            sum_xy -= oldx*oldy
+            sum_x2 -= oldx*oldx
+            sum_y2 -= oldy*oldy
+        if i >= window-1:
+            numerator = (window*sum_xy - sum_x*sum_y)
+            denominator = (window*sum_x2 - sum_x*sum_x)*(window*sum_y2 - sum_y*sum_y)
+            if denominator <= 0:
+                c = np.nan
+            else:
+                c = numerator/np.sqrt(denominator)
+            result[i] = c
+    return pd.Series(result, index=x.index)
 
 def feature_consumer_confidence_cumulative_sum(df):
     if 'value' in df.columns:
         df['Consumer_Confidence_Cumulative_Sum'] = df['value'].cumsum()
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_consumer_confidence_days_since_peak(df):
     if 'value' in df.columns:
         df['Consumer_Confidence_Peak'] = df['value'].expanding().max()
-        peak_dates = df[df['value'] == df['Consumer_Confidence_Peak']].groupby(
-            'Consumer_Confidence_Peak').apply(lambda x: x.index[0]).reset_index(drop=True)
-        df['Consumer_Confidence_Days_Since_Peak'] = df.apply(lambda x: (
-            x.name - peak_dates[peak_dates == x['Consumer_Confidence_Peak']].values[0]).days if any(peak_dates == x['Consumer_Confidence_Peak']) else np.nan, axis=1)
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_consumer_confidence_days_since_trough(df):
     if 'value' in df.columns:
         df['Consumer_Confidence_Trough'] = df['value'].expanding().min()
-        trough_dates = df[df['value'] == df['Consumer_Confidence_Trough']].groupby(
-            'Consumer_Confidence_Trough').apply(lambda x: x.index[0]).reset_index(drop=True)
-        df['Consumer_Confidence_Days_Since_Trough'] = df.apply(lambda x: (
-            x.name - trough_dates[trough_dates == x['Consumer_Confidence_Trough']].values[0]).days if any(trough_dates == x['Consumer_Confidence_Trough']) else np.nan, axis=1)
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
 
-
-# Feature Engineering: Consumer Sentiment
 def feature_consumer_sentiment_rolling_6m_average(df):
     if 'value' in df.columns:
-        df['Consumer_Sentiment_Rolling_6M_Avg'] = df['value'].rolling(
-            window=6).mean()
-    else:
-        print("Column 'value' not found in DataFrame.")
+        df['Consumer_Sentiment_Rolling_6M_Avg'] = df['value'].rolling(window=6).mean()
     return df
-
 
 def feature_consumer_sentiment_rolling_12m_average(df):
     if 'value' in df.columns:
-        df['Consumer_Sentiment_Rolling_12M_Avg'] = df['value'].rolling(
-            window=12).mean()
-    else:
-        print("Column 'value' not found in DataFrame.")
+        df['Consumer_Sentiment_Rolling_12M_Avg'] = df['value'].rolling(window=12).mean()
     return df
-
-# Feature Engineering: Core Inflation
-
 
 def feature_core_inflation_value(df):
     if 'value' in df.columns:
         df['Core_Inflation_Value'] = df['value']
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_core_inflation_ema_12(df):
     if 'value' in df.columns:
-        df['Core_Inflation_EMA_12'] = df['value'].ewm(
-            span=12, adjust=False).mean()
-    else:
-        print("Column 'value' not found in DataFrame.")
+        df['Core_Inflation_EMA_12'] = df['value'].ewm(span=12, adjust=False).mean()
     return df
-
 
 def feature_core_inflation_ema_26(df):
     if 'value' in df.columns:
-        df['Core_Inflation_EMA_26'] = df['value'].ewm(
-            span=26, adjust=False).mean()
-    else:
-        print("Column 'value' not found in DataFrame.")
+        df['Core_Inflation_EMA_26'] = df['value'].ewm(span=26, adjust=False).mean()
     return df
-
 
 def feature_core_inflation_cumulative_sum(df):
     if 'value' in df.columns:
         df['Core_Inflation_Cumulative_Sum'] = df['value'].cumsum()
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_core_inflation_z_score(df):
     if 'value' in df.columns:
-        df['Core_Inflation_Z_Score'] = (
-            df['value'] - df['value'].mean()) / df['value'].std()
-    else:
-        print("Column 'value' not found in DataFrame.")
+        df['Core_Inflation_Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
     return df
-
 
 def feature_core_inflation_trend(df):
     if 'value' in df.columns:
         df['Core_Inflation_Trend'] = df['value'].rolling(window=12).mean()
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
 
-
-# Feature Engineering: CPI
 def feature_cpi_value(df):
     if 'value' in df.columns:
         df['CPI_Value'] = df['value']
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_cpi_trend(df):
     if 'value' in df.columns:
         df['CPI_Trend'] = df['value'].rolling(window=12).mean()
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_cpi_cumulative_sum(df):
     if 'value' in df.columns:
         df['CPI_Cumulative_Sum'] = df['value'].cumsum()
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_cpi_days_since_peak(df):
     if 'value' in df.columns:
         df['CPI_Peak'] = df['value'].expanding().max()
-        peak_dates = df[df['value'] == df['CPI_Peak']].groupby(
-            'CPI_Peak').apply(lambda x: x.index[0]).reset_index(drop=True)
-        df['CPI_Days_Since_Peak'] = df.apply(lambda x: (
-            x.name - peak_dates[peak_dates == x['CPI_Peak']].values[0]).days if any(peak_dates == x['CPI_Peak']) else np.nan, axis=1)
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_cpi_days_since_trough(df):
     if 'value' in df.columns:
         df['CPI_Trough'] = df['value'].expanding().min()
-        trough_dates = df[df['value'] == df['CPI_Trough']].groupby(
-            'CPI_Trough').apply(lambda x: x.index[0]).reset_index(drop=True)
-        df['CPI_Days_Since_Trough'] = df.apply(lambda x: (
-            x.name - trough_dates[trough_dates == x['CPI_Trough']].values[0]).days if any(trough_dates == x['CPI_Trough']) else np.nan, axis=1)
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
 
-
-# Feature Engineering: GDP
 def feature_gdp_value(df):
     if 'value' in df.columns:
         df['GDP_Value'] = df['value']
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_gdp_lag(df, lag_periods):
     for lag in lag_periods:
         if 'value' in df.columns:
             df[f'GDP_Lag_{lag}'] = df['value'].shift(lag)
-        else:
-            print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_gdp_rolling_mean(df, windows):
     for window in windows:
         if 'value' in df.columns:
-            df[f'GDP_Rolling_Mean_{window}Q'] = df['value'].rolling(
-                window).mean()
-        else:
-            print("Column 'value' not found in DataFrame.")
+            df[f'GDP_Rolling_Mean_{window}Q'] = df['value'].rolling(window).mean()
     return df
-
 
 def feature_gdp_rolling_std(df, windows):
     for window in windows:
         if 'value' in df.columns:
-            df[f'GDP_Rolling_Std_{window}Q'] = df['value'].rolling(
-                window).std()
-        else:
-            print("Column 'value' not found in DataFrame.")
+            df[f'GDP_Rolling_Std_{window}Q'] = df['value'].rolling(window).std()
     return df
-
 
 def feature_gdp_cumulative_sum(df):
     if 'value' in df.columns:
         df['GDP_Cumulative_Sum'] = df['value'].cumsum()
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_gdp_cumulative_product(df):
     if 'value' in df.columns:
         df['GDP_Cumulative_Product'] = df['value'].cumprod()
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_gdp_trend(df):
     if 'value' in df.columns:
-        # Assuming a yearly trend for simplicity
         df['GDP_Trend'] = df['value'].rolling(window=12).mean()
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_gdp_ema(df, spans):
     for span in spans:
         if 'value' in df.columns:
-            df[f'GDP_EMA_{span}'] = df['value'].ewm(
-                span=span, adjust=False).mean()
-        else:
-            print("Column 'value' not found in DataFrame.")
+            df[f'GDP_EMA_{span}'] = df['value'].ewm(span=span, adjust=False).mean()
     return df
-
-# Feature Engineering: Industrial Production
-
 
 def feature_industrial_production_value(df):
     if 'value' in df.columns:
         df['Industrial_Production_Value'] = df['value']
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_industrial_production_lag(df, lag_periods):
     for lag in lag_periods:
         if 'value' in df.columns:
             df[f'Industrial_Production_Lag_{lag}'] = df['value'].shift(lag)
-        else:
-            print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_industrial_production_rolling_mean(df, windows):
     for window in windows:
         if 'value' in df.columns:
-            df[f'Industrial_Production_Rolling_Mean_{
-                window}M'] = df['value'].rolling(window).mean()
-        else:
-            print("Column 'value' not found in DataFrame.")
+            df[f'Industrial_Production_Rolling_Mean_{window}M'] = df['value'].rolling(window).mean()
     return df
-
 
 def feature_industrial_production_cumulative_sum(df):
     if 'value' in df.columns:
         df['Industrial_Production_Cumulative_Sum'] = df['value'].cumsum()
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_industrial_production_cumulative_product(df):
     if 'value' in df.columns:
         df['Industrial_Production_Cumulative_Product'] = df['value'].cumprod()
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_industrial_production_trend(df):
     if 'value' in df.columns:
-        df['Industrial_Production_Trend'] = df['value'].rolling(
-            window=12).mean()  # Assuming a yearly trend for simplicity
-    else:
-        print("Column 'value' not found in DataFrame.")
+        df['Industrial_Production_Trend'] = df['value'].rolling(window=12).mean()
     return df
-
 
 def feature_industrial_production_ema(df, spans):
     for span in spans:
         if 'value' in df.columns:
-            df[f'Industrial_Production_EMA_{span}'] = df['value'].ewm(
-                span=span, adjust=False).mean()
-        else:
-            print("Column 'value' not found in DataFrame.")
+            df[f'Industrial_Production_EMA_{span}'] = df['value'].ewm(span=span, adjust=False).mean()
     return df
-
 
 def feature_industrial_production_z_score(df):
     if 'value' in df.columns:
-        df['Industrial_Production_Z_Score'] = (
-            df['value'] - df['value'].mean()) / df['value'].std()
-    else:
-        print("Column 'value' not found in DataFrame.")
+        df['Industrial_Production_Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
     return df
-
 
 def feature_industrial_production_days_since_trough(df):
     if 'value' in df.columns:
         df['Industrial_Production_Trough'] = df['value'].expanding().min()
-        trough_dates = df[df['value'] == df['Industrial_Production_Trough']].groupby(
-            'Industrial_Production_Trough').apply(lambda x: x.index[0]).reset_index(drop=True)
-        df['Industrial_Production_Days_Since_Trough'] = df.apply(lambda x: (
-            x.name - trough_dates[trough_dates == x['Industrial_Production_Trough']].values[0]).days if any(trough_dates == x['Industrial_Production_Trough']) else np.nan, axis=1)
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
-# Feature Engineering: Interest Rate
-
 
 def feature_interest_rate_value(df):
-    # Assuming 'value' column exists and directly using it without renaming
     if 'value' in df.columns:
         df['Interest_Rate_Value'] = df['value']
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_interest_rate_lag(df, lag_periods):
     for lag in lag_periods:
         if 'value' in df.columns:
             df[f'Interest_Rate_Lag_{lag}'] = df['value'].shift(lag)
-        else:
-            print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_interest_rate_rolling_mean(df, windows):
     for window in windows:
         if 'value' in df.columns:
-            df[f'Interest_Rate_Rolling_Mean_{
-                window}M'] = df['value'].rolling(window).mean()
-        else:
-            print("Column 'value' not found in DataFrame.")
+            df[f'Interest_Rate_Rolling_Mean_{window}M'] = df['value'].rolling(window).mean()
     return df
-
 
 def feature_interest_rate_ema(df, spans):
     for span in spans:
         if 'value' in df.columns:
-            df[f'Interest_Rate_EMA_{span}'] = df['value'].ewm(
-                span=span, adjust=False).mean()
-        else:
-            print("Column 'value' not found in DataFrame.")
+            df[f'Interest_Rate_EMA_{span}'] = df['value'].ewm(span=span, adjust=False).mean()
     return df
-
 
 def feature_interest_rate_days_since_peak(df):
     if 'value' in df.columns:
         df['Interest_Rate_Peak'] = df['value'].expanding().max()
-        peak_dates = df[df['value'] == df['Interest_Rate_Peak']].groupby(
-            'Interest_Rate_Peak')['value'].apply(lambda x: x.index[0]).reset_index(drop=True)
-        df['Interest_Rate_Days_Since_Peak'] = df.apply(lambda x: (
-            x.name - peak_dates[peak_dates == x['Interest_Rate_Peak']].values[0]).days if any(peak_dates == x['Interest_Rate_Peak']) else np.nan, axis=1)
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_interest_rate_days_since_trough(df):
     if 'value' in df.columns:
         df['Interest_Rate_Trough'] = df['value'].expanding().min()
-        trough_dates = df[df['value'] == df['Interest_Rate_Trough']].groupby(
-            'Interest_Rate_Trough')['value'].apply(lambda x: x.index[0]).reset_index(drop=True)
-        df['Interest_Rate_Days_Since_Trough'] = df.apply(lambda x: (
-            x.name - trough_dates[trough_dates == x['Interest_Rate_Trough']].values[0]).days if any(trough_dates == x['Interest_Rate_Trough']) else np.nan, axis=1)
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
 
-
-# Feature Engineering: Labor Force Participation with SPY
 def feature_labor_force_value(df):
     if 'value' in df.columns:
         df['Labor_Force_Value'] = df['value']
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_labor_force_lag(df, lag_periods):
     for lag in lag_periods:
         if 'value' in df.columns:
             df[f'Labor_Force_Lag_{lag}'] = df['value'].shift(lag)
-        else:
-            print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_labor_force_rolling_mean(df, windows):
     for window in windows:
         if 'value' in df.columns:
-            df[f'Labor_Force_Rolling_Mean_{
-                window}M'] = df['value'].rolling(window).mean()
-        else:
-            print("Column 'value' not found in DataFrame.")
+            df[f'Labor_Force_Rolling_Mean_{window}M'] = df['value'].rolling(window).mean()
     return df
-
 
 def feature_labor_force_ema(df, spans):
     for span in spans:
         if 'value' in df.columns:
-            df[f'Labor_Force_EMA_{span}'] = df['value'].ewm(
-                span=span, adjust=False).mean()
-        else:
-            print("Column 'value' not found in DataFrame.")
+            df[f'Labor_Force_EMA_{span}'] = df['value'].ewm(span=span, adjust=False).mean()
     return df
-
 
 def feature_labor_force_days_since_peak(df):
     if 'value' in df.columns:
         df['Labor_Force_Peak'] = df['value'].expanding().max()
-        peak_dates = df[df['value'] == df['Labor_Force_Peak']].groupby(
-            'Labor_Force_Peak').apply(lambda x: x.index[0]).reset_index(drop=True)
-        df['Labor_Force_Days_Since_Peak'] = df.apply(lambda x: (
-            x.name - peak_dates[peak_dates == x['Labor_Force_Peak']].values[0]).days if any(peak_dates == x['Labor_Force_Peak']) else np.nan, axis=1)
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_labor_force_days_since_trough(df):
     if 'value' in df.columns:
         df['Labor_Force_Trough'] = df['value'].expanding().min()
-        trough_dates = df[df['value'] == df['Labor_Force_Trough']].groupby(
-            'Labor_Force_Trough').apply(lambda x: x.index[0]).reset_index(drop=True)
-        df['Labor_Force_Days_Since_Trough'] = df.apply(lambda x: (
-            x.name - trough_dates[trough_dates == x['Labor_Force_Trough']].values[0]).days if any(trough_dates == x['Labor_Force_Trough']) else np.nan, axis=1)
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
-# Feature Engineering: Non-Farm Payroll Employment
-
 
 def feature_nonfarm_value(df):
     if 'value' in df.columns:
         df['NonFarm_Value'] = df['value']
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_nonfarm_lag(df, lag_periods):
     for lag in lag_periods:
         if 'value' in df.columns:
             df[f'NonFarm_Lag_{lag}'] = df['value'].shift(lag)
-        else:
-            print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_nonfarm_rolling_mean(df, windows):
     for window in windows:
         if 'value' in df.columns:
-            df[f'NonFarm_Rolling_Mean_{window}M'] = df['value'].rolling(
-                window).mean()
-        else:
-            print("Column 'value' not found in DataFrame.")
+            df[f'NonFarm_Rolling_Mean_{window}M'] = df['value'].rolling(window).mean()
     return df
-
 
 def feature_nonfarm_ema(df, spans):
     for span in spans:
         if 'value' in df.columns:
-            df[f'NonFarm_EMA_{span}'] = df['value'].ewm(
-                span=span, adjust=False).mean()
-        else:
-            print("Column 'value' not found in DataFrame.")
+            df[f'NonFarm_EMA_{span}'] = df['value'].ewm(span=span, adjust=False).mean()
     return df
-
 
 def feature_nonfarm_cumulative_sum(df):
     if 'value' in df.columns:
         df['NonFarm_Cumulative_Sum'] = df['value'].cumsum()
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_nonfarm_cumulative_product(df):
     if 'value' in df.columns:
         df['NonFarm_Cumulative_Product'] = df['value'].cumprod()
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_nonfarm_days_since_trough(df):
     if 'value' in df.columns:
         df['NonFarm_Trough'] = df['value'].expanding().min()
-        trough_dates = df[df['value'] == df['NonFarm_Trough']].groupby(
-            'NonFarm_Trough').apply(lambda x: x.index[0]).reset_index(drop=True)
-        df['NonFarm_Days_Since_Trough'] = df.apply(lambda x: (
-            x.name - trough_dates[trough_dates == x['NonFarm_Trough']].values[0]).days if any(trough_dates == x['NonFarm_Trough']) else np.nan, axis=1)
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
-# Feature Engineering: Personal Consumption Expenditures (PCE)
-
 
 def feature_pce_value(df):
     if 'value' in df.columns:
         df['PCE_Value'] = df['value']
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_pce_lag(df, lag_periods):
     for lag in lag_periods:
         if 'value' in df.columns:
             df[f'PCE_Lag_{lag}'] = df['value'].shift(lag)
-        else:
-            print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_pce_rolling_mean(df, windows):
     for window in windows:
         if 'value' in df.columns:
-            df[f'PCE_Rolling_Mean_{window}M'] = df['value'].rolling(
-                window).mean()
-        else:
-            print("Column 'value' not found in DataFrame.")
+            df[f'PCE_Rolling_Mean_{window}M'] = df['value'].rolling(window).mean()
     return df
-
 
 def feature_pce_cumulative_sum(df):
     if 'value' in df.columns:
         df['PCE_Cumulative_Sum'] = df['value'].cumsum()
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_pce_cumulative_product(df):
     if 'value' in df.columns:
         df['PCE_Cumulative_Product'] = df['value'].cumprod()
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_pce_trend(df):
     if 'value' in df.columns:
-        # Example: Using EMA as a trend indicator
         df['PCE_Trend'] = df['value'].ewm(span=12, adjust=False).mean()
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_pce_ema(df, spans):
     for span in spans:
         if 'value' in df.columns:
-            df[f'PCE_EMA_{span}'] = df['value'].ewm(
-                span=span, adjust=False).mean()
-        else:
-            print("Column 'value' not found in DataFrame.")
+            df[f'PCE_EMA_{span}'] = df['value'].ewm(span=span, adjust=False).mean()
     return df
-
 
 def feature_pce_z_score(df):
     if 'value' in df.columns:
-        df['PCE_Z_Score'] = (
-            df['value'] - df['value'].mean()) / df['value'].std()
-    else:
-        print("Column 'value' not found in DataFrame.")
+        df['PCE_Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
     return df
-
 
 def feature_pce_days_since_peak(df):
     if 'value' in df.columns:
         df['PCE_Peak'] = df['value'].expanding().max()
-        peak_dates = df[df['value'] == df['PCE_Peak']].groupby(
-            'PCE_Peak').apply(lambda x: x.index[0]).reset_index(drop=True)
-        df['PCE_Days_Since_Peak'] = df.apply(lambda x: (
-            x.name - peak_dates[peak_dates == x['PCE_Peak']].values[0]).days if any(peak_dates == x['PCE_Peak']) else np.nan, axis=1)
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
-# Feature Engineering: Producer Price Index (PPI)
-
 
 def feature_ppi_value(df):
     if 'value' in df.columns:
         df['PPI_Value'] = df['value']
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_ppi_lag(df, lag_periods):
     for lag in lag_periods:
         if 'value' in df.columns:
             df[f'PPI_Lag_{lag}'] = df['value'].shift(lag)
-        else:
-            print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_ppi_rolling_mean(df, windows):
     for window in windows:
         if 'value' in df.columns:
-            df[f'PPI_Rolling_Mean_{window}M'] = df['value'].rolling(
-                window).mean()
-        else:
-            print("Column 'value' not found in DataFrame.")
+            df[f'PPI_Rolling_Mean_{window}M'] = df['value'].rolling(window).mean()
     return df
-
 
 def feature_ppi_cumulative_sum(df):
     if 'value' in df.columns:
         df['PPI_Cumulative_Sum'] = df['value'].cumsum()
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_ppi_cumulative_product(df):
     if 'value' in df.columns:
         df['PPI_Cumulative_Product'] = df['value'].cumprod()
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_ppi_trend(df):
     if 'value' in df.columns:
-        # Example: Using EMA as a trend indicator
         df['PPI_Trend'] = df['value'].ewm(span=12, adjust=False).mean()
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_ppi_ema(df, spans):
     for span in spans:
         if 'value' in df.columns:
-            df[f'PPI_EMA_{span}'] = df['value'].ewm(
-                span=span, adjust=False).mean()
-        else:
-            print("Column 'value' not found in DataFrame.")
+            df[f'PPI_EMA_{span}'] = df['value'].ewm(span=span, adjust=False).mean()
     return df
-
 
 def feature_ppi_z_score(df):
     if 'value' in df.columns:
-        df['PPI_Z_Score'] = (
-            df['value'] - df['value'].mean()) / df['value'].std()
-    else:
-        print("Column 'value' not found in DataFrame.")
+        df['PPI_Z_Score'] = (df['value'] - df['value'].mean()) / df['value'].std()
     return df
-
 
 def feature_ppi_days_since_trough(df):
     if 'value' in df.columns:
         df['PPI_Trough'] = df['value'].expanding().min()
-        trough_dates = df[df['value'] == df['PPI_Trough']].groupby(
-            'PPI_Trough').apply(lambda x: x.index[0]).reset_index(drop=True)
-        df['PPI_Days_Since_Trough'] = df.apply(lambda x: (
-            x.name - trough_dates[trough_dates == x['PPI_Trough']].values[0]).days if any(trough_dates == x['PPI_Trough']) else np.nan, axis=1)
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
-# Feature Engineering: Unemployment Rate
-
 
 def feature_unemployment_rate_cumulative_sum(df):
     if 'value' in df.columns:
         df['Unemployment_Rate_Cumulative_Sum'] = df['value'].cumsum()
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
 
 def feature_unemployment_rate_days_since_trough(df):
     if 'value' in df.columns:
         df['Unemployment_Rate_Trough'] = df['value'].expanding().min()
-        trough_dates = df[df['value'] == df['Unemployment_Rate_Trough']].groupby(
-            'Unemployment_Rate_Trough').apply(lambda x: x.index[0]).reset_index(drop=True)
-        df['Unemployment_Rate_Days_Since_Trough'] = df.apply(lambda x: (
-            x.name - trough_dates[trough_dates == x['Unemployment_Rate_Trough']].values[0]).days if any(trough_dates == x['Unemployment_Rate_Trough']) else np.nan, axis=1)
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
-# Feature Engineering: Historical Indicators
-
 
 def feature_historical_indicator_ema_12(df):
     if 'value' in df.columns:
-        df['Historical_Indicator_EMA_12'] = df['value'].ewm(
-            span=12, adjust=False).mean()
-    else:
-        print("Column 'value' not found in DataFrame.")
+        df['Historical_Indicator_EMA_12'] = df['value'].ewm(span=12, adjust=False).mean()
     return df
-
 
 def feature_historical_indicator_rsi(df, window=14):
     if 'value' in df.columns:
         delta = df['value'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+        gain = delta.where(delta > 0, 0).rolling(window=window).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
         rs = gain / loss
         df['Historical_Indicator_RSI'] = 100 - (100 / (1 + rs))
-    else:
-        print("Column 'value' not found in DataFrame.")
     return df
-
-# Feature Engineering: SPX Bull vs. Bear Markets
-
 
 def feature_spx_ema(df, spans):
     for span in spans:
         if 'close' in df.columns:
-            df[f'SPX_EMA_{span}'] = df['close'].ewm(
-                span=span, adjust=False).mean()
-        else:
-            print("Column 'close' not found in DataFrame.")
+            df[f'SPX_EMA_{span}'] = df['close'].ewm(span=span, adjust=False).mean()
     return df
-
 
 def feature_spx_sma(df, windows):
     for window in windows:
         if 'close' in df.columns:
             df[f'SPX_SMA_{window}'] = df['close'].rolling(window=window).mean()
-        else:
-            print("Column 'close' not found in DataFrame.")
     return df
-
 
 def feature_spx_drawdown_recovery(df):
     if 'drawdown' in df.columns:
         df['SPX_Drawdown'] = df['drawdown']
-    else:
-        print("Column 'drawdown' not found in DataFrame.")
-
     if 'recovery' in df.columns:
         df['SPX_Recovery'] = df['recovery']
-    else:
-        print("Column 'recovery' not found in DataFrame.")
-
     return df
-
-# Feature Engineering: SPY Bull vs. Bear Markets
-
 
 def feature_spy_price_data(df):
     if 'open' in df.columns:
@@ -885,127 +579,95 @@ def feature_spy_price_data(df):
         df['SPY_Close'] = df['close']
     return df
 
-
 def feature_spy_atr(df):
     if 'ATR' in df.columns:
         df['SPY_ATR'] = df['ATR']
-    else:
-        print("Column 'ATR' not found in DataFrame.")
     return df
-
 
 def feature_spy_drawdown_recovery(df):
     if 'drawdown' in df.columns:
         df['SPY_Drawdown'] = df['drawdown']
-    else:
-        print("Column 'drawdown' not found in DataFrame.")
-
     if 'recovery' in df.columns:
         df['SPY_Recovery'] = df['recovery']
-    else:
-        print("Column 'recovery' not found in DataFrame.")
-
     return df
-
-# Feature Engineering: Real Time Indicators
-
 
 def feature_real_time_indicator_lag_1(df):
     if 'current_price' in df.columns:
         df['Real_Time_Indicator_Lag_1'] = df['current_price'].shift(1)
-    else:
-        print("Column 'current_price' not found in DataFrame. Skipping feature 'Real_Time_Indicator_Lag_1'.")
     return df
-
 
 def feature_real_time_indicator_sma_20(df):
     if 'current_price' in df.columns:
-        df['Real_Time_Indicator_SMA_20'] = df['current_price'].rolling(
-            window=20).mean()
-    else:
-        print("Column 'current_price' not found in DataFrame. Skipping feature 'Real_Time_Indicator_SMA_20'.")
+        df['Real_Time_Indicator_SMA_20'] = df['current_price'].rolling(window=20).mean()
     return df
-
 
 def feature_real_time_indicator_sma_50(df):
     if 'current_price' in df.columns:
-        df['Real_Time_Indicator_SMA_50'] = df['current_price'].rolling(
-            window=50).mean()
-    else:
-        print("Column 'current_price' not found in DataFrame. Skipping feature 'Real_Time_Indicator_SMA_50'.")
+        df['Real_Time_Indicator_SMA_50'] = df['current_price'].rolling(window=50).mean()
     return df
-
 
 def feature_real_time_indicator_ema_12(df):
     if 'current_price' in df.columns:
-        df['Real_Time_Indicator_EMA_12'] = df['current_price'].ewm(
-            span=12, adjust=False).mean()
-    else:
-        print("Column 'current_price' not found in DataFrame. Skipping feature 'Real_Time_Indicator_EMA_12'.")
+        df['Real_Time_Indicator_EMA_12'] = df['current_price'].ewm(span=12, adjust=False).mean()
     return df
-
 
 def feature_real_time_indicator_ema_26(df):
     if 'current_price' in df.columns:
-        df['Real_Time_Indicator_EMA_26'] = df['current_price'].ewm(
-            span=26, adjust=False).mean()
-    else:
-        print("Column 'current_price' not found in DataFrame. Skipping feature 'Real_Time_Indicator_EMA_26'.")
+        df['Real_Time_Indicator_EMA_26'] = df['current_price'].ewm(span=26, adjust=False).mean()
     return df
 
-# Feature Engineering: Real Time SPX-VIX Correlation
-
-
 def feature_real_time_spx_vix_correlation(df_spx, df_vix):
-    # Log DataFrame info
-    print("Inspecting df_vix DataFrame for SPX correlation:")
-    print(df_vix.head())  # Print the first few rows
-    print("Columns in df_vix:", df_vix.columns)  # Print columns
+    logging.info(f"[feature_real_time_spx_vix_correlation] df_spx columns: {df_spx.columns.tolist()}")
+    logging.info(f"[feature_real_time_spx_vix_correlation] df_vix columns: {df_vix.columns.tolist()}")
 
-    # Check if the 'timestamp' column exists in both DataFrames
+    if not isinstance(df_vix, pd.DataFrame):
+        logging.error("df_vix is not a pandas DataFrame.")
+        return pd.DataFrame()
+
+    logging.info("Inspecting df_vix DataFrame for SPX correlation:")
+    logging.info(df_vix.head())
+    logging.info(f"Columns in df_vix: {df_vix.columns.tolist()}")
+
     if 'timestamp' not in df_spx.columns:
-        print("The 'timestamp' column is missing from the SPX DataFrame. Exiting function.")
-        return pd.DataFrame()  # Return an empty DataFrame or handle as needed
+        logging.error("The 'timestamp' column is missing from the SPX DataFrame. Exiting function.")
+        return pd.DataFrame()
 
     if 'timestamp' not in df_vix.columns:
-        print("The 'timestamp' column is missing from the VIX DataFrame. Adding default 'timestamp' column.")
-        df_vix['timestamp'] = pd.date_range(
-            start='2023-01-01', periods=len(df_vix), freq='T')
+        logging.error("The 'timestamp' column is missing from the VIX DataFrame. Cannot proceed.")
+        return pd.DataFrame()
 
-    # Convert to datetime
-    df_spx['timestamp'] = pd.to_datetime(df_spx['timestamp'], errors='coerce')
-    df_vix['timestamp'] = pd.to_datetime(df_vix['timestamp'], errors='coerce')
+    df_spx_copy = df_spx.copy()
+    df_vix_copy = df_vix.copy()
 
-    # Remove 'timestamp' column if it is set as the index
-    if df_spx.index.name == 'timestamp':
-        df_spx.reset_index(drop=True, inplace=True)
-    if df_vix.index.name == 'timestamp':
-        df_vix.reset_index(drop=True, inplace=True)
+    df_spx_copy['timestamp'] = pd.to_datetime(df_spx_copy['timestamp'], errors='coerce')
+    df_vix_copy['timestamp'] = pd.to_datetime(df_vix_copy['timestamp'], errors='coerce')
 
-    # Set 'timestamp' as the index
-    df_spx.set_index('timestamp', inplace=True, drop=True)
-    df_vix.set_index('timestamp', inplace=True, drop=True)
+    if df_spx_copy.index.name == 'timestamp':
+        df_spx_copy.reset_index(drop=True, inplace=True)
+    if df_vix_copy.index.name == 'timestamp':
+        df_vix_copy.reset_index(drop=True, inplace=True)
 
-    # Check if 'current_price' column exists in both DataFrames
-    if 'current_price' not in df_spx.columns or 'current_price' not in df_vix.columns:
-        print("Missing 'current_price' column in SPX or VIX DataFrame.")
-        return pd.DataFrame()  # Return an empty DataFrame or handle as needed
+    df_spx_copy.set_index('timestamp', inplace=True, drop=True)
+    df_vix_copy.set_index('timestamp', inplace=True, drop=True)
 
-    # Concatenate the DataFrames
-    df_combined = pd.concat([df_spx['current_price'], df_vix['current_price']], axis=1, keys=[
-                            'close_spx', 'close_vix'])
+    if 'current_price' not in df_spx_copy.columns or 'current_price' not in df_vix_copy.columns:
+        logging.error("Missing 'current_price' column in SPX or VIX DataFrame.")
+        return pd.DataFrame()
 
-    # Calculate the rolling correlation
-    df_combined['Real_Time_SPX_VIX_Correlation'] = df_combined['close_spx'].rolling(
-        window=30).corr(df_combined['close_vix'])
+    common_index = df_spx_copy.index.intersection(df_vix_copy.index)
+    df_spx_aligned = df_spx_copy.loc[common_index, ['current_price']].copy()
+    df_vix_aligned = df_vix_copy.loc[common_index, ['current_price']].copy()
 
-    return df_combined[['Real_Time_SPX_VIX_Correlation']].reset_index()
+    df_spx_aligned['Real_Time_SPX_VIX_Correlation'] = memory_friendly_rolling_corr(
+        df_spx_aligned['current_price'], df_vix_aligned['current_price'], window=30
+    )
 
-# Feature Engineering: Real Time SPY-VIX Correlation
+    final_df = df_spx_aligned[['Real_Time_SPX_VIX_Correlation']].reset_index()
 
+    logging.info("Completed SPX-VIX correlation feature calculation in a memory-friendly manner.")
+    return final_df
 
 def feature_real_time_spy_vix_correlation(df_spy, df_vix):
-    # Log DataFrame info
     print("\n--- Starting SPY-VIX Correlation ---")
     print("Initial df_spy state:")
     print(df_spy.head())
@@ -1015,77 +677,82 @@ def feature_real_time_spy_vix_correlation(df_spy, df_vix):
     print(df_vix.head())
     print("Columns in df_vix:", df_vix.columns)
 
-    # Check if the 'timestamp' column exists in both DataFrames
     if 'timestamp' not in df_spy.columns:
         print("The 'timestamp' column is missing from the SPY DataFrame. Exiting function.")
-        return pd.DataFrame()  # Return an empty DataFrame or handle as needed
+        return pd.DataFrame()
 
     if 'timestamp' not in df_vix.columns:
-        print("The 'timestamp' column is missing from the VIX DataFrame. Adding default 'timestamp' column.")
-        df_vix['timestamp'] = pd.date_range(
-            start='2023-01-01', periods=len(df_vix), freq='T')
+        logging.warning("The 'timestamp' column is missing from the VIX DataFrame. Adding default 'timestamp' column.")
+        df_vix['timestamp'] = pd.date_range(start='2023-01-01', periods=len(df_vix), freq='T')
 
-    # Log after adding timestamp column
-    print("State of df_vix after adding timestamp (if applicable):")
-    print(df_vix.head())
-    print("Columns in df_vix:", df_vix.columns)
+    df_spy_copy = df_spy.copy()
+    df_vix_copy = df_vix.copy()
 
-    # Convert to datetime
-    df_spy['timestamp'] = pd.to_datetime(df_spy['timestamp'], errors='coerce')
-    df_vix['timestamp'] = pd.to_datetime(df_vix['timestamp'], errors='coerce')
+    df_spy_copy['timestamp'] = pd.to_datetime(df_spy_copy['timestamp'], errors='coerce')
+    df_vix_copy['timestamp'] = pd.to_datetime(df_vix_copy['timestamp'], errors='coerce')
 
-    # Log after datetime conversion
-    print("State of df_spy and df_vix after datetime conversion:")
-    print(df_spy.head())
-    print(df_vix.head())
+    if df_spy_copy.index.name == 'timestamp':
+        df_spy_copy.reset_index(drop=True, inplace=True)
+    if df_vix_copy.index.name == 'timestamp':
+        df_vix_copy.reset_index(drop=True, inplace=True)
 
-    # Remove 'timestamp' column if it is set as the index
-    if df_spy.index.name == 'timestamp':
-        df_spy.reset_index(drop=True, inplace=True)
-    if df_vix.index.name == 'timestamp':
-        df_vix.reset_index(drop=True, inplace=True)
+    df_spy_copy.set_index('timestamp', inplace=True, drop=True)
+    df_vix_copy.set_index('timestamp', inplace=True, drop=True)
 
-    # Set 'timestamp' as the index
-    df_spy.set_index('timestamp', inplace=True, drop=True)
-    df_vix.set_index('timestamp', inplace=True, drop=True)
-
-    # Log before concatenating
-    print("Before concatenating SPY and VIX DataFrames:")
-    print("df_spy head:", df_spy.head())
-    print("df_vix head:", df_vix.head())
-
-    # Check if 'current_price' column exists in both DataFrames
-    if 'current_price' not in df_spy.columns or 'current_price' not in df_vix.columns:
+    if 'current_price' not in df_spy_copy.columns or 'current_price' not in df_vix_copy.columns:
         print("Missing 'current_price' column in SPY or VIX DataFrame.")
-        return pd.DataFrame()  # Return an empty DataFrame or handle as needed
+        return pd.DataFrame()
 
-    # Concatenate the DataFrames
+    common_index = df_spy_copy.index.intersection(df_vix_copy.index)
+    df_spy_aligned = df_spy_copy.loc[common_index, ['current_price']].copy()
+    df_vix_aligned = df_vix_copy.loc[common_index, ['current_price']].copy()
+
     try:
-        df_combined = pd.concat([df_spy['current_price'], df_vix['current_price']], axis=1, keys=[
-                                'close_spy', 'close_vix'])
-        print("Combined DataFrame:")
-        print(df_combined.head())
-
-        # Calculate the rolling correlation
-        df_combined['Real_Time_SPY_VIX_Correlation'] = df_combined['close_spy'].rolling(
-            window=30).corr(df_combined['close_vix'])
-        print("Calculated rolling correlation:")
-        print(df_combined[['Real_Time_SPY_VIX_Correlation']].head())
-
+        df_spy_aligned['Real_Time_SPY_VIX_Correlation'] = memory_friendly_rolling_corr(
+            df_spy_aligned['current_price'], df_vix_aligned['current_price'], window=30
+        )
     except Exception as e:
-        print("An error occurred during the concatenation or calculation:")
+        print("An error occurred during the memory-friendly correlation calculation:")
         print(e)
-        return pd.DataFrame()  # Return an empty DataFrame or handle as needed
+        return pd.DataFrame()
 
-    # Ensure df_combined is defined before returning
-    if 'df_combined' in locals():
-        return df_combined[['Real_Time_SPY_VIX_Correlation']].reset_index()
-    else:
-        print("df_combined is not defined. Returning an empty DataFrame.")
-        return pd.DataFrame()  # Fallback if df_combined is not defined
+    final_df = df_spy_aligned[['Real_Time_SPY_VIX_Correlation']].reset_index()
+    return final_df
 
-# Main functions for Feature Engineering
+def feature_vix_ema(df: pd.DataFrame, span_list: list) -> pd.DataFrame:
+    if 'current_price' not in df.columns:
+        logging.error("Missing 'current_price' column in VIX DataFrame. EMA calculation skipped.")
+        return df
+    for span in span_list:
+        ema_column = f'VIX_EMA_{span}'
+        df[ema_column] = df['current_price'].ewm(span=span, adjust=False).mean()
+        logging.info(f"Calculated {ema_column} for VIX.")
+    return df
 
+def feature_vix_rsi(df: pd.DataFrame, window: int = 14) -> pd.DataFrame:
+    if 'current_price' not in df.columns:
+        logging.error("Missing 'current_price' column in VIX DataFrame. RSI calculation skipped.")
+        return df
+    delta = df['current_price'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=window, min_periods=1).mean()
+    avg_loss = loss.rolling(window=window, min_periods=1).mean()
+    rs = avg_gain / avg_loss
+    df['VIX_RSI'] = 100 - (100 / (1 + rs))
+    logging.info("Calculated VIX_RSI.")
+    return df
+
+def feature_vix_macd(df: pd.DataFrame, span_short: int = 12, span_long: int = 26, span_signal: int = 9) -> pd.DataFrame:
+    if 'current_price' not in df.columns:
+        logging.error("Missing 'current_price' column in VIX DataFrame. MACD calculation skipped.")
+        return df
+    ema_short = df['current_price'].ewm(span=span_short, adjust=False).mean()
+    ema_long = df['current_price'].ewm(span=span_long, adjust=False).mean()
+    df['VIX_MACD'] = ema_short - ema_long
+    df['VIX_MACD_Signal'] = df['VIX_MACD'].ewm(span=span_signal, adjust=False).mean()
+    logging.info("Calculated VIX_MACD and VIX_MACD_Signal.")
+    return df
 
 def main_consumer_confidence_features(df):
     df = feature_consumer_confidence_cumulative_sum(df)
@@ -1093,12 +760,10 @@ def main_consumer_confidence_features(df):
     df = feature_consumer_confidence_days_since_trough(df)
     return df
 
-
 def main_consumer_sentiment_features(df):
     df = feature_consumer_sentiment_rolling_6m_average(df)
     df = feature_consumer_sentiment_rolling_12m_average(df)
     return df
-
 
 def main_core_inflation_features(df):
     df = feature_core_inflation_value(df)
@@ -1109,7 +774,6 @@ def main_core_inflation_features(df):
     df = feature_core_inflation_trend(df)
     return df
 
-
 def main_cpi_features(df):
     df = feature_cpi_value(df)
     df = feature_cpi_trend(df)
@@ -1117,7 +781,6 @@ def main_cpi_features(df):
     df = feature_cpi_days_since_peak(df)
     df = feature_cpi_days_since_trough(df)
     return df
-
 
 def main_gdp_features(df):
     df = feature_gdp_value(df)
@@ -1129,7 +792,6 @@ def main_gdp_features(df):
     df = feature_gdp_trend(df)
     df = feature_gdp_ema(df, [4, 8])
     return df
-
 
 def main_industrial_production_features(df):
     df = feature_industrial_production_value(df)
@@ -1143,10 +805,7 @@ def main_industrial_production_features(df):
     df = feature_industrial_production_days_since_trough(df)
     return df
 
-
 def main_interest_rate_features(df):
-    # if 'symbol' in df.columns:
-    # df = filter_spx_data(df)  # or filter_spy_data(df) based on the context
     df = feature_interest_rate_value(df)
     df = feature_interest_rate_lag(df, [1, 3, 12])
     df = feature_interest_rate_rolling_mean(df, [3, 6, 12])
@@ -1155,11 +814,7 @@ def main_interest_rate_features(df):
     df = feature_interest_rate_days_since_trough(df)
     return df
 
-
 def main_labor_force_features(df):
-    # Check if 'symbol' column exists before filtering
-    # if 'symbol' in df.columns:
-    #     df = filter_spy_data(df)  # Only apply if 'symbol' column exists
     df = feature_labor_force_value(df)
     df = feature_labor_force_lag(df, [1, 3, 12])
     df = feature_labor_force_rolling_mean(df, [3, 6, 12])
@@ -1167,7 +822,6 @@ def main_labor_force_features(df):
     df = feature_labor_force_days_since_peak(df)
     df = feature_labor_force_days_since_trough(df)
     return df
-
 
 def main_nonfarm_features(df):
     df = feature_nonfarm_value(df)
@@ -1178,7 +832,6 @@ def main_nonfarm_features(df):
     df = feature_nonfarm_cumulative_product(df)
     df = feature_nonfarm_days_since_trough(df)
     return df
-
 
 def main_pce_features(df):
     df = feature_pce_value(df)
@@ -1192,7 +845,6 @@ def main_pce_features(df):
     df = feature_pce_days_since_peak(df)
     return df
 
-
 def main_ppi_features(df):
     df = feature_ppi_value(df)
     df = feature_ppi_lag(df, [1, 3, 12])
@@ -1205,18 +857,15 @@ def main_ppi_features(df):
     df = feature_ppi_days_since_trough(df)
     return df
 
-
 def main_unemployment_rate_features(df):
     df = feature_unemployment_rate_cumulative_sum(df)
     df = feature_unemployment_rate_days_since_trough(df)
     return df
 
-
 def main_historical_indicator_features(df):
     df = feature_historical_indicator_ema_12(df)
     df = feature_historical_indicator_rsi(df)
     return df
-
 
 def main_spx_market_features(df):
     df = feature_spx_ema(df, [12, 26])
@@ -1224,340 +873,635 @@ def main_spx_market_features(df):
     df = feature_spx_drawdown_recovery(df)
     return df
 
-
 def main_spy_market_features(df):
     df = feature_spy_price_data(df)
     df = feature_spy_atr(df)
     df = feature_spy_drawdown_recovery(df)
     return df
 
+def main_vix_features(df):
+    logging.info("[main_vix_features] Processing VIX features.")
+    df = feature_vix_ema(df, [12, 26])
+    df = feature_vix_rsi(df)
+    df = feature_vix_macd(df)
+    logging.info("[main_vix_features] Completed VIX feature engineering.")
+    return df
 
 def main_real_time_spx_features(df):
-    logging.info(
-        f"[main_real_time_spx_features] Processing SPX real-time features.")
+    logging.info("[main_real_time_spx_features] Processing SPX real-time features.")
+    if 'timestamp' in df.index.names and 'timestamp' not in df.columns:
+        logging.info("[main_real_time_spx_features] 'timestamp' in index but not in columns. Resetting index.")
+        df.reset_index(inplace=True)
+    elif 'timestamp' in df.index.names and 'timestamp' in df.columns:
+        logging.info("[main_real_time_spx_features] 'timestamp' is both index and column. Dropping from index.")
+        df.reset_index(drop=True, inplace=True)
 
-    # Reset index only if 'timestamp' is in the index and not a column already
-    if 'timestamp' in df.index.names:
-        if 'timestamp' not in df.columns:
-            logging.info(
-                f"[main_real_time_spx_features] 'timestamp' is in the index but not in the columns. Resetting index and keeping 'timestamp'.")
-            df.reset_index(inplace=True)
-        else:
-            logging.info(
-                f"[main_real_time_spx_features] 'timestamp' is already a column. Resetting index without inserting 'timestamp' again.")
-            df.reset_index(drop=True, inplace=True)
+    if 'timestamp' not in df.columns:
+        logging.warning("[main_real_time_spx_features] The 'timestamp' column is missing. Cannot proceed.")
+        return pd.DataFrame()
 
-    # Ensure 'timestamp' is available and set it as the index if not already set
-    if 'timestamp' in df.columns:
-        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
-        df.set_index('timestamp', inplace=True, drop=False)
-        logging.info(
-            f"[main_real_time_spx_features] 'timestamp' column processed and set as index.")
+    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+
+    if 'current_price' in df.columns:
+        df['target_1h'] = df['current_price'].shift(-20)
+        df['target_3h'] = df['current_price'].shift(-60)
+        df['target_6h'] = df['current_price'].shift(-120)
+        df['target_1d'] = df['current_price'].shift(-480)
+        df['target_3d'] = df['current_price'].shift(-1440)
     else:
-        logging.warning(
-            f"[main_real_time_spx_features] The 'timestamp' column is missing from SPX DataFrame. Exiting function.")
-        return pd.DataFrame()  # Return an empty DataFrame or handle as needed
+        logging.warning("[main_real_time_spx_features] 'current_price' not found, cannot create targets.")
 
-    # Proceed with feature engineering
     df = feature_real_time_indicator_lag_1(df)
     df = feature_real_time_indicator_sma_20(df)
     df = feature_real_time_indicator_sma_50(df)
     df = feature_real_time_indicator_ema_12(df)
     df = feature_real_time_indicator_ema_26(df)
 
-    logging.info(
-        f"[main_real_time_spx_features] Completed feature engineering for SPX real-time.")
+    logging.info("[main_real_time_spx_features] Completed feature engineering for SPX real-time.")
     return df
-
 
 def main_real_time_spy_features(df):
-    logging.info(
-        f"[main_real_time_spy_features] Processing SPY real-time features.")
+    logging.info("[main_real_time_spy_features] Processing SPY real-time features.")
+    if 'timestamp' in df.index.names and 'timestamp' not in df.columns:
+        logging.info("[main_real_time_spy_features] 'timestamp' in index but not in columns. Resetting index.")
+        df.reset_index(inplace=True)
+    elif 'timestamp' in df.index.names and 'timestamp' in df.columns:
+        logging.info("[main_real_time_spy_features] 'timestamp' is both index and column. Dropping from index.")
+        df.reset_index(drop=True, inplace=True)
 
-    # Reset index only if 'timestamp' is in the index and not in columns
-    if 'timestamp' in df.index.names:
-        if 'timestamp' not in df.columns:
-            logging.info(
-                f"[main_real_time_spy_features] 'timestamp' is in the index but not in the columns. Resetting index and keeping 'timestamp'.")
-            df.reset_index(inplace=True)
-        else:
-            logging.info(
-                f"[main_real_time_spy_features] 'timestamp' is already a column. Resetting index without inserting 'timestamp' again.")
-            df.reset_index(drop=True, inplace=True)
+    if 'timestamp' not in df.columns:
+        logging.warning("[main_real_time_spy_features] The 'timestamp' column is missing. Cannot proceed.")
+        return pd.DataFrame()
 
-    # Ensure 'timestamp' is available and set it as the index if not already set
-    if 'timestamp' in df.columns:
-        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
-        df.set_index('timestamp', inplace=True, drop=False)
-        logging.info(
-            f"[main_real_time_spy_features] 'timestamp' column processed and set as index.")
+    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+    logging.info("[main_real_time_spy_features] 'timestamp' column processed.")
+    logging.info(f"[main_real_time_spy_features] Columns after timestamp processing: {df.columns.tolist()}")
+
+    if 'current_price' in df.columns:
+        df['target_1h'] = df['current_price'].shift(-20)
+        df['target_3h'] = df['current_price'].shift(-60)
+        df['target_6h'] = df['current_price'].shift(-120)
+        df['target_1d'] = df['current_price'].shift(-480)
+        df['target_3d'] = df['current_price'].shift(-1440)
     else:
-        logging.warning(
-            f"[main_real_time_spy_features] The 'timestamp' column is missing from SPY DataFrame. Exiting function.")
-        return pd.DataFrame()  # Return an empty DataFrame or handle as needed
+        logging.warning("[main_real_time_spy_features] 'current_price' not found, cannot create targets.")
 
-    # Add logging to check if 'timestamp' exists after processing
-    logging.info(f"[main_real_time_spy_features] Columns after setting timestamp: {
-                 df.columns.tolist()}")
-
-    # Proceed with feature engineering
     df = feature_real_time_indicator_lag_1(df)
     df = feature_real_time_indicator_sma_20(df)
     df = feature_real_time_indicator_sma_50(df)
     df = feature_real_time_indicator_ema_12(df)
     df = feature_real_time_indicator_ema_26(df)
 
-    logging.info(
-        f"[main_real_time_spy_features] Completed feature engineering for SPY real-time.")
+    logging.info("[main_real_time_spy_features] Completed feature engineering for SPY real-time.")
     return df
 
+missing_columns_dict = {}
 
-def main_real_time_vix_correlation_features(df_spx, df_spy, df_vix):
-    df_spx_vix_correlation = feature_real_time_spx_vix_correlation(
-        df_spx, df_vix)
-    df_spy_vix_correlation = feature_real_time_spy_vix_correlation(
-        df_spy, df_vix)
+def require_columns(df, required_cols, dataset_name):
+    missing = [col for col in required_cols if col not in df.columns]
+    if missing:
+        logging.warning(f"{dataset_name}: Missing required columns {missing}")
+        missing_columns_dict[dataset_name] = missing
+        return False
+    return True
 
-    # Merging the SPX-VIX and SPY-VIX correlations into respective dataframes
-    df_spx = pd.merge(df_spx, df_spx_vix_correlation,
-                      left_index=True, right_index=True, how='left')
-    df_spy = pd.merge(df_spy, df_spy_vix_correlation,
-                      left_index=True, right_index=True, how='left')
+def apply_days_since_peak_or_trough(df, feature_peak_col, feature_days_col, dataset_name):
+    datetime_col = 'date' if 'date' in df.columns else 'timestamp' if 'timestamp' in df.columns else None
+    if datetime_col is None:
+        logging.warning(f"{dataset_name}: No datetime column for {feature_days_col}. Skipping.")
+        df[feature_days_col] = np.nan
+        return df
+    unique_vals = df[feature_peak_col].dropna().unique()
+    val_to_index = {}
+    for val in unique_vals:
+        first_occ_idx = df[df[feature_peak_col] == val].index[0]
+        val_to_index[val] = first_occ_idx
+    def calc_days_since(row):
+        val = row[feature_peak_col]
+        if pd.isna(val):
+            return np.nan
+        if val not in val_to_index:
+            return np.nan
+        peak_idx = val_to_index[val]
+        if peak_idx not in df.index or row.name not in df.index:
+            return np.nan
+        if pd.isna(df.at[peak_idx, datetime_col]) or pd.isna(df.at[row.name, datetime_col]):
+            return np.nan
+        delta = df.at[row.name, datetime_col] - df.at[peak_idx, datetime_col]
+        return delta.days if pd.notna(delta) else np.nan
+    df[feature_days_col] = df.apply(calc_days_since, axis=1)
+    return df
 
-    return df_spx, df_spy
+def apply_features(df, dataset_name, data_dict):
+    if dataset_name == 'real_time_vix':
+        logging.info(f"[apply_features - {dataset_name}] Initial columns: {df.columns.tolist()}")
+        if 'timestamp' not in df.columns:
+            logging.warning(f"[apply_features - {dataset_name}] 'timestamp' missing at the start of apply_features.")
+        else:
+            logging.info(f"[apply_features - {dataset_name}] 'timestamp' found before feature engineering.")
+        if 'timestamp' not in df.columns:
+            logging.error(f"[apply_features - {dataset_name}] 'timestamp' must be present. Cannot proceed.")
+            return df
 
+        logging.info(f"[apply_features - {dataset_name}] Applying main_vix_features...")
+        df = main_vix_features(df)
+        logging.info(f"[apply_features - {dataset_name}] After main_vix_features columns: {df.columns.tolist()}")
 
-# Apply Features (Main Main)
-def apply_features(df, dataset_name, real_time_vix=None):
+        if 'timestamp' not in df.columns:
+            logging.warning(f"[apply_features - {dataset_name}] 'timestamp' missing after main_vix_features.")
+        else:
+            logging.info(f"[apply_features - {dataset_name}] 'timestamp' still present after main_vix_features.")
+
+        logging.info(f"[apply_features - {dataset_name}] Final columns at end of function: {df.columns.tolist()}")
+        return df
+
+    macro_required = ['value']
+
     if dataset_name == 'consumer_confidence_data':
-        return main_consumer_confidence_features(df)
+        if not require_columns(df, macro_required, dataset_name):
+            return df
+        df = main_consumer_confidence_features(df)
+        df = apply_days_since_peak_or_trough(df,
+                                             'Consumer_Confidence_Peak',
+                                             'Consumer_Confidence_Days_Since_Peak',
+                                             dataset_name)
+        df = apply_days_since_peak_or_trough(df,
+                                             'Consumer_Confidence_Trough',
+                                             'Consumer_Confidence_Days_Since_Trough',
+                                             dataset_name)
+        return df
+
     elif dataset_name == 'consumer_sentiment_data':
+        if not require_columns(df, macro_required, dataset_name):
+            return df
         return main_consumer_sentiment_features(df)
+
     elif dataset_name == 'core_inflation_data':
+        if not require_columns(df, macro_required, dataset_name):
+            return df
         return main_core_inflation_features(df)
+
     elif dataset_name == 'cpi_data':
-        return main_cpi_features(df)
+        if not require_columns(df, macro_required, dataset_name):
+            return df
+        df = main_cpi_features(df)
+        df = apply_days_since_peak_or_trough(df,
+                                             'CPI_Peak',
+                                             'CPI_Days_Since_Peak',
+                                             dataset_name)
+        df = apply_days_since_peak_or_trough(df,
+                                             'CPI_Trough',
+                                             'CPI_Days_Since_Trough',
+                                             dataset_name)
+        return df
+
     elif dataset_name == 'gdp_data':
+        if not require_columns(df, macro_required, dataset_name):
+            return df
         return main_gdp_features(df)
+
     elif dataset_name == 'industrial_production_data':
-        return main_industrial_production_features(df)
+        if not require_columns(df, macro_required, dataset_name):
+            return df
+        df = main_industrial_production_features(df)
+        df = apply_days_since_peak_or_trough(df,
+                                             'Industrial_Production_Trough',
+                                             'Industrial_Production_Days_Since_Trough',
+                                             dataset_name)
+        return df
+
     elif dataset_name == 'interest_rate_data':
-        return main_interest_rate_features(df)
+        if not require_columns(df, macro_required, dataset_name):
+            return df
+        df = main_interest_rate_features(df)
+        df = apply_days_since_peak_or_trough(df,
+                                             'Interest_Rate_Peak',
+                                             'Interest_Rate_Days_Since_Peak',
+                                             dataset_name)
+        df = apply_days_since_peak_or_trough(df,
+                                             'Interest_Rate_Trough',
+                                             'Interest_Rate_Days_Since_Trough',
+                                             dataset_name)
+        return df
+
     elif dataset_name == 'labor_force_participation_rate_data':
-        return main_labor_force_features(df)
+        if not require_columns(df, macro_required, dataset_name):
+            return df
+        df = main_labor_force_features(df)
+        df = apply_days_since_peak_or_trough(df,
+                                             'Labor_Force_Peak',
+                                             'Labor_Force_Days_Since_Peak',
+                                             dataset_name)
+        df = apply_days_since_peak_or_trough(df,
+                                             'Labor_Force_Trough',
+                                             'Labor_Force_Days_Since_Trough',
+                                             dataset_name)
+        return df
+
     elif dataset_name == 'nonfarm_payroll_employment_data':
-        return main_nonfarm_features(df)
-    elif dataset_name == 'personal_consumption_expenditures_data':
-        return main_pce_features(df)
+        if not require_columns(df, macro_required, dataset_name):
+            return df
+        df = main_nonfarm_features(df)
+        df = apply_days_since_peak_or_trough(df,
+                                             'NonFarm_Trough',
+                                             'NonFarm_Days_Since_Trough',
+                                             dataset_name)
+        return df
+
+    elif dataset_name == 'personal_consumption_expenditures':
+        if not require_columns(df, macro_required, dataset_name):
+            return df
+        df = main_pce_features(df)
+        df = apply_days_since_peak_or_trough(df,
+                                             'PCE_Peak',
+                                             'PCE_Days_Since_Peak',
+                                             dataset_name)
+        return df
+
     elif dataset_name == 'ppi_data':
-        return main_ppi_features(df)
+        if not require_columns(df, macro_required, dataset_name):
+            return df
+        df = main_ppi_features(df)
+        df = apply_days_since_peak_or_trough(df,
+                                             'PPI_Trough',
+                                             'PPI_Days_Since_Trough',
+                                             dataset_name)
+        return df
+
     elif dataset_name == 'unemployment_rate_data':
-        return main_unemployment_rate_features(df)
+        if not require_columns(df, macro_required, dataset_name):
+            return df
+        df = main_unemployment_rate_features(df)
+        df = apply_days_since_peak_or_trough(df,
+                                             'Unemployment_Rate_Trough',
+                                             'Unemployment_Rate_Days_Since_Trough',
+                                             dataset_name)
+        return df
+
     elif dataset_name == 'historical_indicator_data':
+        if not require_columns(df, macro_required, dataset_name):
+            return df
         return main_historical_indicator_features(df)
+
     elif dataset_name == 'spx_market_data':
+        if not require_columns(df, ['close'], dataset_name):
+            return df
         return main_spx_market_features(df)
+
     elif dataset_name == 'spy_market_data':
+        if not require_columns(df, ['close'], dataset_name):
+            return df
         return main_spy_market_features(df)
-    elif dataset_name == 'real_time_spx':
-        df = main_real_time_spx_features(df)
-        if real_time_vix is not None:
-            spx_vix_corr = feature_real_time_spx_vix_correlation(
-                df, real_time_vix)
-            # Drop 'timestamp' column to avoid overlap
-            spx_vix_corr.drop(columns=['timestamp'],
-                              inplace=True, errors='ignore')
-            df = df.join(spx_vix_corr)
+
+    elif dataset_name in ['historical_spx', 'historical_spy']:
+        if dataset_name == 'historical_spx':
+            if not require_columns(df, ['close'], dataset_name):
+                return df
+            df = main_spx_market_features(df)
+            correlation_function = feature_real_time_spx_vix_correlation
+        else:
+            if not require_columns(df, ['close'], dataset_name):
+                return df
+            df = main_spy_market_features(df)
+            correlation_function = feature_real_time_spy_vix_correlation
+
+        vix_data = data_dict.get('historical_vix', None)
+        if vix_data is not None and not vix_data.empty:
+            corr_features = correlation_function(df, vix_data)
+            if 'timestamp' in corr_features.columns:
+                df = pd.merge(df, corr_features, on='timestamp', how='left')
         return df
-    elif dataset_name == 'real_time_spy':
-        df = main_real_time_spy_features(df)
-        if real_time_vix is not None:
-            spy_vix_corr = feature_real_time_spy_vix_correlation(
-                df, real_time_vix)
-            # Drop 'timestamp' column to avoid overlap
-            spy_vix_corr.drop(columns=['timestamp'],
-                              inplace=True, errors='ignore')
-            df = df.join(spy_vix_corr)
+    
+    elif dataset_name in ['real_time_spx', 'real_time_spy']:
+        if dataset_name == 'real_time_spx':
+            if not require_columns(df, ['current_price'], dataset_name):
+                return df
+            df = main_real_time_spx_features(df)
+            correlation_function = feature_real_time_spx_vix_correlation
+        else:
+            if not require_columns(df, ['current_price'], dataset_name):
+                return df
+            df = main_real_time_spy_features(df)
+            correlation_function = feature_real_time_spy_vix_correlation
+
+        vix_data = data_dict.get('real_time_vix', None)
+        if vix_data is not None and not vix_data.empty:
+            corr_features = correlation_function(df, vix_data)
+            if 'timestamp' in corr_features.columns:
+                df = pd.merge(df, corr_features, on='timestamp', how='left')
         return df
+
+    elif dataset_name in ['historical_vix', 'real_time_vix']:
+        if 'timestamp' not in df.columns:
+            return df
+        df = main_vix_features(df)
+        return df
+
     else:
-        print(f"No specific feature engineering function defined for {
-              dataset_name}.")
         return df
+    
+def create_XY_sequences(df, seq_len=60, single_horizon_target=None):
+    """
+    Create sequences for both X and Y arrays from a given DataFrame.
+
+    1) If df has all 5 multi-horizon columns: [target_1h, target_3h, target_6h, target_1d, target_3d],
+       we create Y as a 5-dimensional output (shape: (num_samples, 5)).
+
+    2) Otherwise, if 'single_horizon_target' is provided and present in df, we produce Y with shape (num_samples, 1).
+
+    3) If neither multi-horizon columns nor a single_horizon_target is found, we produce only X (no Y).
+    """
+    import logging
+    horizon_cols = ['target_1h','target_3h','target_6h','target_1d','target_3d']
+    available_horizons = [col for col in horizon_cols if col in df.columns]
+
+    # 1) Check if we have *all* multi-horizon columns
+    if len(available_horizons) == 5:
+        logging.info("Creating multi-horizon Y with shape=(...,5).")
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        for hc in horizon_cols:
+            if hc in numeric_cols:
+                numeric_cols.remove(hc)
+        X_array = df[numeric_cols].values
+        y_array = df[horizon_cols].values  # shape => (N, 5)
+    else:
+        # 2) Otherwise, single horizon fallback
+        if single_horizon_target and single_horizon_target in df.columns:
+            logging.info(f"Creating single-horizon Y using {single_horizon_target}.")
+            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            if single_horizon_target in numeric_cols:
+                numeric_cols.remove(single_horizon_target)
+            X_array = df[numeric_cols].values
+            y_array = df[single_horizon_target].values.reshape(-1,1)
+        else:
+            # 3) No valid target => only X
+            logging.warning("No multi-horizon or single-horizon target found; only X will be returned.")
+            X_array = df.select_dtypes(include=[np.number]).values
+            y_array = None
+
+    if len(X_array) < seq_len:
+        logging.warning("Not enough rows to form even one sequence.")
+        return None, None
+
+    # Build sequences
+    X_seq, y_seq = [], []
+    for i in range(len(X_array) - seq_len):
+        X_seq.append(X_array[i : i + seq_len])
+        if y_array is not None:
+            # multi-horizon => shape (5,) ; single-horizon => shape (1,)
+            y_seq.append(y_array[i + seq_len])  # offset
+
+    X_seq = np.array(X_seq, dtype=np.float32)
+    y_seq = np.array(y_seq, dtype=np.float32) if y_array is not None else None
+    return X_seq, y_seq
 
 
-# Scaling function
+def save_sequences_in_parts(X, Y, prefix, chunk_size=10000):
+    ensure_directory_exists(SEQUENCES_DIR)  # Make sure our subfolder is created
+
+    num_chunks = (X.shape[0] + chunk_size - 1) // chunk_size
+    for i in range(num_chunks):
+        start = i * chunk_size
+        end = min((i+1)*chunk_size, X.shape[0])
+        X_part = X[start:end]
+        X_part_filename = os.path.join(SEQUENCES_DIR, f'{prefix}_X_3D_part{i}.npy')
+        np.save(X_part_filename, X_part)
+
+    if Y is not None:
+        num_chunks = (Y.shape[0] + chunk_size - 1) // chunk_size
+        for i in range(num_chunks):
+            start = i * chunk_size
+            end = min((i+1)*chunk_size, Y.shape[0])
+            Y_part = Y[start:end]
+            Y_part_filename = os.path.join(SEQUENCES_DIR, f'{prefix}_Y_3D_part{i}.npy')
+            np.save(Y_part_filename, Y_part)
+
+        
 def scale_all_features(df, dataset_name, target_column=None):
-    # Identify datetime columns
-    datetime_columns = [col for col in [
-        'timestamp', 'date'] if col in df.columns]
-
-    # Check if any datetime columns are found, if not, log a warning
-    if not datetime_columns:
-        print(f"Warning: No 'timestamp' or 'date' column found in {
-              dataset_name}. Skipping datetime columns handling.")
-
-    # Check if target column exists
+    datetime_columns_local = [col for col in ['timestamp', 'date'] if col in df.columns]
+    multi_target_cols = [col for col in df.columns if col.startswith('target_')]
+    target_columns_local = []
     if target_column and target_column in df.columns:
-        target_columns = [target_column]
-    else:
-        target_columns = []
-        if target_column:
-            logging.warning(f"Target column '{target_column}' not found in DataFrame '{
-                            dataset_name}'. Skipping target scaling.")
+        target_columns_local.append(target_column)
+    target_columns_local = list(set(target_columns_local + multi_target_cols))
 
-    # For specific real-time datasets, drop columns with all NaN or empty values
     if dataset_name in ['real_time_spx', 'real_time_spy', 'real_time_vix']:
-        df = df.dropna(axis=1, how='all')
+        df.dropna(axis=1, how='all', inplace=True)
 
-    # Select feature columns (exclude datetime and target columns)
-    feature_columns = [
-        col for col in df.columns if col not in datetime_columns + target_columns]
+    datetime_df = df[datetime_columns_local] if datetime_columns_local else pd.DataFrame()
+    target_df = df[target_columns_local] if target_columns_local else pd.DataFrame()
 
-    # Convert feature columns to numeric (coerce invalid values to NaN)
+    feature_columns = [c for c in df.columns if c not in datetime_columns_local + target_columns_local]
     feature_df = df[feature_columns].apply(pd.to_numeric, errors='coerce')
 
-    # Check if feature_df is empty after conversion
-    logging.info(f"[scale_all_features] Feature columns for {
-                 dataset_name}: {feature_columns}")
+    for col in feature_df.columns:
+        if pd.api.types.is_float_dtype(feature_df[col]):
+            feature_df[col] = pd.to_numeric(feature_df[col], downcast='float')
+        elif pd.api.types.is_integer_dtype(feature_df[col]):
+            feature_df[col] = pd.to_numeric(feature_df[col], downcast='integer')
+
     if feature_df.empty:
-        logging.warning(f"[scale_all_features] No valid feature columns found in '{
-                        dataset_name}'. Skipping scaling.")
-        return df
+        return pd.concat([datetime_df, target_df], axis=1) if not (datetime_df.empty and target_df.empty) else df
 
-    # Additional logging for data types
-    logging.info(f"[scale_all_features] Data types of feature_df:\n{
-                 feature_df.dtypes}")
-
-    # Check for and handle non-numeric columns (drop them)
-    non_numeric_features = feature_df.select_dtypes(
-        exclude=[np.number]).columns.tolist()
-    if non_numeric_features:
-        logging.warning(f"Non-numeric feature columns detected in '{dataset_name}': {
-                        non_numeric_features}. Dropping these columns.")
-        feature_df.drop(columns=non_numeric_features, inplace=True)
-
-    # Handle NaN and infinite values in feature columns
     feature_df.replace([np.inf, -np.inf], np.nan, inplace=True)
-    feature_df.fillna(feature_df.mean(), inplace=True)
+    feature_df.fillna(feature_df.mean(numeric_only=True), inplace=True)
 
-    # Scaling features
-    feature_scaler = MinMaxScaler(feature_range=(0, 1))
-    try:
-        scaled_feature_df = pd.DataFrame(
-            feature_scaler.fit_transform(feature_df),
-            columns=feature_df.columns,
-            index=df.index
-        )
-    except ValueError as e:
-        logging.error(f"Error in scaling features for {dataset_name}: {e}")
-        return df  # Return the original DataFrame in case of a scaling error
-
-    # Ensure the directory exists before saving
-    feature_scaler_filename = f'models/lumen_2/{
-        dataset_name}_feature_scaler.joblib'
-    scaler_directory = os.path.dirname(feature_scaler_filename)
-    ensure_directory_exists(scaler_directory)
-
-    # Save the feature scaler
-    joblib.dump(feature_scaler, feature_scaler_filename)
-    print(f"Saved scaler for {dataset_name} to {feature_scaler_filename}")
-
-    # Handle target column scaling, if applicable
-    if target_columns:
-        # Convert target columns to numeric
-        target_df = df[target_columns].apply(pd.to_numeric, errors='coerce')
-        target_df.replace([np.inf, -np.inf], np.nan, inplace=True)
-
-        # Ensure no NaNs in the target column
-        target_df.dropna(inplace=True)
-
-        # Align the feature and target dataframes by index
-        feature_df = feature_df.loc[target_df.index]
-        scaled_feature_df = scaled_feature_df.loc[target_df.index]
-        scaled_target_df = target_df
+    if not feature_df.empty:
+        scaler = MinMaxScaler(feature_range=(0, 1))
+        try:
+            scaled_vals = scaler.fit_transform(feature_df)
+        except ValueError:
+            return pd.concat([datetime_df, target_df], axis=1) if not (datetime_df.empty and target_df.empty) else df
+        scaled_feature_df = pd.DataFrame(scaled_vals.astype('float32'), columns=feature_df.columns, index=feature_df.index)
     else:
-        scaled_target_df = pd.DataFrame(index=scaled_feature_df.index)
+        scaled_feature_df = feature_df
 
-    # Combine datetime, scaled features, and scaled target columns
-    if datetime_columns:
-        datetime_df = df[datetime_columns]
-        final_df = pd.concat([datetime_df.reset_index(drop=True), scaled_feature_df.reset_index(
-            drop=True), scaled_target_df.reset_index(drop=True)], axis=1)
-    else:
-        final_df = pd.concat([scaled_feature_df, scaled_target_df], axis=1)
+    parts = []
+    if not datetime_df.empty:
+        datetime_df.reset_index(drop=True, inplace=True)
+        parts.append(datetime_df)
+    scaled_feature_df.reset_index(drop=True, inplace=True)
+    parts.append(scaled_feature_df)
+    if not target_df.empty:
+        target_df.reset_index(drop=True, inplace=True)
+        parts.append(target_df)
 
-    # Log final dataframe shape and return
-    print(f"Final DataFrame shape after scaling for {
-          dataset_name}: {final_df.shape}")
-    return final_df
-
-# Save enhanced data to the featured directory
-
+    return pd.concat(parts, axis=1)
 
 def save_enhanced_data(df, filename):
-    # Add 'featured_' prefix as needed
     enhanced_filename = f"featured_{filename}"
-    df.to_csv(os.path.join(FEATURED_DIR, enhanced_filename))
-    print(f"Saved enhanced data to {
-          os.path.join(FEATURED_DIR, enhanced_filename)}")
+    filepath = os.path.join(FEATURED_DIR, enhanced_filename)
+    df.to_csv(filepath, index=False)
+    logging.info(f"Saved enhanced data to {filepath}")
 
-# MAIN function to perform feature engineering
+def extract_and_save_feature_list(data_dict: dict, output_file: str, datetime_columns: list, target_columns: dict):
+    feature_list = []
+    for dataset_name, df in data_dict.items():
+        target_column = target_columns.get(dataset_name, None)
+        exclude_cols = datetime_columns.copy()
+        if target_column:
+            exclude_cols.append(target_column)
+        features = [col for col in df.columns if col not in exclude_cols]
+        for idx, feature in enumerate(features, start=1):
+            feature_list.append({
+                'Dataset': dataset_name,
+                'Feature_Number': idx,
+                'Feature_Name': feature
+            })
+    feature_df = pd.DataFrame(feature_list)
+    feature_df.to_csv(output_file, index=False)
+    logging.info(f"Feature list saved to {output_file}")
 
+    summary = feature_df.groupby('Dataset').agg(
+        Total_Features=('Feature_Name', 'count'),
+        Feature_Names=('Feature_Name', lambda x: ', '.join(x[:5]) + ('...' if len(x) > 5 else ''))
+    ).reset_index()
+
+    logging.info("=== Feature Summary ===")
+    for _, row in summary.iterrows():
+        logging.info(f"Dataset '{row['Dataset']}': {row['Total_Features']} features.")
+        logging.info(f"Sample Features: {row['Feature_Names']}")
+    logging.info("========================")
+
+datetime_columns = ['timestamp', 'date']
+target_columns = {
+    'historical_spx': 'close',
+    'historical_spy': 'close',
+    'real_time_spx': 'current_price',
+    'real_time_spy': 'current_price',
+    'unemployment_rate_data': 'unemployment_rate',
+}
+
+def create_sequences(data, seq_len=60):
+    sequences = []
+    for i in range(len(data) - seq_len + 1):
+        seq = data[i:i+seq_len]
+        sequences.append(seq)
+    return np.array(sequences)
+
+def create_and_save_sequences_in_chunks(df, data_name, seq_len, target_column, chunk_size=10000):
+    """
+    Create sequences for X and Y arrays in small increments rather than all at once.
+    This prevents loading massive arrays all at once into memory.
+    """
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    has_target = target_column and target_column in df.columns
+
+    if has_target:
+        numeric_cols.remove(target_column)
+        X_array = df[numeric_cols].values
+        y_array = df[target_column].values
+    else:
+        X_array = df[numeric_cols].values
+        y_array = None
+
+    total_length = len(X_array)
+    if total_length < seq_len:
+        logging.warning(f"[{data_name}] Not enough data to create sequences of length {seq_len}. Skipping.")
+        return
+
+    # We'll create and save sequences in manageable chunks
+    start = 0
+    x_part_count = 0
+    y_part_count = 0
+
+    while start + seq_len <= total_length:
+        end = min(start + chunk_size, total_length - seq_len + 1)
+        # Create partial sequences for this chunk
+        X_seq_list = []
+        Y_seq_list = []
+        
+        for i in range(start, end):
+            X_seq_list.append(X_array[i:i+seq_len])
+            if has_target:
+                Y_seq_list.append(y_array[i+seq_len-1])  # predict value at the end of the sequence
+
+        X_seq_arr = np.array(X_seq_list, dtype=np.float32)
+        Y_seq_arr = np.array(Y_seq_list, dtype=np.float32) if has_target else None
+
+        # Save partial sequences
+        X_part_filename = os.path.join(FEATURED_DIR, f'{data_name}_X_3D_part{x_part_count}.npy')
+        np.save(X_part_filename, X_seq_arr)
+        x_part_count += 1
+
+        if has_target:
+            Y_part_filename = os.path.join(FEATURED_DIR, f'{data_name}_Y_3D_part{y_part_count}.npy')
+            np.save(Y_part_filename, Y_seq_arr)
+            y_part_count += 1
+
+        # Move to next chunk
+        start = end
 
 def main():
-    logging.info(f"[main] Starting feature engineering process.")
-    data_dict = load_data()
+    # 1) Ensure both FEATURED_DIR and SEQUENCES_DIR exist
+    ensure_directory_exists(FEATURED_DIR)
+    ensure_directory_exists(SEQUENCES_DIR)  # Make sure your "sequences" subfolder exists
 
-    real_time_vix = data_dict.get('real_time_vix')
+    logging.info("[main] Starting feature engineering process.")
+    data_dict = load_data()
 
     for data_name, df in data_dict.items():
         logging.info(f"[main] Processing {data_name}...")
 
         if 'timestamp' in df.columns:
             df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
-            df.set_index('timestamp', inplace=True, drop=False)
+            logging.info(f"[main] 'timestamp' column converted for {data_name}.")
         elif 'date' in df.columns:
             df['date'] = pd.to_datetime(df['date'], errors='coerce')
-            df.set_index('date', inplace=True, drop=False)
+            logging.info(f"[main] 'date' column converted for {data_name}.")
         else:
-            logging.warning(f"[main] No 'timestamp' or 'date' column found in {
-                            data_name}. Skipping datetime columns handling.")
+            logging.warning(f"[main] No 'timestamp' or 'date' column in {data_name}.")
 
+        # Apply feature engineering
         try:
-            df = apply_features(df, data_name, real_time_vix)
+            df = apply_features(df, data_name, data_dict)
         except Exception as e:
-            logging.error(f"[main] Error applying features for {
-                          data_name}: {e}", exc_info=True)
-            continue  # Skip to the next dataset if an error occurs
+            logging.error(f"[main] Error applying features for {data_name}: {e}", exc_info=True)
+            continue
 
-        # Log DataFrame columns before scaling
-        logging.info(f"[main] Columns in DataFrame before scaling for {
-                     data_name}: {df.columns.tolist()}")
+        # Identify which column (if any) is the primary target for this dataset
+        target_column = target_columns.get(data_name, None)
 
-        if data_name in ['historical_spx', 'historical_spy']:
-            target_column = 'close'
-        elif data_name in ['real_time_spx', 'real_time_spy']:
-            target_column = 'current_price'
-        else:
-            target_column = None
-
+        # Scale all features in the DataFrame
         try:
             df = scale_all_features(df, data_name, target_column)
         except Exception as e:
-            logging.error(f"[main] Error scaling features for {
-                          data_name}: {e}", exc_info=True)
-            continue  # Skip to the next dataset if an error occurs
-
-        if df.empty:
-            logging.warning(f"[main] DataFrame for {
-                            data_name} is empty after scaling. Skipping saving.")
+            logging.error(f"[main] Error scaling features for {data_name}: {e}", exc_info=True)
             continue
 
-        logging.info(f"[main] Saving enhanced data for {data_name}.")
-        save_enhanced_data(df, f'{data_name}_featured.csv')
+        if df.empty:
+            logging.warning(f"[main] {data_name} is empty after scaling. Skipping saving.")
+            continue
 
+        # Save the CSV with the enhanced features
+        try:
+            save_enhanced_data(df, f'{data_name}.csv')
+        except Exception as e:
+            logging.error(f"[main] Error saving enhanced data for {data_name}: {e}", exc_info=True)
+            continue
 
-# Ensure the directory exists before running main
+        # Create sequences in chunks (to reduce memory usage), then save them
+        create_and_save_sequences_in_chunks(
+            df,
+            data_name,
+            seq_len=60,
+            target_column=target_column,
+            chunk_size=10000
+        )
+
+    # Finally, extract and save the full feature list
+    output_file = os.path.join(BASE_DIR, 'feature_list.csv')
+    extract_and_save_feature_list(data_dict, output_file, datetime_columns, target_columns)
+
+    # If any columns were missing across datasets, show a summary
+    if missing_columns_dict:
+        logging.info("=== Missing Columns Summary ===")
+        for d_name, cols in missing_columns_dict.items():
+            logging.info(f"{d_name} is missing: {cols}")
+        logging.info("==============================")
+
+    logging.info("[main] Feature engineering process completed.")
+
 if __name__ == "__main__":
     ensure_directory_exists(FEATURED_DIR)
     main()
