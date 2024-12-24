@@ -137,3 +137,4 @@ ai/.env
 # Ignore Python cache files
 __pycache__/
 *.pyc
+ai/models/lumen_2/X_test_real.npy
