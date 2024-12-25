@@ -7,7 +7,6 @@ from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import Sequence
 
-# --- Path adjustment snippet (same as in your other scripts) ---
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
 sys.path.append(project_root)

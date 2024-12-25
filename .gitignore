@@ -146,3 +146,4 @@ ai/data/lumen_2/raw/
 ai/data/lumen_2/test/
 ai/models/lumen_2/scalers/
 ai/models/lumen_2/trained/
+ai/models/lumen_2/Lumen2_from_s3.keras
