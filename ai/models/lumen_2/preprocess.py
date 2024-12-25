@@ -1,3 +1,4 @@
+import sys
 import os
 import pandas as pd
 import numpy as np
@@ -7,6 +8,10 @@ from statsmodels.tsa.seasonal import seasonal_decompose
 from dotenv import load_dotenv
 
 load_dotenv()
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, "..", "..", ".."))  
+sys.path.append(project_root)
 
 
 def get_db_connection():
@@ -29,7 +34,7 @@ def load_data(query):
         print(f"Executing query: {query}")
         df = pd.read_sql(query, connection)
         print("Data loaded from the database. DataFrame head:")
-        print(df.head())  # Print the first few rows of the DataFrame
+        print(df.head())  
         connection.close()
         print("Connection closed successfully.")
         return df
@@ -41,27 +46,20 @@ def load_data(query):
 # Data Cleaning
 # Data Cleaning: average_hourly_earnings_data
 def clean_average_hourly_earnings_data(df):
-    # Drop unnecessary columns 'created_at' and 'updated_at'
     df = df.drop(columns=['created_at', 'updated_at'], errors='ignore')
 
-    # Ensure the 'date' column exists; if not, raise an error
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
 
-    # Convert 'date' to datetime format
     df['date'] = pd.to_datetime(df['date'])
 
-    # Check for duplicate columns and drop them
     df = df.loc[:, ~df.columns.duplicated()]
     print("Dropped duplicate columns, if any existed.")
 
-    # Keep only relevant columns: 'id', 'date', and 'value'
     df = df[['id', 'date', 'value']]
 
-    # Handle missing values by dropping rows where 'value' is NaN
     df = df.dropna(subset=['value'])
 
-    # Remove duplicates based on the 'date' column
     df = df.drop_duplicates(subset=['date'])
 
     # Handle outliers in the 'value' column
@@ -73,33 +71,26 @@ def clean_average_hourly_earnings_data(df):
 
 
 def clean_consumer_confidence_data(df):
-    # Debug: Print the DataFrame before any operation
     print("Initial DataFrame:")
     print(df.head())
 
-    # Check if 'created_at' or 'updated_at' columns exist and drop them
     if 'created_at' in df.columns:
         df = df.drop(columns=['created_at'])
     if 'updated_at' in df.columns:
         df = df.drop(columns=['updated_at'])
 
-    # Ensure the 'date' column exists; if not, rename 'timestamp' to 'date' for consistency
     if 'date' not in df.columns and 'timestamp' in df.columns:
         df = df.rename(columns={'timestamp': 'date'})
 
-    # If neither 'date' nor 'timestamp' exists, raise an error
     if 'date' not in df.columns:
         raise KeyError("The 'date' column is missing from the data.")
 
-    # Convert 'date' to datetime format
     df['date'] = pd.to_datetime(df['date'])
     print("Converted 'date' column to datetime format.")
 
-    # Check for duplicate columns and drop them
     df = df.loc[:, ~df.columns.duplicated()]
     print("Dropped duplicate columns, if any existed.")
 
-    # Keep only relevant columns: 'id', 'date', and 'value'
     if 'id' in df.columns and 'value' in df.columns:
         df = df[['id', 'date', 'value']]
     else:
@@ -111,7 +102,6 @@ def clean_consumer_confidence_data(df):
         df = df.dropna(subset=['value'])
         print("Dropped rows with missing 'value'.")
 
-    # Remove duplicates based on the 'date' column
     before_duplicates = df.shape[0]
     df = df.drop_duplicates(subset=['date'])
     after_duplicates = df.shape[0]
@@ -124,7 +114,6 @@ def clean_consumer_confidence_data(df):
     df = df[(df['value'] >= lower_bound) & (df['value'] <= upper_bound)]
     print(f"Removed {outliers.shape[0]} outliers from 'value' column.")
 
-    # Debug: Print the DataFrame after cleaning
     print("DataFrame after cleaning:")
     print(df.head())
 
@@ -134,9 +123,8 @@ def clean_consumer_confidence_data(df):
 # Clean Consumer Sentiment
 def clean_consumer_sentiment_data(df):
     print("Initial DataFrame loaded from DB:")
-    print(df.head(), df.info())  # Print initial state of the DataFrame
+    print(df.head(), df.info())
 
-    # Drop unnecessary columns if they exist
     df = df.drop(columns=['created_at', 'updated_at'], errors='ignore')
 
     # Ensure the 'date' column exists; if not, rename 'timestamp' to 'date' for consistency
@@ -2153,8 +2141,14 @@ TABLE_CLEANING_FUNCTIONS = {
 }
 
 if __name__ == "__main__":
-    processed_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__)))), 'data', 'lumen_2', 'processed')
+    processed_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        'data',
+        'lumen_2',
+        'processed'
+    )
+
+    from ai.utils.aws_s3_utils import auto_upload_file_to_s3 
 
     for table_name, cleaning_function in TABLE_CLEANING_FUNCTIONS.items():
         print(f"Processing table: {table_name}")
@@ -2165,6 +2159,7 @@ if __name__ == "__main__":
             print(f"Warning: The feature DataFrame for {table_name} is empty. Skipping saving.")
             continue
 
+        # 1) Save locally:
         output_path = os.path.join(processed_dir, f"processed_{table_name}.csv")
         if os.path.exists(output_path):
             os.remove(output_path)
@@ -2173,3 +2168,10 @@ if __name__ == "__main__":
         print(f"Saving file to {output_path}")
         processed_df.to_csv(output_path, index=False)
         print(f"{table_name} processing completed and saved to {output_path}")
+
+        # 2) Now automatically upload to S3
+        auto_upload_file_to_s3(
+            local_path=output_path,
+            s3_subfolder="data/lumen2/processed"
+        )
+        print(f"Uploaded {output_path} to S3 under data/lumen2/processed\n")

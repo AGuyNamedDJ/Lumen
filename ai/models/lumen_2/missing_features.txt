@@ -1,9 +1,0 @@
-OBV
-SMA_100
-high
-low
-open
-ATR_14
-Stochastic_Oscillator
-Unnamed: 0
-date

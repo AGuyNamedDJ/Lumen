@@ -1,3 +1,4 @@
+import sys
 import os
 import pandas as pd
 import logging
@@ -6,6 +7,17 @@ import numpy as np
 from dotenv import load_dotenv
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.optimizers import Adam
+
+# Add this:
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
+sys.path.append(project_root)
+
+try:
+    from ai.utils.aws_s3_utils import auto_upload_file_to_s3
+except ImportError:
+    logging.warning("Could not import 'auto_upload_file_to_s3' from ai.utils.aws_s3_utils. Check your import paths!")
+
 
 # Load environment variables
 load_dotenv()
@@ -639,33 +651,49 @@ def feature_real_time_spx_vix_correlation(df_spx, df_vix):
     df_spx_copy = df_spx.copy()
     df_vix_copy = df_vix.copy()
 
+    # Convert to datetime just in case
     df_spx_copy['timestamp'] = pd.to_datetime(df_spx_copy['timestamp'], errors='coerce')
     df_vix_copy['timestamp'] = pd.to_datetime(df_vix_copy['timestamp'], errors='coerce')
 
+    # Reset indices if they were set to 'timestamp'
     if df_spx_copy.index.name == 'timestamp':
         df_spx_copy.reset_index(drop=True, inplace=True)
     if df_vix_copy.index.name == 'timestamp':
         df_vix_copy.reset_index(drop=True, inplace=True)
 
+    # Use 'timestamp' as the new index
     df_spx_copy.set_index('timestamp', inplace=True, drop=True)
     df_vix_copy.set_index('timestamp', inplace=True, drop=True)
 
+    # --- NEW PART: rename 'close' -> 'current_price' if needed ---
+    if 'current_price' not in df_spx_copy.columns and 'close' in df_spx_copy.columns:
+        df_spx_copy.rename(columns={'close': 'current_price'}, inplace=True)
+
+    if 'current_price' not in df_vix_copy.columns and 'close' in df_vix_copy.columns:
+        df_vix_copy.rename(columns={'close': 'current_price'}, inplace=True)
+
+    # Check again
     if 'current_price' not in df_spx_copy.columns or 'current_price' not in df_vix_copy.columns:
         logging.error("Missing 'current_price' column in SPX or VIX DataFrame.")
         return pd.DataFrame()
 
+    # Align on timestamps
     common_index = df_spx_copy.index.intersection(df_vix_copy.index)
     df_spx_aligned = df_spx_copy.loc[common_index, ['current_price']].copy()
     df_vix_aligned = df_vix_copy.loc[common_index, ['current_price']].copy()
 
+    # Perform rolling correlation
     df_spx_aligned['Real_Time_SPX_VIX_Correlation'] = memory_friendly_rolling_corr(
-        df_spx_aligned['current_price'], df_vix_aligned['current_price'], window=30
+        df_spx_aligned['current_price'],
+        df_vix_aligned['current_price'],
+        window=30
     )
 
     final_df = df_spx_aligned[['Real_Time_SPX_VIX_Correlation']].reset_index()
 
     logging.info("Completed SPX-VIX correlation feature calculation in a memory-friendly manner.")
     return final_df
+
 
 def feature_real_time_spy_vix_correlation(df_spy, df_vix):
     print("\n--- Starting SPY-VIX Correlation ---")
@@ -699,6 +727,13 @@ def feature_real_time_spy_vix_correlation(df_spy, df_vix):
     df_spy_copy.set_index('timestamp', inplace=True, drop=True)
     df_vix_copy.set_index('timestamp', inplace=True, drop=True)
 
+    # --- NEW PART: rename 'close' -> 'current_price' if needed ---
+    if 'current_price' not in df_spy_copy.columns and 'close' in df_spy_copy.columns:
+        df_spy_copy.rename(columns={'close': 'current_price'}, inplace=True)
+
+    if 'current_price' not in df_vix_copy.columns and 'close' in df_vix_copy.columns:
+        df_vix_copy.rename(columns={'close': 'current_price'}, inplace=True)
+
     if 'current_price' not in df_spy_copy.columns or 'current_price' not in df_vix_copy.columns:
         print("Missing 'current_price' column in SPY or VIX DataFrame.")
         return pd.DataFrame()
@@ -709,7 +744,9 @@ def feature_real_time_spy_vix_correlation(df_spy, df_vix):
 
     try:
         df_spy_aligned['Real_Time_SPY_VIX_Correlation'] = memory_friendly_rolling_corr(
-            df_spy_aligned['current_price'], df_vix_aligned['current_price'], window=30
+            df_spy_aligned['current_price'],
+            df_vix_aligned['current_price'],
+            window=30
         )
     except Exception as e:
         print("An error occurred during the memory-friendly correlation calculation:")
@@ -1248,81 +1285,151 @@ def create_XY_sequences(df, seq_len=60, single_horizon_target=None):
 
 
 def save_sequences_in_parts(X, Y, prefix, chunk_size=10000):
-    ensure_directory_exists(SEQUENCES_DIR)  # Make sure our subfolder is created
+    """
+    Saves 3D X and Y arrays in multiple smaller .npy chunks, optionally uploading them to S3.
+    If Y is None, only X parts are saved/uploaded.
 
-    num_chunks = (X.shape[0] + chunk_size - 1) // chunk_size
-    for i in range(num_chunks):
+    :param X: 3D NumPy array, shape [samples, sequence_length, features]
+    :param Y: 2D or 3D NumPy array, or None if no target, shape [samples, ...]
+    :param prefix: Filename prefix (e.g. 'real_time_spx')
+    :param chunk_size: Maximum number of sequences to store in each .npy file
+    """
+    ensure_directory_exists(SEQUENCES_DIR)  # Ensure local subfolder is created
+
+    # 1) Save X in parts
+    num_chunks_x = (X.shape[0] + chunk_size - 1) // chunk_size
+    for i in range(num_chunks_x):
         start = i * chunk_size
         end = min((i + 1) * chunk_size, X.shape[0])
+
         X_part = X[start:end]
-        X_part_filename = os.path.join(SEQUENCES_DIR, f'{prefix}_X_3D_part{i}.npy')
-        np.save(X_part_filename, X_part)
+        x_filename = f"{prefix}_X_3D_part{i}.npy"
+        x_filepath = os.path.join(SEQUENCES_DIR, x_filename)
 
+        # Save locally
+        np.save(x_filepath, X_part)
+        logging.info(f"Saved X chunk to {x_filepath}")
+
+        # Auto-upload to S3 if available
+        if callable(globals().get("auto_upload_file_to_s3")):
+            auto_upload_file_to_s3(
+                local_path=x_filepath,
+                s3_subfolder="data/lumen2/featured/sequences"
+            )
+
+    # 2) If Y is provided, save it in parts as well
     if Y is not None:
-        num_chunks = (Y.shape[0] + chunk_size - 1) // chunk_size
-        for i in range(num_chunks):
-            start = i * chunk_size
-            end = min((i + 1) * chunk_size, Y.shape[0])
-            Y_part = Y[start:end]
-            Y_part_filename = os.path.join(SEQUENCES_DIR, f'{prefix}_Y_3D_part{i}.npy')
-            np.save(Y_part_filename, Y_part)
+        if len(Y) != len(X):
+            logging.warning("X and Y lengths differ. Verify alignment before saving.")
+        num_chunks_y = (Y.shape[0] + chunk_size - 1) // chunk_size
+        for j in range(num_chunks_y):
+            start = j * chunk_size
+            end = min((j + 1) * chunk_size, Y.shape[0])
 
+            Y_part = Y[start:end]
+            y_filename = f"{prefix}_Y_3D_part{j}.npy"
+            y_filepath = os.path.join(SEQUENCES_DIR, y_filename)
+
+            # Save locally
+            np.save(y_filepath, Y_part)
+            logging.info(f"Saved Y chunk to {y_filepath}")
+
+            # Auto-upload to S3 if available
+            if callable(globals().get("auto_upload_file_to_s3")):
+                auto_upload_file_to_s3(
+                    local_path=y_filepath,
+                    s3_subfolder="data/lumen2/featured/sequences"
+                )
 
 def scale_all_features(df, dataset_name, target_column=None):
-    datetime_columns_local = [col for col in ['timestamp', 'date'] if col in df.columns]
-    multi_target_cols = [col for col in df.columns if col.startswith('target_')]
+    datetime_columns_local = [col for col in ["timestamp", "date"] if col in df.columns]
+    multi_target_cols = [col for col in df.columns if col.startswith("target_")]
     target_columns_local = []
+
     if target_column and target_column in df.columns:
         target_columns_local.append(target_column)
+
     target_columns_local = list(set(target_columns_local + multi_target_cols))
 
     # For real_time data, drop columns that are entirely NaN
-    if dataset_name in ['real_time_spx', 'real_time_spy', 'real_time_vix']:
-        df.dropna(axis=1, how='all', inplace=True)
+    if dataset_name in ["real_time_spx", "real_time_spy", "real_time_vix"]:
+        df.dropna(axis=1, how="all", inplace=True)
 
+    # Separate out date/time columns and any target columns
     datetime_df = df[datetime_columns_local] if datetime_columns_local else pd.DataFrame()
     target_df = df[target_columns_local] if target_columns_local else pd.DataFrame()
 
+    # The "feature" columns are all numeric columns excluding date/time + targets
     feature_columns = [c for c in df.columns if c not in datetime_columns_local + target_columns_local]
-    feature_df = df[feature_columns].apply(pd.to_numeric, errors='coerce')
+    feature_df = df[feature_columns].apply(pd.to_numeric, errors="coerce")
 
+    # Downcast numeric columns to save memory
     for col in feature_df.columns:
         if pd.api.types.is_float_dtype(feature_df[col]):
-            feature_df[col] = pd.to_numeric(feature_df[col], downcast='float')
+            feature_df[col] = pd.to_numeric(feature_df[col], downcast="float")
         elif pd.api.types.is_integer_dtype(feature_df[col]):
-            feature_df[col] = pd.to_numeric(feature_df[col], downcast='integer')
+            feature_df[col] = pd.to_numeric(feature_df[col], downcast="integer")
 
+    # If there are no features, return early
     if feature_df.empty:
         if not (datetime_df.empty and target_df.empty):
             return pd.concat([datetime_df, target_df], axis=1)
         return df
 
-    # Replace inf with NaN, then fill them with column mean
+    # Replace inf with NaN, then fill NaNs with column mean
     feature_df.replace([np.inf, -np.inf], np.nan, inplace=True)
     feature_df.fillna(feature_df.mean(numeric_only=True), inplace=True)
 
-    if not feature_df.empty:
+    # If still no valid numeric columns, skip
+    if feature_df.empty:
+        scaled_feature_df = feature_df
+    else:
+        # --- Here we actually fit/transform with MinMaxScaler ---
+        from sklearn.preprocessing import MinMaxScaler
         scaler = MinMaxScaler(feature_range=(0, 1))
         try:
             scaled_vals = scaler.fit_transform(feature_df)
         except ValueError:
+            # If something goes wrong with fitting, at least return unscaled data
             if not (datetime_df.empty and target_df.empty):
                 return pd.concat([datetime_df, target_df], axis=1)
             return df
+
+        # Create DataFrame of scaled features
         scaled_feature_df = pd.DataFrame(
-            scaled_vals.astype('float32'),
+            scaled_vals.astype("float32"),
             columns=feature_df.columns,
             index=feature_df.index
         )
-    else:
-        scaled_feature_df = feature_df
 
+        # Save the scaler to local disk
+        import joblib
+        scalers_dir = os.path.join(BASE_DIR, "models", "lumen_2", "scalers")
+        os.makedirs(scalers_dir, exist_ok=True)
+        scaler_filename = f"{dataset_name}_scaler.joblib"
+        scaler_path = os.path.join(scalers_dir, scaler_filename)
+
+        joblib.dump(scaler, scaler_path)
+        logging.info(f"Saved scaler for '{dataset_name}' to {scaler_path}")
+
+        if callable(globals().get("auto_upload_file_to_s3")):
+            try:
+                auto_upload_file_to_s3(
+                    local_path=scaler_path,
+                    s3_subfolder="models/lumen_2/scalers"
+                )
+            except Exception as upload_err:
+                logging.warning(f"Could not upload scaler to S3: {upload_err}")
+
+    # Re-combine any datetime columns + scaled features + target columns
     parts = []
     if not datetime_df.empty:
         datetime_df.reset_index(drop=True, inplace=True)
         parts.append(datetime_df)
+
     scaled_feature_df.reset_index(drop=True, inplace=True)
     parts.append(scaled_feature_df)
+
     if not target_df.empty:
         target_df.reset_index(drop=True, inplace=True)
         parts.append(target_df)
@@ -1336,6 +1443,12 @@ def save_enhanced_data(df, filename):
     df.to_csv(filepath, index=False)
     logging.info(f"Saved enhanced data to {filepath}")
 
+    # Now auto-upload to S3, if the function is available
+    if callable(globals().get("auto_upload_file_to_s3")):
+        auto_upload_file_to_s3(
+            local_path=filepath,
+            s3_subfolder="data/lumen2/featured"
+        )
 
 def extract_and_save_feature_list(data_dict: dict, output_file: str, datetime_columns: list, target_columns: dict):
     feature_list = []
@@ -1389,11 +1502,19 @@ def create_sequences(data, seq_len=60):
 def create_and_save_sequences_in_chunks(df, data_name, seq_len, target_column, chunk_size=10000):
     """
     Create sequences for X and Y arrays in small increments rather than all at once,
-    preventing massive memory usage.
+    preventing massive memory usage. Saves each chunk locally, then uploads
+    to S3 if 'auto_upload_file_to_s3' is available.
+
+    :param df: A DataFrame with numeric columns.
+    :param data_name: A string identifier, e.g. "real_time_spx".
+    :param seq_len: Sequence length (e.g. 60).
+    :param target_column: The name of the column to predict, or None.
+    :param chunk_size: Max number of sequences per chunk file.
     """
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     has_target = target_column and (target_column in df.columns)
 
+    # Separate features vs. target
     if has_target:
         numeric_cols.remove(target_column)
         X_array = df[numeric_cols].values
@@ -1404,7 +1525,9 @@ def create_and_save_sequences_in_chunks(df, data_name, seq_len, target_column, c
 
     total_length = len(X_array)
     if total_length < seq_len:
-        logging.warning(f"[{data_name}] Not enough data to create sequences of length {seq_len}. Skipping.")
+        logging.warning(
+            f"[{data_name}] Not enough data to create sequences of length {seq_len}. Skipping."
+        )
         return
 
     start = 0
@@ -1417,27 +1540,47 @@ def create_and_save_sequences_in_chunks(df, data_name, seq_len, target_column, c
         X_seq_list = []
         Y_seq_list = []
 
+        # Build partial sequences
         for i in range(start, end):
             X_seq_list.append(X_array[i : i + seq_len])
             if has_target:
-                # e.g. predict value at the last step of the 60-length sequence
+                # Example: take the last item in the 60-length window
                 Y_seq_list.append(y_array[i + seq_len - 1])
 
+        # Convert to NumPy arrays
         X_seq_arr = np.array(X_seq_list, dtype=np.float32)
         Y_seq_arr = np.array(Y_seq_list, dtype=np.float32) if has_target else None
 
-        # Save partial sequences into SEQUENCES_DIR
-        X_part_filename = os.path.join(SEQUENCES_DIR, f'{data_name}_X_3D_part{x_part_count}.npy')
+        # Save local X chunk
+        X_part_filename = os.path.join(SEQUENCES_DIR, f"{data_name}_X_3D_part{x_part_count}.npy")
         np.save(X_part_filename, X_seq_arr)
+        logging.info(f"Saved X chunk to {X_part_filename}")
+
+        # Attempt auto-upload to S3
+        if callable(globals().get("auto_upload_file_to_s3")):
+            auto_upload_file_to_s3(
+                local_path=X_part_filename,
+                s3_subfolder="data/lumen2/featured/sequences"
+            )
+
         x_part_count += 1
 
+        # Save local Y chunk if applicable
         if has_target:
-            Y_part_filename = os.path.join(SEQUENCES_DIR, f'{data_name}_Y_3D_part{y_part_count}.npy')
+            Y_part_filename = os.path.join(SEQUENCES_DIR, f"{data_name}_Y_3D_part{y_part_count}.npy")
             np.save(Y_part_filename, Y_seq_arr)
+            logging.info(f"Saved Y chunk to {Y_part_filename}")
+
+            # Attempt auto-upload to S3
+            if callable(globals().get("auto_upload_file_to_s3")):
+                auto_upload_file_to_s3(
+                    local_path=Y_part_filename,
+                    s3_subfolder="data/lumen2/featured/sequences"
+                )
+
             y_part_count += 1
 
         start = end
-
 
 def main():
     ensure_directory_exists(FEATURED_DIR)

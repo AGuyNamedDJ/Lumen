@@ -1,14 +1,22 @@
+import sys
 import os
 import numpy as np
 import logging
+from dotenv import load_dotenv
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import Sequence
-from dotenv import load_dotenv
 
-# Make sure definitions_lumen_2.py has the correct final Dense(...) 
-# If single-horizon => Dense(1, activation='linear')
-# If multi-horizon => Dense(5, activation='linear'), etc.
+# --- Path adjustment snippet (same as in your other scripts) ---
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
+sys.path.append(project_root)
+
+try:
+    from ai.utils.aws_s3_utils import auto_upload_file_to_s3
+except ImportError:
+    logging.info("auto_upload_file_to_s3 not available. Skipping S3 upload.")
+
 from definitions_lumen_2 import create_hybrid_model
 
 # Load environment variables
@@ -18,21 +26,20 @@ logging.basicConfig(level=logging.INFO)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 MODEL_DIR = os.path.join(BASE_DIR, '..', '..', 'models', 'lumen_2')
-if not os.path.exists(MODEL_DIR):
-    os.makedirs(MODEL_DIR)
+os.makedirs(MODEL_DIR, exist_ok=True)
+
+TRAINED_DIR = os.path.join(MODEL_DIR, 'trained')
+os.makedirs(TRAINED_DIR, exist_ok=True)
 
 MODEL_NAME = 'Lumen2'
 
-# This is still your overall "featured" dir
 FEATURED_DATA_DIR = os.path.join(BASE_DIR, '../../data/lumen_2/featured')
 if not os.path.exists(FEATURED_DATA_DIR):
     raise FileNotFoundError(f"The directory {FEATURED_DATA_DIR} does not exist.")
 
-# But now we also define the subdirectory where .npy parts reside
 SEQUENCES_DIR = os.path.join(FEATURED_DATA_DIR, 'sequences')
 if not os.path.exists(SEQUENCES_DIR):
     logging.warning(f"Sequences directory {SEQUENCES_DIR} does not exist. Did you run feature engineering?")
-
 
 print("Files in featured directory:", os.listdir(FEATURED_DATA_DIR))
 if os.path.exists(SEQUENCES_DIR):
@@ -57,10 +64,6 @@ class NpyDataGenerator(Sequence):
             np.random.shuffle(self.indices)
 
     def __len__(self):
-        """
-        Return the total number of batches if we used all data. But for Approach #1,
-        we won't rely on this to define steps_per_epoch. 
-        """
         return int(np.ceil(len(self.X) / self.batch_size))
 
     def __getitem__(self, idx):
@@ -106,12 +109,12 @@ def load_npy_data(x_prefix, y_prefix):
     ensuring shapes match and checking for NaNs or infs.
     """
     x_files = find_npy_parts(SEQUENCES_DIR, x_prefix)
-    if len(x_files) == 0:
+    if not x_files:
         logging.error(f"No X files found with prefix '{x_prefix}' in {SEQUENCES_DIR}")
         return None, None
 
     y_files = find_npy_parts(SEQUENCES_DIR, y_prefix)
-    if len(y_files) == 0:
+    if not y_files:
         # Maybe there's a single .npy that doesn't have 'part0', etc.
         single_y_file = os.path.join(SEQUENCES_DIR, f"{y_prefix}.npy")
         if os.path.exists(single_y_file):
@@ -153,15 +156,15 @@ def load_npy_data(x_prefix, y_prefix):
 
 def main():
     """
-    1) Loads X, y from .npy parts (now from SEQUENCES_DIR).
-    2) Performs debug checks on data (shapes, NaNs, etc.).
-    3) Builds and compiles a hybrid model.
-    4) Trains the model with a generator (NpyDataGenerator),
-       but sets steps_per_epoch so partial leftover batch is ignored.
-    5) Saves the best model to disk.
+    1) Load X, y from .npy parts.
+    2) Perform debug checks.
+    3) Build & compile hybrid model.
+    4) Train with generator approach.
+    5) Save best model to disk.
+    6) Optionally upload to S3 if auto_upload_file_to_s3 is available.
     """
 
-    # Adjust these for whichever dataset you’re training on:
+    # Adjust these for whichever dataset you’re training on
     x_prefix = 'real_time_spy_X_3D'
     y_prefix = 'real_time_spy_Y_3D'
 
@@ -170,24 +173,19 @@ def main():
         print("Could not load data. Please verify .npy files exist and shapes match.")
         return
 
-    # Basic shape checks
     logging.info(f"Final X shape: {X.shape}, y shape: {y.shape}")
-    # Example: print a small sample
     logging.info(f"Example X[0, 0]: {X[0, 0]}")
     logging.info(f"Example y[0]: {y[0]}")
 
     sequence_length = X.shape[1]
     num_features = X.shape[2]
 
-    # Approach #1: define batch_size and steps_per_epoch explicitly,
-    # ignoring leftover partial batches.
     batch_size = 32
     num_samples = X.shape[0]
-    steps_per_epoch = num_samples // batch_size  # integer division => leftover ignored
+    steps_per_epoch = num_samples // batch_size  # leftover ignored
 
-    # Create generator
     train_generator = NpyDataGenerator(X, y, batch_size=batch_size, shuffle=True)
-    
+
     # Build model
     input_shape = (sequence_length, num_features)
     model = create_hybrid_model(
@@ -198,15 +196,14 @@ def main():
         dropout_rate=0.2
     )
 
-    # If you see loss=nan, you can lower your LR to 1e-5 or 1e-6
     optimizer = Adam(learning_rate=1e-4, clipnorm=1.0)
     model.compile(optimizer=optimizer, loss='mean_squared_error')
 
     logging.info("Model summary:")
     model.summary(print_fn=logging.info)
 
-    # Checkpoints + early stopping
-    checkpoint_path = os.path.join(MODEL_DIR, f'{MODEL_NAME}.keras')
+    # Checkpoints + EarlyStopping
+    checkpoint_path = os.path.join(TRAINED_DIR, f'{MODEL_NAME}.keras')
     checkpoint_cb = ModelCheckpoint(
         checkpoint_path,
         save_best_only=True,
@@ -220,7 +217,6 @@ def main():
         verbose=1
     )
 
-    # Train
     model.fit(
         train_generator,
         steps_per_epoch=steps_per_epoch,
@@ -230,6 +226,22 @@ def main():
     )
 
     print("Training complete. Model saved to:", checkpoint_path)
+
+    # Attempt to auto-upload if a best checkpoint was saved
+    if checkpoint_cb.best is not None:
+        if 'auto_upload_file_to_s3' in globals() and callable(auto_upload_file_to_s3):
+            try:
+                auto_upload_file_to_s3(
+                    local_path=checkpoint_path,
+                    s3_subfolder="models/lumen_2/trained"
+                )
+                logging.info("Uploaded trained model to S3 under 'models/lumen_2/trained'.")
+            except Exception as e:
+                logging.warning(f"Could not upload model to S3: {e}")
+        else:
+            logging.info("auto_upload_file_to_s3 not available. Skipping S3 upload.")
+    else:
+        logging.info("No 'best' model checkpoint found. Check your training or callback conditions.")
 
 
 if __name__ == "__main__":

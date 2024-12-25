@@ -138,3 +138,11 @@ ai/.env
 __pycache__/
 *.pyc
 ai/models/lumen_2/X_test_real.npy
+
+# AI data & models
+ai/data/lumen_2/processed/
+ai/data/lumen_2/featured/
+ai/data/lumen_2/raw/
+ai/data/lumen_2/test/
+ai/models/lumen_2/scalers/
+ai/models/lumen_2/trained/
