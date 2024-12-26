@@ -1,192 +1,77 @@
 import os
 import numpy as np
-import pandas as pd
+import logging
 from sklearn.metrics import mean_squared_error, r2_score
 from tensorflow.keras.models import load_model
-import logging
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
-# Paths to saved models
-MODEL_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_NAME_HIST = 'Lumen2_historical.keras'
-MODEL_NAME_REAL = 'Lumen2_real_time.keras'
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Load models
-model_hist = load_model(os.path.join(MODEL_DIR, MODEL_NAME_HIST))
-model_real = load_model(os.path.join(MODEL_DIR, MODEL_NAME_REAL))
-
-# Function to load test data using memory-mapping
-
+MODEL_PATH = os.path.join(BASE_DIR, "trained", "Lumen2.keras")
+# If you've renamed your real-time test arrays to X_test.npy / y_test.npy:
+X_TEST_PATH = os.path.join(BASE_DIR, "X_test.npy")  
+Y_TEST_PATH = os.path.join(BASE_DIR, "y_test.npy")
 
 def load_test_data():
-    try:
-        # Load historical test data normally
-        X_test_hist = np.load(os.path.join(MODEL_DIR, 'X_test_hist.npy'))
-        y_test_hist = np.load(os.path.join(MODEL_DIR, 'y_test_hist.npy'))
+    if not (os.path.exists(X_TEST_PATH) and os.path.exists(Y_TEST_PATH)):
+        logging.error("X_test.npy or y_test.npy not found.")
+        return None, None
 
-        # Memory-map the real-time test data
-        X_test_real = np.load(os.path.join(
-            MODEL_DIR, 'X_test_real.npy'), mmap_mode='r')
-        y_test_real = np.load(os.path.join(
-            MODEL_DIR, 'y_test_real.npy'), mmap_mode='r')
+    X_test = np.load(X_TEST_PATH)
+    y_test = np.load(Y_TEST_PATH)
+    logging.info(f"Loaded test data: X_test={X_test.shape}, y_test={y_test.shape}")
+    return X_test, y_test
 
-    except FileNotFoundError as e:
-        logging.error(f"Test data file not found: {e}")
-        raise e
+def evaluate_lumen2_model(model, X_test, y_test):
+    if X_test is None or y_test is None:
+        logging.error("No test data to evaluate.")
+        return
 
-    return X_test_hist, y_test_hist, X_test_real, y_test_real
+    if len(X_test) != len(y_test):
+        logging.error(f"Mismatch in sample counts: X_test={X_test.shape[0]}, y_test={y_test.shape[0]}")
+        return
 
-# Data generator for memory-mapped arrays
-
-
-def memmap_data_generator(X, y, batch_size, expected_features):
-    num_samples = X.shape[0]
-    for start_idx in range(0, num_samples, batch_size):
-        end_idx = min(start_idx + batch_size, num_samples)
-        X_batch = X[start_idx:end_idx]
-        y_batch = y[start_idx:end_idx]
-
-        # Check for feature mismatch and pad if necessary
-        if X_batch.shape[2] != expected_features:
-            missing_feature_count = expected_features - X_batch.shape[2]
-            if missing_feature_count > 0:
-                logging.warning(
-                    f"Adding {missing_feature_count} missing features to test data.")
-                X_batch = np.pad(
-                    X_batch, ((0, 0), (0, 0), (0, missing_feature_count)),
-                    'constant', constant_values=0)
-            else:
-                logging.error(f"Feature mismatch: expected {
-                              expected_features}, got {X_batch.shape[2]}")
-                raise ValueError(f"Feature mismatch: expected {
-                                 expected_features}, got {X_batch.shape[2]}")
-
-        yield X_batch.astype(np.float32), y_batch.astype(np.float32)
-
-# Evaluate model function using generator
-
-
-def evaluate_model_generator(model, data_gen, num_samples, model_name, expected_features, batch_size=256):
-    logging.debug(f"Evaluating model: {model_name}")
-
-    # Initialize lists to store predictions and true values
-    y_true = []
-    y_pred = []
-
-    steps = int(np.ceil(num_samples / batch_size))
-
-    for _ in range(steps):
-        try:
-            X_batch, y_batch = next(data_gen)
-            y_batch_pred = model.predict(X_batch)
-            y_true.append(y_batch)
-            y_pred.append(y_batch_pred)
-        except StopIteration:
-            break
-
-    # Concatenate all predictions and true values
-    y_true = np.concatenate(y_true, axis=0)
-    y_pred = np.concatenate(y_pred, axis=0)
-
-    # Proceed with evaluation as before
-    mse = mean_squared_error(y_true, y_pred)
-    rmse = np.sqrt(mse)
-    r2 = r2_score(y_true, y_pred)
-
-    # Log the results
-    logging.info(f"{model_name} Evaluation Results:")
-    logging.info(f"MSE: {mse}")
-    logging.info(f"RMSE: {rmse}")
-    logging.info(f"R²: {r2}")
-
-    return mse, rmse, r2, y_pred
-
-# Evaluate model function for smaller datasets (historical data)
-
-
-def evaluate_model(model, X_test, y_test, model_name, expected_features):
-    logging.debug(f"Evaluating model: {model_name}")
-
-    if X_test.shape[0] == 0:
-        logging.error(f"No test data available for {model_name}.")
-        raise ValueError(f"No test data available for {model_name}.")
-
-    # Check for feature mismatch and pad if necessary
-    if X_test.shape[2] != expected_features:
-        missing_feature_count = expected_features - X_test.shape[2]
-        if missing_feature_count > 0:
-            logging.warning(f"Adding {missing_feature_count} missing features to {
-                            model_name} test data.")
+    expected_features = model.input_shape[-1]
+    if X_test.shape[-1] != expected_features:
+        diff = expected_features - X_test.shape[-1]
+        if diff > 0:
+            logging.warning(f"Padding X_test with {diff} missing feature(s).")
             X_test = np.pad(
-                X_test, ((0, 0), (0, 0), (0, missing_feature_count)),
-                'constant', constant_values=0)
+                X_test, ((0,0),(0,0),(0,diff)), mode="constant", constant_values=0
+            )
         else:
-            logging.error(f"Feature mismatch: expected {
-                          expected_features}, got {X_test.shape[2]}")
-            raise ValueError(f"Feature mismatch: expected {
-                             expected_features}, got {X_test.shape[2]}")
+            logging.error(f"Feature mismatch: model expects {expected_features}, got {X_test.shape[-1]}")
+            return
 
-    # Ensure data types are optimized
-    X_test = X_test.astype(np.float32)
-    y_test = y_test.astype(np.float32)
+    X_test = X_test.astype('float32')
+    y_test = y_test.astype('float32')
 
-    # Predict
-    y_pred = model.predict(X_test)
+    y_pred = model.predict(X_test, verbose=0)
 
-    # Proceed with evaluation as before
     mse = mean_squared_error(y_test, y_pred)
     rmse = np.sqrt(mse)
     r2 = r2_score(y_test, y_pred)
 
-    # Log the results
-    logging.info(f"{model_name} Evaluation Results:")
-    logging.info(f"MSE: {mse}")
+    logging.info("=== Evaluation Results ===")
+    logging.info(f"MSE:  {mse}")
     logging.info(f"RMSE: {rmse}")
-    logging.info(f"R²: {r2}")
-
-    return mse, rmse, r2, y_pred
-
-# Main function to evaluate both models
-
+    logging.info(f"R²:   {r2}")
 
 def main():
-    X_test_hist, y_test_hist, X_test_real, y_test_real = load_test_data()
+    if not os.path.exists(MODEL_PATH):
+        logging.error(f"Model file not found at {MODEL_PATH}")
+        return
 
-    # Print shapes for historical data
-    print('X_test_hist shape:', X_test_hist.shape)
-    print('y_test_hist shape:', y_test_hist.shape)
-    print('X_test_real shape:', X_test_real.shape)
-    print('y_test_real shape:', y_test_real.shape)
+    model = load_model(MODEL_PATH)
+    logging.info(f"Loaded model from {MODEL_PATH}")
 
-    # Get expected features from model input shapes
-    expected_input_shape_hist = model_hist.input_shape
-    expected_features_hist = expected_input_shape_hist[2]  # Should be 44
-    expected_input_shape_real = model_real.input_shape
-    expected_features_real = expected_input_shape_real[2]  # Should be 58
+    X_test, y_test = load_test_data()
+    if X_test is None or y_test is None:
+        logging.error("Could not load test data; aborting evaluation.")
+        return
 
-    # Evaluate the historical model
-    mse_hist, rmse_hist, r2_hist, y_pred_hist = evaluate_model(
-        model_hist, X_test_hist, y_test_hist, "Historical Model", expected_features=expected_features_hist)
-
-    # Evaluate the real-time model using the generator
-    batch_size = 256  # Adjust based on your system's capacity
-
-    data_gen = memmap_data_generator(
-        X_test_real, y_test_real, batch_size, expected_features_real)
-
-    num_samples = X_test_real.shape[0]
-
-    mse_real, rmse_real, r2_real, y_pred_real = evaluate_model_generator(
-        model_real, data_gen, num_samples, "Real-Time Model", expected_features_real, batch_size=batch_size)
-
-    print("Evaluation Results:")
-    print(
-        f"Historical Model - MSE: {mse_hist}, RMSE: {rmse_hist}, R²: {r2_hist}")
-    print(
-        f"Real-Time Model - MSE: {mse_real}, RMSE: {rmse_real}, R²: {r2_real}")
-
+    evaluate_lumen2_model(model, X_test, y_test)
 
 if __name__ == "__main__":
     main()

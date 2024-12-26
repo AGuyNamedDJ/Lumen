@@ -13,10 +13,11 @@ project_root = os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
 sys.path.append(project_root)
 
 try:
-    from ai.utils.aws_s3_utils import download_file_from_s3
+    from ai.utils.aws_s3_utils import download_file_from_s3, auto_upload_file_to_s3
 except ImportError:
-    logging.error("download_file_from_s3 not available, cannot pull from S3. Exiting.")
-    sys.exit(1)
+    download_file_from_s3 = None
+    auto_upload_file_to_s3 = None
+    logging.warning("AWS S3 utilities not available. No cloud downloads/uploads will occur.")
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -25,9 +26,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FEATURED_DIR = os.path.join(BASE_DIR, "../../data/lumen_2/featured")
 MODEL_DIR = os.path.join(BASE_DIR, "../../models/lumen_2")
 
-###############################################################################
-# Data Keys, CSVs, Scalers in S3
-###############################################################################
 DATA_KEYS = [
     "consumer_confidence", "consumer_sentiment", "core_inflation", "cpi", "gdp",
     "industrial_production", "interest_rate", "labor_force", "nonfarm_payroll",
@@ -57,11 +55,6 @@ DATA_S3 = {
     "real_time_vix":            "data/lumen2/featured/featured_real_time_vix.csv",
 }
 
-# Local ephemeral CSV paths
-CSV_TMP = {
-    k: os.path.join(FEATURED_DIR, f"{k}.csv") for k in DATA_KEYS
-}
-
 SCALERS_S3 = {
     "consumer_confidence":      "models/lumen_2/scalers/consumer_confidence_data_scaler.joblib",
     "consumer_sentiment":       "models/lumen_2/scalers/consumer_sentiment_data_scaler.joblib",
@@ -83,307 +76,254 @@ SCALERS_S3 = {
     "real_time_vix":            "models/lumen_2/scalers/real_time_vix_scaler.joblib",
 }
 
+CSV_TMP = {k: os.path.join(FEATURED_DIR, f"{k}.csv") for k in DATA_KEYS}
 SCALERS_LOCAL = {
     k: os.path.join(MODEL_DIR, "scalers", f"{k}_data_scaler.joblib") for k in DATA_KEYS
 }
 
+def download_file(key_s3, key_local):
+    if not download_file_from_s3:
+        logging.warning("download_file_from_s3 not available. Skipping.")
+        return
+    logging.info(f"Downloading {key_s3} → {key_local}")
+    download_file_from_s3(key_s3, key_local)
 
-def download_csvs_from_s3():
-    """Download each CSV from S3 into FEATURED_DIR, parse date/timestamp if possible."""
-    if not os.path.exists(FEATURED_DIR):
-        os.makedirs(FEATURED_DIR, exist_ok=True)
-
+def download_csvs():
+    os.makedirs(FEATURED_DIR, exist_ok=True)
     dataframes = {}
-    for key in DATA_KEYS:
-        s3_key = DATA_S3[key]
-        local_csv = CSV_TMP[key]
-
-        logging.info(f"[{key}] Downloading CSV from S3 → {local_csv}")
+    for k in DATA_KEYS:
+        s3_key = DATA_S3[k]
+        local_csv = CSV_TMP[k]
         try:
-            download_file_from_s3(s3_key, local_csv)
+            download_file(s3_key, local_csv)
         except Exception as e:
-            logging.error(f"[{key}] Could not download CSV from S3: {e}")
+            logging.error(f"[{k}] CSV download error: {e}")
             continue
-
-        # Attempt parse
-        if "real_time" in key:
-            dt_col = "timestamp"
-        else:
-            dt_col = "date"
-
-        with open(local_csv, "r") as fcheck:
-            snippet = fcheck.read(4096)
-            if dt_col not in snippet:
-                logging.warning(f"[{key}] Column '{dt_col}' not found. Reading w/o parse_dates.")
-                df = pd.read_csv(local_csv)
-            else:
-                try:
+        # Decide date col
+        dt_col = "timestamp" if "real_time" in k else "date"
+        try:
+            with open(local_csv, "r") as f:
+                snippet = f.read(2048)
+                if dt_col in snippet:
                     df = pd.read_csv(local_csv, parse_dates=[dt_col])
-                except Exception:
-                    logging.warning(f"[{key}] parse_dates failed on '{dt_col}'. Reading fallback.")
+                else:
+                    logging.warning(f"[{k}] Missing '{dt_col}' in snippet. Reading plain.")
                     df = pd.read_csv(local_csv)
-
-        dataframes[key] = df
-
+        except Exception:
+            df = pd.read_csv(local_csv)
+        dataframes[k] = df
     return dataframes
 
-
-def download_scalers_from_s3():
-    """Download each scaler from S3 into local MODEL_DIR/scalers, then load them."""
-    local_scaler_dir = os.path.join(MODEL_DIR, "scalers")
-    os.makedirs(local_scaler_dir, exist_ok=True)
-
-    scalers = {}
-    for key in DATA_KEYS:
-        s3_path = SCALERS_S3[key]
-        local_path = SCALERS_LOCAL[key]
-        logging.info(f"[{key}] Downloading scaler from S3 → {local_path}")
+def download_scalers():
+    local_scalers = {}
+    os.makedirs(os.path.join(MODEL_DIR, "scalers"), exist_ok=True)
+    for k in DATA_KEYS:
         try:
-            download_file_from_s3(s3_path, local_path)
-            scalers[key] = joblib.load(local_path)
+            remote_path = SCALERS_S3[k]
+            local_path = SCALERS_LOCAL[k]
+            download_file(remote_path, local_path)
+            local_scalers[k] = joblib.load(local_path)
         except Exception as e:
-            logging.error(f"[{key}] Could not download scaler from S3: {e}")
-    return scalers
+            logging.error(f"[{k}] Scaler download error: {e}")
+    return local_scalers
 
-
-def unify_historical_columns(dataframes):
+def unify_historical(dfmap):
     """
     For each historical DataFrame:
-      - If 'timestamp' is present but 'date' is missing, rename 'timestamp'->'date'.
-      - Then forcibly convert 'date' to datetime64[ns].
+    - rename 'timestamp'→'date' if no 'date' column found
+    - convert 'date'→datetime
     """
     hist_keys = [
-        k for k in dataframes
-        if any(x in k for x in [
+        x for x in dfmap
+        if any(z in x for z in [
             "historical", "consumer", "core_inflation", "cpi", "gdp",
             "industrial", "interest_rate", "labor_force", "nonfarm",
             "personal_consumption", "ppi", "unemployment_rate"
         ])
     ]
-
     for k in hist_keys:
-        df = dataframes[k]
-        # If 'date' not in columns but 'timestamp' is, rename
+        df = dfmap[k]
         if "date" not in df.columns and "timestamp" in df.columns:
-            logging.info(f"[{k}] Renaming 'timestamp' -> 'date' for historical unify.")
+            logging.info(f"[{k}] rename 'timestamp' -> 'date'")
             df.rename(columns={"timestamp": "date"}, inplace=True)
-
         if "date" in df.columns:
-            # Force convert to datetime
             df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    return dfmap
+
+def prefix_columns(df, prefix):
+    df.columns = [f"{prefix}_{c}" for c in df.columns]
+    return df
+
+def apply_scaler_to_df(df, scaler):
+    cols = df.columns
+    arr = scaler.transform(df)
+    return pd.DataFrame(arr, columns=cols, index=df.index)
+
+def apply_all_scalers(dfmap, scalers):
+    for k, df in dfmap.items():
+        # Identify date/timestamp col
+        if "real_time" in k:
+            dt_cols = ["timestamp"] if "timestamp" in df.columns else []
         else:
-            logging.warning(f"[{k}] No 'date' or 'timestamp' columns found after unify.")
-    return dataframes
-
-
-def force_datetime(df, colname):
-    """Ensure colname is datetime64[ns] if present."""
-    if colname in df.columns:
-        df[colname] = pd.to_datetime(df[colname], errors="coerce")
-
-
-def apply_scalers(dataframes, scalers):
-    """
-    Align each DataFrame with its associated scaler if found, scaling the features,
-    and prefixing columns with the dataset key.
-    """
-    for key, df in dataframes.items():
-        # decide dt col
-        if "real_time" in key:
-            dt_cols = []
-            if "timestamp" in df.columns:
-                dt_cols = ["timestamp"]
-                force_datetime(df, "timestamp")
-        else:
-            dt_cols = []
-            if "date" in df.columns:
-                dt_cols = ["date"]
-                force_datetime(df, "date")
-
-        # Identify target(s)
-        target_cols = []
+            dt_cols = ["date"] if "date" in df.columns else []
+        # Identify possible target columns
+        tcols = []
         if "close" in df.columns:
-            target_cols.append("close")
+            tcols.append("close")
         if "current_price" in df.columns:
-            target_cols.append("current_price")
-
-        df_targets = df[target_cols] if target_cols else pd.DataFrame(index=df.index)
-
-        # remove dt cols + target cols from feature set
-        df_features = df.drop(columns=(dt_cols + target_cols), errors="ignore")
-
-        scaler = scalers.get(key, None)
-        if not scaler:
-            logging.warning(f"[{key}] No scaler found; leaving columns as-is.")
-            df_features.columns = [f"{key}_{c}" for c in df_features.columns]
-            if not df_targets.empty:
-                df_targets.columns = [f"{key}_{c}" for c in df_targets.columns]
-
-            dataframes[key] = pd.concat(
-                [
-                    df[dt_cols].reset_index(drop=True),  # keep dt if present
-                    df_features.reset_index(drop=True),
-                    df_targets.reset_index(drop=True),
-                ],
-                axis=1,
-            )
+            tcols.append("current_price")
+        feats = df.drop(columns=dt_cols + tcols, errors="ignore")
+        scl = scalers.get(k)
+        if not scl:
+            logging.warning(f"[{k}] No scaler found, leaving data unscaled.")
+            feats = prefix_columns(feats, k)
+            # rename target columns
+            for c in tcols:
+                df.rename(columns={c: f"{k}_{c}"}, inplace=True)
+            dfmap[k] = pd.concat([df[dt_cols], feats, df[[col for col in df.columns if col.startswith(f"{k}_")]]],
+                                 axis=1)
             continue
+        want_cols = getattr(scl, "feature_names_in_", feats.columns)
+        feats = feats.reindex(columns=want_cols, fill_value=0)
+        scaled = apply_scaler_to_df(feats, scl)
+        scaled = prefix_columns(scaled, k)
+        # rename target columns
+        for c in tcols:
+            df.rename(columns={c: f"{k}_{c}"}, inplace=True)
+        dfmap[k] = pd.concat([
+            df[dt_cols].reset_index(drop=True),
+            scaled.reset_index(drop=True),
+            df[[col for col in df.columns if col.startswith(f"{k}_")]].reset_index(drop=True)
+        ], axis=1)
+    return dfmap
 
-        # if scaler found, align columns
-        expected_cols = getattr(scaler, "feature_names_in_", df_features.columns)
-        df_features = df_features.reindex(columns=expected_cols, fill_value=0)
-
-        # scale
-        scaled_vals = scaler.transform(df_features)
-        df_scaled = pd.DataFrame(scaled_vals, columns=expected_cols)
-        df_scaled.columns = [f"{key}_{c}" for c in df_scaled.columns]
-
-        # rename targets
-        if not df_targets.empty:
-            df_targets.columns = [f"{key}_{c}" for c in df_targets.columns]
-
-        dataframes[key] = pd.concat(
-            [
-                df[dt_cols].reset_index(drop=True),
-                df_scaled.reset_index(drop=True),
-                df_targets.reset_index(drop=True),
-            ],
-            axis=1,
-        )
-    return dataframes
-
-
-def merge_dataframes(frames_dict, on_col):
-    """
-    Outer-merge all frames on `on_col`. If a frame doesn't have that column at all,
-    skip it with a warning. Also ensure all 'on_col' are datetime dtype.
-    """
-    valid_frames = []
-    for k, df in frames_dict.items():
+def outer_merge(dfs, on_col):
+    valid = []
+    for k, df in dfs.items():
         if on_col not in df.columns:
-            logging.warning(f"[{k}] Missing merge col '{on_col}'. Skipping from merge.")
+            logging.warning(f"[{k}] missing {on_col}, skip.")
             continue
-        # Force col to datetime to avoid object/datetime conflicts
         df[on_col] = pd.to_datetime(df[on_col], errors="coerce")
-        valid_frames.append(df)
-
-    if not valid_frames:
-        logging.warning(f"No valid frames with '{on_col}' to merge on. Returning empty.")
+        valid.append(df)
+    if not valid:
         return pd.DataFrame()
-
-    # now reduce-merge
-    merged = reduce(lambda L, R: pd.merge(L, R, on=on_col, how="outer"), valid_frames)
-    # sort
-    if on_col in merged.columns:
-        # ensure it's datetime
-        merged[on_col] = pd.to_datetime(merged[on_col], errors="coerce")
-        merged.sort_values(by=on_col, inplace=True)
-        merged.ffill(inplace=True)
-        merged.bfill(inplace=True)
+    merged = reduce(lambda L, R: pd.merge(L, R, on=on_col, how="outer"), valid)
+    merged.sort_values(by=on_col, inplace=True)
+    merged.ffill(inplace=True)
+    merged.bfill(inplace=True)
     return merged
 
+def fix_historical_spx_close(df):
+    """
+    If 'historical_spx_close' is missing, but we see 'close_x' or 'close_y' 
+    from merges, we unify them into 'historical_spx_close'.
+    """
+    # typical merges produce close_x / close_y if there's also a close from spy
+    # We only fix if historical_spx_close does not exist
+    if "historical_spx_close" not in df.columns:
+        # check if there's a 'close_x' or 'close_y' from the historical_spx merges
+        # we can attempt to unify into one column named 'historical_spx_close'
+        potential = [col for col in df.columns if col.startswith("close_") or col == "close"]
+        # Typically merges produce 'close_x' and 'close_y'
+        # but we only unify if at least one is not all NaN
+        for c in potential:
+            if df[c].notna().any():
+                logging.info(f"Renaming {c} → 'historical_spx_close'")
+                df.rename(columns={c: "historical_spx_close"}, inplace=True)
+                break
+    return df
 
-def prepare_data_for_lstm(df, target_col, seq_len=30, feature_list=None):
-    """
-    Build sequences of length `seq_len`. Optionally restrict columns to `feature_list`.
-    """
-    df = df.copy()
-    # drop date / timestamp if present
+def build_sequences(df, target_col, seq_len=30, feat_list=None):
+    # drop date/timestamp
     for c in ["date", "timestamp"]:
         if c in df.columns:
             df.drop(columns=c, inplace=True, errors="ignore")
-
     if target_col not in df.columns:
-        raise ValueError(f"Target '{target_col}' missing from columns {df.columns.tolist()}")
-
-    if feature_list is not None:
-        feature_list = [f for f in feature_list if f in df.columns]
-        df_features = df[feature_list]
+        raise ValueError(f"Missing {target_col} in {df.columns.tolist()}")
+    if feat_list:
+        feat_list = [f for f in feat_list if f in df.columns]
+        Xdf = df[feat_list]
     else:
-        df_features = df.drop(columns=[target_col], errors="ignore")
-
-    X_all = df_features.values
-    y_all = df[target_col].values
-
-    if np.isnan(X_all).any() or np.isinf(X_all).any():
-        raise ValueError(f"NaN/Inf found in features for target '{target_col}'")
-    if np.isnan(y_all).any() or np.isinf(y_all).any():
-        raise ValueError(f"NaN/Inf found in target '{target_col}'")
-
+        Xdf = df.drop(columns=[target_col], errors="ignore")
+    Xarr = Xdf.values
+    yarr = df[target_col].values
     X_seq, y_seq = [], []
-    for i in range(len(X_all) - seq_len):
-        X_seq.append(X_all[i : i + seq_len])
-        y_seq.append(y_all[i + seq_len])
-
+    for i in range(len(Xarr) - seq_len):
+        X_seq.append(Xarr[i:i+seq_len])
+        y_seq.append(yarr[i+seq_len])
     return np.array(X_seq, dtype=np.float32), np.array(y_seq, dtype=np.float32)
 
-
 def main():
-    # 1) Download CSVs from S3
-    dfs = download_csvs_from_s3()
-    # 1a) unify columns for historical sets
-    dfs = unify_historical_columns(dfs)
+    if not download_file_from_s3:
+        logging.warning("No S3 download; only local usage possible?")
+
+    # 1) Download CSVs
+    dfmap = download_csvs()
+    # 1a) unify historical date
+    dfmap = unify_historical(dfmap)
 
     # 2) Download scalers
-    scalers = download_scalers_from_s3()
+    scs = download_scalers()
 
     # 3) Apply scalers
-    dfs = apply_scalers(dfs, scalers)
+    dfmap = apply_all_scalers(dfmap, scs)
 
     # Partition sets
     hist_keys = [
-        k for k in dfs
-        if any(x in k for x in [
+        k for k in dfmap
+        if any(z in k for z in [
             "historical", "consumer", "core_inflation", "cpi", "gdp",
             "industrial", "interest_rate", "labor_force", "nonfarm",
             "personal_consumption", "ppi", "unemployment_rate"
         ])
     ]
-    rt_keys = [k for k in dfs if "real_time" in k]
+    rt_keys = [k for k in dfmap if "real_time" in k]
+    hist_map = {k: dfmap[k] for k in hist_keys}
+    rt_map = {k: dfmap[k] for k in rt_keys}
 
-    hist_dfs = {k: dfs[k] for k in hist_keys}
-    rt_dfs   = {k: dfs[k] for k in rt_keys}
+    hist_merged = outer_merge(hist_map, "date")
+    logging.info(f"[Historical] final shape: {hist_merged.shape}")
+    rt_merged = outer_merge(rt_map, "timestamp")
+    logging.info(f"[Real-Time] final shape: {rt_merged.shape}")
 
-    # 4) Merge historical on 'date'
-    combined_hist = merge_dataframes(hist_dfs, on_col="date")
-    logging.info(f"[Historical] final shape: {combined_hist.shape}")
+    # Additional fix: unify 'close_x' or 'close_y' -> 'historical_spx_close' if needed
+    hist_merged = fix_historical_spx_close(hist_merged)
 
-    # 5) Merge real-time on 'timestamp'
-    combined_rt = merge_dataframes(rt_dfs, on_col="timestamp")
-    logging.info(f"[Real-Time] final shape: {combined_rt.shape}")
-
-    # Example: build sequences for historical
-    if not combined_hist.empty:
+    # 4) If historical not empty
+    if not hist_merged.empty:
         target_hist = "historical_spx_close"
-        seq_len = 30
         try:
-            f_hist = np.load(os.path.join(MODEL_DIR, "feature_names_hist.npy"), allow_pickle=True)
-            feature_hist = f_hist.tolist() if isinstance(f_hist, np.ndarray) else None
+            feats_hist = np.load(os.path.join(MODEL_DIR, "feature_names_hist.npy"), allow_pickle=True).tolist()
         except FileNotFoundError:
-            feature_hist = None
+            feats_hist = None
 
-        X_hist, y_hist = prepare_data_for_lstm(combined_hist, target_hist, seq_len, feature_list=feature_hist)
-        np.save(os.path.join(MODEL_DIR, "X_test_hist.npy"), X_hist)
-        np.save(os.path.join(MODEL_DIR, "y_test_hist.npy"), y_hist)
-        logging.info(f"[Historical Sequences] X={X_hist.shape}, y={y_hist.shape}")
+        Xh, yh = build_sequences(hist_merged, target_hist, seq_len=30, feat_list=feats_hist)
+        np.save(os.path.join(MODEL_DIR, "X_test_hist.npy"), Xh)
+        np.save(os.path.join(MODEL_DIR, "y_test_hist.npy"), yh)
+        logging.info(f"[Historical Sequences] X={Xh.shape}, y={yh.shape}")
+        # push to S3
+        if auto_upload_file_to_s3:
+            auto_upload_file_to_s3(os.path.join(MODEL_DIR, "X_test_hist.npy"), "models/lumen_2/trained")
+            auto_upload_file_to_s3(os.path.join(MODEL_DIR, "y_test_hist.npy"), "models/lumen_2/trained")
 
-    # Example: build sequences for real-time
-    if not combined_rt.empty:
+    # 5) If real-time not empty
+    if not rt_merged.empty:
         target_rt = "real_time_spx_current_price"
-        seq_len = 30
         try:
-            f_rt = np.load(os.path.join(MODEL_DIR, "feature_names_real.npy"), allow_pickle=True)
-            feature_rt = f_rt.tolist() if isinstance(f_rt, np.ndarray) else None
+            feats_rt = np.load(os.path.join(MODEL_DIR, "feature_names_real.npy"), allow_pickle=True).tolist()
         except FileNotFoundError:
-            feature_rt = None
+            feats_rt = None
 
-        X_rt, y_rt = prepare_data_for_lstm(combined_rt, target_rt, seq_len, feature_list=feature_rt)
-        np.save(os.path.join(MODEL_DIR, "X_test_real.npy"), X_rt)
-        np.save(os.path.join(MODEL_DIR, "y_test_real.npy"), y_rt)
-        logging.info(f"[Real-Time Sequences] X={X_rt.shape}, y={y_rt.shape}")
+        Xr, yr = build_sequences(rt_merged, target_rt, seq_len=30, feat_list=feats_rt)
+        np.save(os.path.join(MODEL_DIR, "X_test_real.npy"), Xr)
+        np.save(os.path.join(MODEL_DIR, "y_test_real.npy"), yr)
+        logging.info(f"[Real-Time Sequences] X={Xr.shape}, y={yr.shape}")
+        # push to S3
+        if auto_upload_file_to_s3:
+            auto_upload_file_to_s3(os.path.join(MODEL_DIR, "X_test_real.npy"), "models/lumen_2/trained")
+            auto_upload_file_to_s3(os.path.join(MODEL_DIR, "y_test_real.npy"), "models/lumen_2/trained")
 
-    logging.info("Test data preparation from S3 complete!")
-
+    logging.info("Test data preparation complete (with .npy upload to S3).")
 
 if __name__ == "__main__":
     main()
