@@ -1,164 +1,150 @@
 import os
 import sys
-import pandas as pd
-from dotenv import load_dotenv
-from sklearn.preprocessing import LabelEncoder
-import numpy as np
 import logging
+import numpy as np
+import boto3
+from dotenv import load_dotenv
 from tensorflow.keras.models import load_model
-# from definitions_lumen_2 import ReduceMeanLayer
-from models.lumen_2.definitions_lumen_2 import ReduceMeanLayer
 
-# Add the correct path for module discovery
-sys.path.append(os.path.abspath(
-    os.path.join(os.path.dirname(__file__), '../../')))
+# ------------------------------------------------------------------------
+# If you need a custom layer from definitions_lumen_2:
+# ------------------------------------------------------------------------
+try:
+    from definitions_lumen_2 import ReduceMeanLayer
+except ImportError:
+    # If definitions_lumen_2 is not accessible or no custom layer is needed
+    class ReduceMeanLayer:
+        pass
 
-# Load environment variables
+# ------------------------------------------------------------------------
+# Load environment variables + set up logging
+# ------------------------------------------------------------------------
 load_dotenv()
+logging.basicConfig(level=logging.INFO)
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG)
+# ------------------------------------------------------------------------
+# Hard-coded region us-east-2; update if you truly use a different region
+# ------------------------------------------------------------------------
+def get_s3_client():
+    return boto3.client(
+        "s3",
+        aws_access_key_id     = os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY"),
+        region_name           = "us-east-2"
+    )
 
-# Define current_dir to refer to the directory containing this script
-current_dir = os.path.dirname(os.path.abspath(__file__))
-
-
-def load_data_for_prediction(file_path, is_historical=False):
-    # Load the CSV file
-    data = pd.read_csv(file_path)
-
-    # Check if it's historical or real-time data and use appropriate time column
-    time_col = 'date' if is_historical else 'timestamp'
-
-    # Convert 'date' or 'timestamp' to datetime
-    if time_col in data.columns:
-        data[time_col] = pd.to_datetime(data[time_col], errors='coerce')
-    else:
-        raise KeyError(f"Column '{time_col}' not found in the dataset.")
-
-    # Extract useful time-based features
-    data['day_of_week'] = data[time_col].dt.dayofweek   # Monday=0, Sunday=6
-    data['hour_of_day'] = data[time_col].dt.hour  # Hour of the day (0-23)
-    data['day_of_month'] = data[time_col].dt.day  # Day of the month (1-31)
-    data['month_of_year'] = data[time_col].dt.month     # Month (1-12)
-    data['seconds_since_start'] = (
-        data[time_col] - data[time_col].min()).dt.total_seconds()
-
-    # Drop the 'FEDFUNDS' column if it exists
-    if 'FEDFUNDS' in data.columns:
-        data = data.drop(columns=['FEDFUNDS'])
-        print("Dropped 'FEDFUNDS' column.")
-
-    # Drop any remaining non-numeric columns (in case there are other string columns)
-    non_numeric_cols = data.select_dtypes(exclude=[np.number]).columns
-    if len(non_numeric_cols) > 0:
-        print(f"Dropping non-numeric columns: {non_numeric_cols}")
-        data = data.drop(columns=non_numeric_cols)
-
-    # Drop the original 'date' or 'timestamp' column and any other unnecessary columns
-    data = data.drop(columns=[time_col], errors='ignore')
-
-    # Check if data has any non-numeric columns remaining
-    print(data.dtypes)
-
-    # Convert to float32 to ensure compatibility with TensorFlow models
+def download_file_from_s3(s3_key: str, local_path: str):
+    """Download a file from S3 to local filesystem."""
+    bucket_name = os.getenv("LUMEN_S3_BUCKET_NAME", "lumenaibucket")
+    s3 = get_s3_client()
     try:
-        data = data.astype(np.float32)
-    except ValueError as e:
-        print(f"Error converting data to float32: {e}")
+        logging.info(f"Downloading s3://{bucket_name}/{s3_key} → {local_path}")
+        s3.download_file(bucket_name, s3_key, local_path)
+        logging.info(f"Downloaded s3://{bucket_name}/{s3_key} → {local_path}")
+    except Exception as e:
+        logging.error(f"Error downloading {s3_key} from S3: {e}")
         raise
 
-    # Check for NaNs and fill if needed
-    if data.isnull().values.any():
-        print("Warning: Data contains NaN values. Filling with 0.")
-        data = data.fillna(0)
+def upload_file_to_s3(local_path: str, s3_key: str):
+    """Upload a local file to the S3 bucket/key specified."""
+    bucket_name = os.getenv("LUMEN_S3_BUCKET_NAME", "lumenaibucket")
+    s3 = get_s3_client()
+    try:
+        logging.info(f"Uploading {local_path} → s3://{bucket_name}/{s3_key}")
+        s3.upload_file(local_path, bucket_name, s3_key)
+        logging.info(f"Uploaded {local_path} → s3://{bucket_name}/{s3_key}")
+    except Exception as e:
+        logging.error(f"Error uploading {local_path} to s3://{bucket_name}/{s3_key}: {e}")
+        raise
 
-    return data
+# ------------------------------------------------------------------------
+# Local + S3 file references
+# ------------------------------------------------------------------------
+script_dir = os.path.dirname(os.path.abspath(__file__))
 
+# We'll store everything in 'trained' subfolder for consistency
+TRAINED_DIR         = os.path.join(script_dir, "trained")
+MODEL_PATH          = os.path.join(TRAINED_DIR, "Lumen2.keras")  # single real-time model
+LOCAL_X_TEST_REAL   = os.path.join(TRAINED_DIR, "X_test_real.npy")  # real-time test data
+LOCAL_PRED_REAL     = os.path.join(TRAINED_DIR, "predictions_real.npy")  # predictions
+
+# Adjust these S3 keys if you want the script to automatically pull/push them:
+S3_X_TEST_REAL      = "models/lumen_2/trained/X_test_real.npy"
+S3_PREDICTIONS_REAL = "models/lumen_2/trained/predictions_real.npy"
+
+def maybe_download_test_data():
+    """Ensure the real-time test array (X_test_real.npy) is present locally by pulling from S3."""
+    os.makedirs(TRAINED_DIR, exist_ok=True)
+    if not os.path.exists(LOCAL_X_TEST_REAL):
+        try:
+            download_file_from_s3(S3_X_TEST_REAL, LOCAL_X_TEST_REAL)
+        except Exception as exc:
+            logging.error(f"Could not download {S3_X_TEST_REAL} from S3: {exc}")
+    else:
+        logging.info(f"Real-time test data already exists locally: {LOCAL_X_TEST_REAL}")
 
 def load_trained_model(model_path):
-    # Load the saved hybrid model with custom layer
-    try:
-        model = load_model(model_path, custom_objects={
-                           'ReduceMeanLayer': ReduceMeanLayer})
-        logging.debug(f"Model loaded successfully from {model_path}")
-    except Exception as e:
-        logging.error(f"Failed to load the model: {e}")
+    """Load your single Lumen2 model with any needed custom objects."""
+    if not os.path.exists(model_path):
+        logging.error(f"Model file not found at {model_path}")
         return None
-    return model
+    try:
+        model = load_model(model_path, custom_objects={'ReduceMeanLayer': ReduceMeanLayer})
+        logging.info(f"Loaded model from {model_path}")
+        return model
+    except Exception as e:
+        logging.error(f"Error loading model: {e}")
+        return None
 
+def main():
+    # 1) Possibly download the test data from S3
+    maybe_download_test_data()
 
-def predict_with_model(model, input_data):
-    # Extract the input shape expected by the model
-    expected_shape = model.input_shape
-    expected_timesteps = expected_shape[1]
-    expected_features = expected_shape[2]
+    # 2) Load the trained model
+    model = load_trained_model(MODEL_PATH)
+    if model is None:
+        logging.error("Could not load real-time Lumen2 model. Exiting.")
+        return
 
-    # Convert DataFrame to NumPy array
-    input_data = input_data.values
+    # 3) Check if local X_test_real exists now
+    if not os.path.exists(LOCAL_X_TEST_REAL):
+        logging.error(f"No real-time test data found at {LOCAL_X_TEST_REAL}. Exiting.")
+        return
 
-    # Ensure that input_data has the correct number of features
-    if input_data.shape[1] > expected_features:
-        print(f"Trimming input data to {expected_features} features")
-        input_data = input_data[:, :expected_features]
+    # 4) Load the real-time test data
+    X_test = np.load(LOCAL_X_TEST_REAL)
+    logging.info(f"Loaded real-time test data: shape={X_test.shape}")
 
-    # Create sequences of the expected length
-    sequences = []
-    for i in range(len(input_data) - expected_timesteps + 1):
-        sequences.append(input_data[i:i + expected_timesteps])
-    sequences = np.array(sequences)
+    # 5) Compare to the model’s expected shape
+    exp_timesteps = model.input_shape[1]
+    exp_features  = model.input_shape[2]
+    logging.info(f"Model expects shape: (batch, {exp_timesteps}, {exp_features})")
 
-    # Check the reshaped input data shape
-    print(f"Reshaped input data shape: {sequences.shape}")
+    actual_feats = X_test.shape[2]
+    if actual_feats < exp_features:
+        diff = exp_features - actual_feats
+        logging.warning(f"Padding X_test from {actual_feats} → {exp_features} features with zeros.")
+        X_test = np.pad(X_test, ((0,0), (0,0), (0,diff)), mode="constant", constant_values=0)
+    elif actual_feats > exp_features:
+        diff = actual_feats - exp_features
+        logging.warning(f"Trimming X_test from {actual_feats} → {exp_features} features.")
+        X_test = X_test[:, :, :exp_features]
 
-    # Make predictions using the model
-    predictions = model.predict(sequences)
+    # 6) Predict
+    logging.info("Predicting on real-time test data...")
+    X_test = X_test.astype("float32")
+    preds = model.predict(X_test, verbose=0)
+    logging.info(f"Predictions shape: {preds.shape}")
 
-    return predictions
+    # 7) Save predictions locally
+    np.save(LOCAL_PRED_REAL, preds)
+    logging.info(f"Saved predictions to {LOCAL_PRED_REAL}")
 
+    # 8) Optionally upload predictions back to S3
+    try:
+        upload_file_to_s3(LOCAL_PRED_REAL, S3_PREDICTIONS_REAL)
+    except Exception as exc:
+        logging.warning(f"Could not upload predictions to S3: {exc}")
 
 if __name__ == "__main__":
-    # === Predict for Historical Model ===
-    # Load test sequences
-    X_test_hist = np.load(os.path.join(
-        current_dir, 'X_test_hist.npy'))
-
-    # Load the historical model
-    hist_model_file = os.path.join(
-        current_dir, 'Lumen2_historical.keras')
-    hist_model = load_trained_model(hist_model_file)
-
-    if hist_model is not None:
-        # Make predictions on historical test data
-        hist_predictions = hist_model.predict(X_test_hist)
-        print(hist_predictions)
-
-        # Save historical predictions to a file
-        np.save(os.path.join(current_dir, 'predictions_hist.npy'), hist_predictions)
-        logging.debug(
-            f"Historical predictions saved to models/predictions_hist.npy")
-    else:
-        print("Failed to load historical model.")
-
-    # === Predict for Real-Time Model ===
-    # Load test sequences
-    X_test_real = np.load(os.path.join(
-        current_dir, 'X_test_real.npy'))
-
-    # Load the real-time model
-    real_time_model_file = os.path.join(
-        current_dir, 'Lumen2_real_time.keras')
-    real_time_model = load_trained_model(real_time_model_file)
-
-    if real_time_model is not None:
-        # Make predictions on real-time test data
-        real_time_predictions = real_time_model.predict(X_test_real)
-        print(real_time_predictions)
-
-        # Save real-time predictions to a file
-        np.save(os.path.join(current_dir, 'predictions_real.npy'),
-                real_time_predictions)
-        logging.debug(
-            f"Real-time predictions saved to models/predictions_real.npy")
-    else:
-        print("Failed to load real-time model.")
+    main()
