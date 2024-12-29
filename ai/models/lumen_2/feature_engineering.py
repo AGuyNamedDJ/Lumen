@@ -410,33 +410,73 @@ def create_sequences_in_chunks(df, prefix="spx_spy_vix", seq_len=60, chunk_size=
     df.insert(0, "timestamp", timestamps)
 
 ##############################################################################
+# 9.1) TIME-SERIES SPLIT FUNCTION
+##############################################################################
+def time_series_split(df, train_frac=0.7, val_frac=0.15):
+    """
+    Chronologically split a cleaned DataFrame into train/val/test subsets.
+    Example: 70% train, 15% val, 15% test by row count, after sorting by time.
+    """
+    df_sorted = df.sort_values("timestamp").copy()
+    N = len(df_sorted)
+    train_end = int(N * train_frac)
+    val_end   = int(N * (train_frac + val_frac))
+
+    df_train = df_sorted.iloc[:train_end]
+    df_val   = df_sorted.iloc[train_end:val_end]
+    df_test  = df_sorted.iloc[val_end:]
+
+    logging.info(f"[time_series_split] -> Train: {df_train.shape}, Val: {df_val.shape}, Test: {df_test.shape}")
+    return df_train, df_val, df_test
+
+##############################################################################
 # 10) MAIN
 ##############################################################################
 def main():
     logging.info("=== Feature Engineering with SPX, SPY, VIX data from S3 ===")
+
+    # 1) Download all processed CSVs from S3 => local
     download_processed_csvs()
 
+    # 2) Merge data into a single DataFrame
     df_merged = merge_spx_spy_vix_3min()
     logging.info(f"[main] shape after merge: {df_merged.shape}")
 
+    # 3) Add indicators
     df_merged = add_spx_indicators(df_merged)
     df_merged = add_spy_indicators(df_merged)
     df_merged = add_vix_indicators(df_merged)
     df_merged = add_spy_vix_rolling_corr(df_merged, window=30)
     logging.info(f"[main] shape after indicators: {df_merged.shape}")
 
+    # 4) Create target
     df_merged = create_target_1h(df_merged)
     logging.info(f"[main] shape after target_1h: {df_merged.shape}")
 
+    # 5) Drop NA + scale
     df_merged = drop_na_and_scale(df_merged)
     if df_merged.empty:
         logging.warning("[main] No data remain => aborting.")
         return
 
-    save_featured_csv(df_merged, "spx_spy_vix_merged_features.csv")
-    create_sequences_in_chunks(df_merged, prefix="spx_spy_vix", seq_len=60, chunk_size=10000)
+    # ----------------------------------------------------------------------
+    # NEW STEP A: SPLIT INTO TRAIN/VAL/TEST AFTER CLEANING
+    # ----------------------------------------------------------------------
+    df_train, df_val, df_test = time_series_split(df_merged, train_frac=0.7, val_frac=0.15)
+
+    # Optional: Save each subset’s CSV if you like
+    save_featured_csv(df_train, "spx_spy_vix_merged_features_train.csv")
+    save_featured_csv(df_val,   "spx_spy_vix_merged_features_val.csv")
+    save_featured_csv(df_test,  "spx_spy_vix_merged_features_test.csv")
+
+    # ----------------------------------------------------------------------
+    # NEW STEP B: CREATE SEQUENCES FOR EACH SPLIT
+    # ----------------------------------------------------------------------
+    create_sequences_in_chunks(df_train, prefix="spx_spy_vix_train", seq_len=60, chunk_size=10000)
+    create_sequences_in_chunks(df_val,   prefix="spx_spy_vix_val",   seq_len=60, chunk_size=10000)
+    create_sequences_in_chunks(df_test,  prefix="spx_spy_vix_test",  seq_len=60, chunk_size=10000)
 
     logging.info("=== Done ===")
-
+    
 if __name__ == "__main__":
     main()

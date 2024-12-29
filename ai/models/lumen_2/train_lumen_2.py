@@ -7,7 +7,7 @@ from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import Sequence
 
-# Adjust your Python path to see ai/utils, definitions, etc.
+# Adjust your Python path if needed
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
 sys.path.append(project_root)
@@ -16,6 +16,7 @@ try:
     from ai.utils.aws_s3_utils import auto_upload_file_to_s3
 except ImportError:
     logging.info("auto_upload_file_to_s3 not available. Skipping S3 upload.")
+    auto_upload_file_to_s3 = None
 
 from definitions_lumen_2 import create_hybrid_model
 
@@ -30,6 +31,7 @@ os.makedirs(MODEL_DIR, exist_ok=True)
 TRAINED_DIR = os.path.join(MODEL_DIR, "trained")
 os.makedirs(TRAINED_DIR, exist_ok=True)
 
+# If you want a new name, e.g. "Lumen2_spx_spy_vix", do so here
 MODEL_NAME = "Lumen2"
 
 FEATURED_DATA_DIR = os.path.join(BASE_DIR, "..", "..", "data", "lumen_2", "featured")
@@ -62,7 +64,6 @@ class NpyDataGenerator(Sequence):
             np.random.shuffle(self.indices)
 
     def __len__(self):
-        # We'll let Keras rely on steps_per_epoch, so __len__ can just be the full # of batches
         return int(np.ceil(len(self.X) / self.batch_size))
 
     def __getitem__(self, idx):
@@ -75,7 +76,7 @@ class NpyDataGenerator(Sequence):
 
 
 def find_npy_parts(directory, prefix):
-    """Finds all .npy with a given prefix, sorts them by 'partN' integer."""
+    """Finds all .npy with a given prefix, sorted by the integer after 'part'."""
     files = [
         os.path.join(directory, f)
         for f in os.listdir(directory)
@@ -99,7 +100,7 @@ def find_npy_parts(directory, prefix):
 
 def load_npy_data(x_prefix, y_prefix):
     """
-    Loads X, y from .npy part files in SEQUENCES_DIR, checks for shape consistency, logs debug info.
+    Loads X, y from .npy part files in SEQUENCES_DIR, checks shape consistency, logs debug info.
     """
     x_files = find_npy_parts(SEQUENCES_DIR, x_prefix)
     if not x_files:
@@ -115,15 +116,13 @@ def load_npy_data(x_prefix, y_prefix):
             logging.error(f"No Y part files for '{y_prefix}' in {SEQUENCES_DIR}. Exiting.")
             return None, None
 
-    # Concatenate any multi-part X
+    # Concatenate multi-part
     X_parts = [np.load(xf) for xf in x_files]
     X = np.concatenate(X_parts, axis=0) if len(X_parts) > 1 else X_parts[0]
 
-    # Concatenate any multi-part Y
     Y_parts = [np.load(yf) for yf in y_files]
     y = np.concatenate(Y_parts, axis=0) if len(Y_parts) > 1 else Y_parts[0]
 
-    # Check consistency
     if len(X) != len(y):
         logging.error(f"Mismatch X vs y count: {len(X)} vs {len(y)}. Exiting.")
         return None, None
@@ -136,10 +135,13 @@ def load_npy_data(x_prefix, y_prefix):
 
 
 def main():
-    """Trains the hybrid model with a memory-based generator, ensuring consistent steps_per_epoch."""
-    # Decide which files to load: e.g. real_time_spy_X_3D / real_time_spy_Y_3D
-    x_prefix = "real_time_spy_X_3D"
-    y_prefix = "real_time_spy_Y_3D"
+    """
+    Trains the hybrid model with a memory-based generator, 
+    pointing to spx_spy_vix_... prefix from the new feature engineering.
+    """
+    # New prefix to match your updated feature engineering naming
+    x_prefix = "spx_spy_vix_X_3D"
+    y_prefix = "spx_spy_vix_Y_3D"
 
     X, y = load_npy_data(x_prefix, y_prefix)
     if X is None or y is None:
@@ -150,12 +152,9 @@ def main():
     num_feats = X.shape[2]
     logging.info(f"Sequence length={seq_len}, Features={num_feats}, Samples={len(X)}")
 
-    # Build generator
     batch_size = 32
     train_generator = NpyDataGenerator(X, y, batch_size=batch_size, shuffle=True)
-
-    # steps_per_epoch to fully utilize the data
-    steps_per_epoch = len(X) // batch_size  # floor division
+    steps_per_epoch = len(X) // batch_size
     logging.info(f"steps_per_epoch={steps_per_epoch} for {len(X)} samples @ batch_size={batch_size}")
 
     # Build model
@@ -169,11 +168,9 @@ def main():
     optimizer = Adam(learning_rate=1e-4, clipnorm=1.0)
     model.compile(optimizer=optimizer, loss="mean_squared_error")
 
-    # Logging
     logging.info("Model summary:")
     model.summary(print_fn=logging.info)
 
-    # Checkpoints
     checkpoint_path = os.path.join(TRAINED_DIR, f"{MODEL_NAME}.keras")
     checkpoint_cb = ModelCheckpoint(
         checkpoint_path,
@@ -200,15 +197,15 @@ def main():
     logging.info(f"Training complete. Model saved to {checkpoint_path}")
 
     # Optionally upload checkpoint to S3
-    if checkpoint_cb.best is not None:
-        if auto_upload_file_to_s3 and callable(auto_upload_file_to_s3):
-            try:
-                auto_upload_file_to_s3(checkpoint_path, "models/lumen_2/trained")
-                logging.info(f"Uploaded {checkpoint_path} to S3 => models/lumen_2/trained")
-            except Exception as exc:
-                logging.warning(f"Could not upload to S3: {exc}")
+    if checkpoint_cb.best is not None and auto_upload_file_to_s3 and callable(auto_upload_file_to_s3):
+        try:
+            auto_upload_file_to_s3(checkpoint_path, "models/lumen_2/trained")
+            logging.info(f"Uploaded {checkpoint_path} to S3 => models/lumen_2/trained")
+        except Exception as exc:
+            logging.warning(f"Could not upload to S3: {exc}")
     else:
-        logging.info("No best checkpoint found to upload.")
+        logging.info("No best checkpoint found or auto_upload_file_to_s3 not available.")
+
 
 if __name__ == "__main__":
     main()
