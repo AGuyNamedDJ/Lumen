@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import os
 import sys
 import logging
@@ -9,7 +8,7 @@ from sklearn.preprocessing import MinMaxScaler
 import boto3
 
 ##############################################################################
-# 1) S3 HELPERS: NO MORE "ModuleNotFoundError: No module named 'ai'"
+# 1) AWS S3 HELPER FUNCTIONS
 ##############################################################################
 def get_s3_client():
     """
@@ -17,14 +16,15 @@ def get_s3_client():
     """
     return boto3.client(
         "s3",
-        region_name           = os.getenv("AWS_REGION", "us-east-2"),
-        aws_access_key_id     = os.getenv("AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+        region_name=os.getenv("AWS_REGION", "us-east-2"),
+        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY")
     )
 
 def download_file_from_s3(s3_key: str, local_path: str):
     """
-    Download a file from S3 (s3_key) to local_path.
+    Downloads a file from a given S3 key into a local path.
+    Skips download if the file already exists locally.
     """
     bucket_name = os.getenv("LUMEN_S3_BUCKET_NAME", "your-default-bucket")
     s3 = get_s3_client()
@@ -34,14 +34,14 @@ def download_file_from_s3(s3_key: str, local_path: str):
     try:
         logging.info(f"[download_file_from_s3] Downloading s3://{bucket_name}/{s3_key} → {local_path}")
         s3.download_file(bucket_name, s3_key, local_path)
-        logging.info(f"[download_file_from_s3] Done.")
+        logging.info("[download_file_from_s3] Done.")
     except Exception as e:
         logging.error(f"Error downloading {s3_key} from S3: {e}")
         raise
 
 def upload_file_to_s3(local_path: str, s3_key: str):
     """
-    Upload a local file to s3://<bucket>/<s3_key>.
+    Uploads a local file to the given s3://<bucket>/<s3_key>.
     """
     bucket_name = os.getenv("LUMEN_S3_BUCKET_NAME", "your-default-bucket")
     s3 = get_s3_client()
@@ -55,7 +55,8 @@ def upload_file_to_s3(local_path: str, s3_key: str):
 
 def auto_upload_file_to_s3(local_path: str, s3_subfolder: str = ""):
     """
-    Derive the filename from local_path; place in s3_subfolder if provided.
+    Convenience wrapper that derives the filename from local_path
+    and optionally places it in s3_subfolder.
     """
     base_name = os.path.basename(local_path)
     if s3_subfolder:
@@ -65,12 +66,12 @@ def auto_upload_file_to_s3(local_path: str, s3_subfolder: str = ""):
     upload_file_to_s3(local_path, s3_key)
 
 ##############################################################################
-# 2) ENV, LOGGING, PATHS
+# 2) ENV, LOGGING, AND PATH SETUP
 ##############################################################################
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
+script_dir   = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
 sys.path.append(project_root)
 
@@ -84,11 +85,12 @@ os.makedirs(FEATURED_DIR, exist_ok=True)
 os.makedirs(SEQUENCES_DIR, exist_ok=True)
 
 ##############################################################################
-# 3) DOWNLOAD PROCESSED CSVs FROM S3
+# 3) DOWNLOAD PROCESSED CSVs
 ##############################################################################
 def download_processed_csvs():
     """
-    Download the processed CSVs from S3 => local `processed` folder.
+    Retrieves processed CSVs for real_time_spx, real_time_spy, real_time_vix
+    from S3 and stores them locally in the processed directory.
     """
     spx_s3_key = "data/lumen2/processed/processed_real_time_spx.csv"
     spy_s3_key = "data/lumen2/processed/processed_real_time_spy.csv"
@@ -106,6 +108,10 @@ def download_processed_csvs():
 # 4) MERGE SPX, SPY, VIX
 ##############################################################################
 def merge_spx_spy_vix_3min():
+    """
+    Loads local CSVs, renames columns, up-samples VIX to 3-min intervals,
+    merges everything into one DataFrame, and forward-fills missing data.
+    """
     spx_local = os.path.join(DATA_DIR, "processed_real_time_spx.csv")
     spy_local = os.path.join(DATA_DIR, "processed_real_time_spy.csv")
     vix_local = os.path.join(DATA_DIR, "processed_real_time_vix.csv")
@@ -127,7 +133,7 @@ def merge_spx_spy_vix_3min():
     spy.set_index("timestamp", inplace=True)
     vix.set_index("timestamp", inplace=True)
 
-    # Rename columns
+    # Rename columns for clarity
     if "current_price" in spx.columns:
         spx.rename(columns={"current_price": "spx_price"}, inplace=True)
     if "volume" in spx.columns:
@@ -137,21 +143,16 @@ def merge_spx_spy_vix_3min():
     if "volume" in spy.columns:
         spy.rename(columns={"volume": "spy_volume"}, inplace=True)
 
-    # VIX => 3-min
     vix_3min = vix.resample("3Min").last().ffill()
     if "current_price" in vix_3min.columns:
         vix_3min.rename(columns={"current_price": "vix_price"}, inplace=True)
     if "volume" in vix_3min.columns:
         vix_3min.rename(columns={"volume": "vix_volume"}, inplace=True)
 
-    # Merge spx + spy (avoid col overlap by suffixing)
     merged_spx_spy = spx.join(spy, how="outer", lsuffix="_spx", rsuffix="_spy")
-
-    # Then join vix_3min
-    df_merged = merged_spx_spy.join(vix_3min, how="outer", rsuffix="_vix")
+    df_merged      = merged_spx_spy.join(vix_3min, how="outer", rsuffix="_vix")
     df_merged.sort_index(inplace=True)
     df_merged.ffill(inplace=True)
-
     df_merged.reset_index(inplace=True)
     df_merged.rename(columns={"index": "timestamp"}, inplace=True)
 
@@ -159,100 +160,102 @@ def merge_spx_spy_vix_3min():
     return df_merged
 
 ##############################################################################
-# 5) INDICATORS
+# 5) INDICATOR FUNCTIONS
 ##############################################################################
 def add_spx_indicators(df):
+    """
+    Creates SPX-based MACD, Bollinger, RSI, and OBV (if spx_volume exists).
+    """
     if "spx_price" not in df.columns:
         logging.info("No spx_price => skipping SPX indicators.")
         return df
     df.sort_values("timestamp", inplace=True)
     p = df["spx_price"]
 
-    # MACD
     ema12 = p.ewm(span=12, adjust=False).mean()
     ema26 = p.ewm(span=26, adjust=False).mean()
     df["SPX_MACD"]        = ema12 - ema26
     df["SPX_MACD_Signal"] = df["SPX_MACD"].ewm(span=9, adjust=False).mean()
 
-    # Bollinger
     sma20 = p.rolling(20).mean()
     std20 = p.rolling(20).std()
     df["SPX_BollU"] = sma20 + 2 * std20
     df["SPX_BollL"] = sma20 - 2 * std20
 
-    # RSI
     delta = p.diff()
-    gain  = delta.where(delta>0,0).rolling(14).mean()
-    loss  = (-delta.where(delta<0,0)).rolling(14).mean()
-    rs    = gain/(loss + 1e-9)
-    df["SPX_RSI"] = 100 - 100/(1+rs)
+    gain  = delta.where(delta > 0, 0).rolling(14).mean()
+    loss  = (-delta.where(delta < 0, 0)).rolling(14).mean()
+    rs    = gain / (loss + 1e-9)
+    df["SPX_RSI"] = 100 - 100 / (1 + rs)
 
-    # OBV if volume
     if "spx_volume" in df.columns:
-        sign_price = np.sign(delta.fillna(0))
+        sign_price   = np.sign(delta.fillna(0))
         df["SPX_OBV"] = (sign_price * df["spx_volume"]).fillna(0).cumsum()
 
     return df
 
 def add_spy_indicators(df):
+    """
+    Creates SPY-based MACD, Bollinger, RSI, and OBV (if spy_volume exists).
+    """
     if "spy_price" not in df.columns:
         logging.info("No spy_price => skipping SPY indicators.")
         return df
     df.sort_values("timestamp", inplace=True)
     p = df["spy_price"]
 
-    # MACD
     ema12 = p.ewm(span=12, adjust=False).mean()
     ema26 = p.ewm(span=26, adjust=False).mean()
     df["SPY_MACD"]        = ema12 - ema26
     df["SPY_MACD_Signal"] = df["SPY_MACD"].ewm(span=9, adjust=False).mean()
 
-    # Bollinger
     sma20 = p.rolling(20).mean()
     std20 = p.rolling(20).std()
     df["SPY_BollU"] = sma20 + 2 * std20
     df["SPY_BollL"] = sma20 - 2 * std20
 
-    # RSI
     delta = p.diff()
-    gain  = delta.where(delta>0,0).rolling(14).mean()
-    loss  = (-delta.where(delta<0,0)).rolling(14).mean()
-    rs    = gain/(loss + 1e-9)
-    df["SPY_RSI"] = 100 - 100/(1+rs)
+    gain  = delta.where(delta > 0, 0).rolling(14).mean()
+    loss  = (-delta.where(delta < 0, 0)).rolling(14).mean()
+    rs    = gain / (loss + 1e-9)
+    df["SPY_RSI"] = 100 - 100 / (1 + rs)
 
     if "spy_volume" in df.columns:
-        sign_price = np.sign(delta.fillna(0))
+        sign_price   = np.sign(delta.fillna(0))
         df["SPY_OBV"] = (sign_price * df["spy_volume"]).fillna(0).cumsum()
 
     return df
 
 def add_vix_indicators(df):
+    """
+    Creates VIX-based RSI, short/long EMAs, and MACD if vix_price is present.
+    """
     if "vix_price" not in df.columns:
         logging.info("No vix_price => skipping VIX indicators.")
         return df
     df.sort_values("timestamp", inplace=True)
     p = df["vix_price"]
 
-    # RSI
     delta = p.diff()
-    gain  = delta.where(delta>0,0).rolling(14).mean()
-    loss  = (-delta.where(delta<0,0)).rolling(14).mean()
-    rs    = gain/(loss + 1e-9)
-    df["VIX_RSI"] = 100 - 100/(1+rs)
+    gain  = delta.where(delta > 0, 0).rolling(14).mean()
+    loss  = (-delta.where(delta < 0, 0)).rolling(14).mean()
+    rs    = gain / (loss + 1e-9)
+    df["VIX_RSI"] = 100 - 100 / (1 + rs)
 
-    # EMAs
     df["VIX_EMA_10"] = p.ewm(span=10, adjust=False).mean()
     df["VIX_EMA_20"] = p.ewm(span=20, adjust=False).mean()
 
-    # MACD
     ema12 = p.ewm(span=12, adjust=False).mean()
     ema26 = p.ewm(span=26, adjust=False).mean()
-    df["VIX_MACD"] = ema12 - ema26
+    df["VIX_MACD"]        = ema12 - ema26
     df["VIX_MACD_Signal"] = df["VIX_MACD"].ewm(span=9, adjust=False).mean()
 
     return df
 
 def add_spy_vix_rolling_corr(df, window=30):
+    """
+    Adds a rolling correlation between SPY and VIX prices over 'window' bars.
+    """
     if "spy_price" not in df.columns or "vix_price" not in df.columns:
         logging.info("No spy_price or vix_price => skipping rolling corr.")
         return df
@@ -266,6 +269,9 @@ def add_spy_vix_rolling_corr(df, window=30):
 # 6) CREATE TARGET
 ##############################################################################
 def create_target_1h(df):
+    """
+    Appends 'target_1h' by shifting spy_price -20 rows to represent a 1-hour lookahead at 3-min intervals.
+    """
     if "spy_price" in df.columns:
         df["target_1h"] = df["spy_price"].shift(-20)
     else:
@@ -276,15 +282,17 @@ def create_target_1h(df):
 # 7) DROP NA + SCALE
 ##############################################################################
 def drop_na_and_scale(df):
+    """
+    Removes rows lacking the target, slices off warm-up/cool-down periods,
+    drops NaNs in numeric columns, and applies MinMax scaling.
+    """
     logging.info(f"[drop_na_and_scale] initial shape: {df.shape}")
 
-    # 1) Drop rows missing target_1h first
     before_target = len(df)
     df.dropna(subset=["target_1h"], inplace=True)
     logging.info(f"  -> after dropna(target_1h): {len(df)}/{before_target} remain")
 
-    # 2) Slice off the first 50 (to handle rolling warm-up) + last 20 (for the shift)
-    #    Adjust numbers for your actual rolling windows & shift
+    # Example approach: remove the first 50 bars (warm-up for rolling) and last 20 bars (since shift is -20)
     if len(df) > 70:
         df = df.iloc[50:-20]
         logging.info(f"  -> after slicing buffer: {df.shape}")
@@ -292,25 +300,19 @@ def drop_na_and_scale(df):
         logging.warning("Data < 70 rows => skipping slice => no data left otherwise.")
         return pd.DataFrame()
 
-    # 2.5) Make a copy to avoid SettingWithCopyWarning
     df = df.copy()
-
-    # 3) Replace inf with NaN
     df.replace([np.inf, -np.inf], np.nan, inplace=True)
 
-    # 4) Print how many NaNs in each column for debugging
     logging.info("[drop_na_and_scale] NaN counts per column (before final drop):")
     nan_counts = df.isna().sum()
     for col in df.columns:
         logging.info(f"    {col}: {nan_counts[col]}")
 
-    # 4a) Possibly drop columns that are entirely NaN (optional)
     all_nan_cols = [c for c in df.columns if df[c].isna().all()]
     if all_nan_cols:
         logging.info(f"[drop_na_and_scale] Dropping columns entirely NaN: {all_nan_cols}")
         df.drop(columns=all_nan_cols, inplace=True)
 
-    # 5) Finally drop rows that still have NaN in numeric columns
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     before_numeric = len(df)
     df.dropna(subset=numeric_cols, inplace=True)
@@ -320,7 +322,6 @@ def drop_na_and_scale(df):
         logging.warning("All rows removed => No data to scale.")
         return df
 
-    # 6) Scale
     timestamps = df["timestamp"].copy()
     df.drop(columns=["timestamp"], inplace=True, errors="ignore")
 
@@ -339,11 +340,13 @@ def drop_na_and_scale(df):
 # 8) SAVE CSV + UPLOAD
 ##############################################################################
 def save_featured_csv(df, filename):
+    """
+    Writes a DataFrame to CSV and optionally uploads to S3 under data/lumen2/featured.
+    """
     out_path = os.path.join(FEATURED_DIR, filename)
     df.to_csv(out_path, index=False)
     logging.info(f"[save_featured_csv] => {out_path}")
 
-    # Upload to S3 if desired
     folder_key = "data/lumen2/featured"
     logging.info(f"Uploading final CSV => s3://<bucket>/{folder_key}/{filename}")
     try:
@@ -352,9 +355,13 @@ def save_featured_csv(df, filename):
         logging.warning(f"Could not upload CSV to S3: {e}")
 
 ##############################################################################
-# 9) CREATE SEQUENCES + UPLOAD .NPY CHUNKS
+# 9) CREATE SEQUENCES + UPLOAD
 ##############################################################################
 def create_sequences_in_chunks(df, prefix="spx_spy_vix", seq_len=60, chunk_size=10000):
+    """
+    Converts a DataFrame into 3D sequences of shape (batch, seq_len, features).
+    target_1h is used for Y; other numeric features form X.
+    """
     timestamps = df.pop("timestamp")
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
 
@@ -365,7 +372,7 @@ def create_sequences_in_chunks(df, prefix="spx_spy_vix", seq_len=60, chunk_size=
     numeric_cols.remove("target_1h")
     X_arr = df[numeric_cols].values
     Y_arr = df["target_1h"].values
-    n     = len(X_arr)
+    n = len(X_arr)
 
     if n < seq_len:
         logging.warning("[create_sequences_in_chunks] Not enough data for even 1 sequence.")
@@ -375,15 +382,17 @@ def create_sequences_in_chunks(df, prefix="spx_spy_vix", seq_len=60, chunk_size=
     start = 0
     x_idx = 0
     y_idx = 0
+
     while start + seq_len <= n:
         end = min(start + chunk_size, n - seq_len + 1)
         X_list, Y_list = [], []
+
         for i in range(start, end):
             X_list.append(X_arr[i : i + seq_len])
             Y_list.append(Y_arr[i + seq_len - 1])
 
         X_np = np.array(X_list, dtype=np.float32)
-        Y_np = np.array(Y_list, dtype=np.float32).reshape(-1,1)
+        Y_np = np.array(Y_list, dtype=np.float32).reshape(-1, 1)
 
         x_filename = f"{prefix}_X_3D_part{x_idx}.npy"
         y_filename = f"{prefix}_Y_3D_part{y_idx}.npy"
@@ -394,7 +403,6 @@ def create_sequences_in_chunks(df, prefix="spx_spy_vix", seq_len=60, chunk_size=
         np.save(y_path, Y_np)
         logging.info(f"[create_sequences_in_chunks] Saved chunk {x_idx}: X=({X_np.shape}), Y=({Y_np.shape})")
 
-        # Attempt S3 upload
         chunk_s3_folder = "data/lumen2/featured/sequences"
         try:
             auto_upload_file_to_s3(x_path, chunk_s3_folder)
@@ -406,21 +414,20 @@ def create_sequences_in_chunks(df, prefix="spx_spy_vix", seq_len=60, chunk_size=
         y_idx += 1
         start = end
 
-    # Put timestamps back
     df.insert(0, "timestamp", timestamps)
 
 ##############################################################################
-# 9.1) TIME-SERIES SPLIT FUNCTION
+# 9.1) TIME-SERIES SPLIT
 ##############################################################################
 def time_series_split(df, train_frac=0.7, val_frac=0.15):
     """
-    Chronologically split a cleaned DataFrame into train/val/test subsets.
-    Example: 70% train, 15% val, 15% test by row count, after sorting by time.
+    Chronologically splits df into train/val/test.
+    Adjust fractions as needed (e.g. 0.7 / 0.15 / 0.15).
     """
     df_sorted = df.sort_values("timestamp").copy()
-    N = len(df_sorted)
-    train_end = int(N * train_frac)
-    val_end   = int(N * (train_frac + val_frac))
+    n = len(df_sorted)
+    train_end = int(n * train_frac)
+    val_end   = int(n * (train_frac + val_frac))
 
     df_train = df_sorted.iloc[:train_end]
     df_val   = df_sorted.iloc[train_end:val_end]
@@ -430,53 +437,46 @@ def time_series_split(df, train_frac=0.7, val_frac=0.15):
     return df_train, df_val, df_test
 
 ##############################################################################
-# 10) MAIN
+# 10) MAIN PIPELINE
 ##############################################################################
 def main():
     logging.info("=== Feature Engineering with SPX, SPY, VIX data from S3 ===")
 
-    # 1) Download all processed CSVs from S3 => local
+    # Step 1: Download processed CSVs from S3 into local folder
     download_processed_csvs()
 
-    # 2) Merge data into a single DataFrame
+    # Step 2: Merge all into one DataFrame, add indicators, create target
     df_merged = merge_spx_spy_vix_3min()
     logging.info(f"[main] shape after merge: {df_merged.shape}")
 
-    # 3) Add indicators
     df_merged = add_spx_indicators(df_merged)
     df_merged = add_spy_indicators(df_merged)
     df_merged = add_vix_indicators(df_merged)
     df_merged = add_spy_vix_rolling_corr(df_merged, window=30)
     logging.info(f"[main] shape after indicators: {df_merged.shape}")
 
-    # 4) Create target
     df_merged = create_target_1h(df_merged)
     logging.info(f"[main] shape after target_1h: {df_merged.shape}")
 
-    # 5) Drop NA + scale
     df_merged = drop_na_and_scale(df_merged)
     if df_merged.empty:
         logging.warning("[main] No data remain => aborting.")
         return
 
-    # ----------------------------------------------------------------------
-    # NEW STEP A: SPLIT INTO TRAIN/VAL/TEST AFTER CLEANING
-    # ----------------------------------------------------------------------
+    # Step 3: Split into train/val/test sets
     df_train, df_val, df_test = time_series_split(df_merged, train_frac=0.7, val_frac=0.15)
 
-    # Optional: Save each subset’s CSV if you like
+    # (Optional) Save each subset to CSV
     save_featured_csv(df_train, "spx_spy_vix_merged_features_train.csv")
     save_featured_csv(df_val,   "spx_spy_vix_merged_features_val.csv")
     save_featured_csv(df_test,  "spx_spy_vix_merged_features_test.csv")
 
-    # ----------------------------------------------------------------------
-    # NEW STEP B: CREATE SEQUENCES FOR EACH SPLIT
-    # ----------------------------------------------------------------------
+    # Step 4: Create sequences for each subset
     create_sequences_in_chunks(df_train, prefix="spx_spy_vix_train", seq_len=60, chunk_size=10000)
     create_sequences_in_chunks(df_val,   prefix="spx_spy_vix_val",   seq_len=60, chunk_size=10000)
     create_sequences_in_chunks(df_test,  prefix="spx_spy_vix_test",  seq_len=60, chunk_size=10000)
 
     logging.info("=== Done ===")
-    
+
 if __name__ == "__main__":
     main()
