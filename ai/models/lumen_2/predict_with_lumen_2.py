@@ -6,145 +6,168 @@ import boto3
 from dotenv import load_dotenv
 from tensorflow.keras.models import load_model
 
-# ------------------------------------------------------------------------
-# If you need a custom layer from definitions_lumen_2:
-# ------------------------------------------------------------------------
 try:
     from definitions_lumen_2 import ReduceMeanLayer
 except ImportError:
-    # If definitions_lumen_2 is not accessible or no custom layer is needed
     class ReduceMeanLayer:
         pass
 
 # ------------------------------------------------------------------------
-# Load environment variables + set up logging
+# ENV + LOGGING
 # ------------------------------------------------------------------------
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
 # ------------------------------------------------------------------------
-# Hard-coded region us-east-2; update if you truly use a different region
+# BOTO3 S3 UTILS
 # ------------------------------------------------------------------------
 def get_s3_client():
+    """Creates a boto3 S3 client from environment variables (region/key/secret)."""
     return boto3.client(
         "s3",
-        aws_access_key_id     = os.getenv("AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY"),
-        region_name           = "us-east-2"
+        region_name=os.getenv("AWS_REGION", "us-east-2"),
+        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY")
     )
 
 def download_file_from_s3(s3_key: str, local_path: str):
-    """Download a file from S3 to local filesystem."""
-    bucket_name = os.getenv("LUMEN_S3_BUCKET_NAME", "lumenaibucket")
+    """
+    Downloads a file from s3://<bucket>/<s3_key> → local_path.
+    Overwrites local_path if it already exists.
+    """
+    bucket_name = os.getenv("LUMEN_S3_BUCKET_NAME", "your-default-bucket")
     s3 = get_s3_client()
-    try:
-        logging.info(f"Downloading s3://{bucket_name}/{s3_key} → {local_path}")
-        s3.download_file(bucket_name, s3_key, local_path)
-        logging.info(f"Downloaded s3://{bucket_name}/{s3_key} → {local_path}")
-    except Exception as e:
-        logging.error(f"Error downloading {s3_key} from S3: {e}")
-        raise
+    if os.path.exists(local_path):
+        logging.info(f"[download_file_from_s3] Removing existing local file => {local_path}")
+        os.remove(local_path)
+    logging.info(f"[download_file_from_s3] Downloading s3://{bucket_name}/{s3_key} → {local_path}")
+    s3.download_file(bucket_name, s3_key, local_path)
+    logging.info("[download_file_from_s3] Done.")
 
 def upload_file_to_s3(local_path: str, s3_key: str):
-    """Upload a local file to the S3 bucket/key specified."""
-    bucket_name = os.getenv("LUMEN_S3_BUCKET_NAME", "lumenaibucket")
+    """
+    Uploads a local file to s3://<bucket>/<s3_key>.
+    """
+    bucket_name = os.getenv("LUMEN_S3_BUCKET_NAME", "your-default-bucket")
     s3 = get_s3_client()
-    try:
-        logging.info(f"Uploading {local_path} → s3://{bucket_name}/{s3_key}")
-        s3.upload_file(local_path, bucket_name, s3_key)
-        logging.info(f"Uploaded {local_path} → s3://{bucket_name}/{s3_key}")
-    except Exception as e:
-        logging.error(f"Error uploading {local_path} to s3://{bucket_name}/{s3_key}: {e}")
-        raise
+    logging.info(f"[upload_file_to_s3] Uploading {local_path} → s3://{bucket_name}/{s3_key}")
+    s3.upload_file(local_path, bucket_name, s3_key)
+    logging.info("[upload_file_to_s3] Done.")
 
 # ------------------------------------------------------------------------
-# Local + S3 file references
+# PATHS
 # ------------------------------------------------------------------------
 script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
+sys.path.append(project_root)
 
-# We'll store everything in 'trained' subfolder for consistency
-TRAINED_DIR         = os.path.join(script_dir, "trained")
-MODEL_PATH          = os.path.join(TRAINED_DIR, "Lumen2.keras")  # single real-time model
-LOCAL_X_TEST_REAL   = os.path.join(TRAINED_DIR, "X_test_real.npy")  # real-time test data
-LOCAL_PRED_REAL     = os.path.join(TRAINED_DIR, "predictions_real.npy")  # predictions
+TRAINED_DIR = os.path.join(script_dir, "trained")
+os.makedirs(TRAINED_DIR, exist_ok=True)
 
-# Adjust these S3 keys if you want the script to automatically pull/push them:
-S3_X_TEST_REAL      = "models/lumen_2/trained/X_test_real.npy"
-S3_PREDICTIONS_REAL = "models/lumen_2/trained/predictions_real.npy"
+# Default model path
+MODEL_FILENAME = "Lumen2.keras"
+MODEL_PATH     = os.path.join(TRAINED_DIR, MODEL_FILENAME)
 
-def maybe_download_test_data():
-    """Ensure the real-time test array (X_test_real.npy) is present locally by pulling from S3."""
-    os.makedirs(TRAINED_DIR, exist_ok=True)
-    if not os.path.exists(LOCAL_X_TEST_REAL):
-        try:
-            download_file_from_s3(S3_X_TEST_REAL, LOCAL_X_TEST_REAL)
-        except Exception as exc:
-            logging.error(f"Could not download {S3_X_TEST_REAL} from S3: {exc}")
-    else:
-        logging.info(f"Real-time test data already exists locally: {LOCAL_X_TEST_REAL}")
+TEST_X_S3_KEY  = "data/lumen2/featured/sequences/spx_spy_vix_test_X_3D_part0.npy"
+TEST_Y_S3_KEY  = "data/lumen2/featured/sequences/spx_spy_vix_test_Y_3D_part0.npy"
+LOCAL_TEST_X   = os.path.join(TRAINED_DIR, "spx_spy_vix_test_X_3D_part0.npy")
+LOCAL_TEST_Y   = os.path.join(TRAINED_DIR, "spx_spy_vix_test_Y_3D_part0.npy")
 
-def load_trained_model(model_path):
-    """Load your single Lumen2 model with any needed custom objects."""
-    if not os.path.exists(model_path):
-        logging.error(f"Model file not found at {model_path}")
+PREDICTIONS_NPY = os.path.join(TRAINED_DIR, "predictions_test.npy")
+PREDICTIONS_S3  = "models/lumen_2/trained/predictions_test.npy" 
+
+# ------------------------------------------------------------------------
+# 1) Download test sequences + model if needed
+# ------------------------------------------------------------------------
+def download_test_data():
+    """Download test X, Y from S3 => local, so we can do predictions."""
+    logging.info("[download_test_data] Ensuring test data is local.")
+    download_file_from_s3(TEST_X_S3_KEY, LOCAL_TEST_X)
+    download_file_from_s3(TEST_Y_S3_KEY, LOCAL_TEST_Y)
+
+def maybe_download_model():
+    """If the model isn't local, download it from S3, or skip if local file is present."""
+    if os.path.exists(MODEL_PATH):
+        logging.info(f"Model file already local: {MODEL_PATH}")
+        return
+    # If you store the model on S3, define S3 key here:
+    model_s3_key = "models/lumen_2/trained/Lumen2.keras"
+    download_file_from_s3(model_s3_key, MODEL_PATH)
+
+# ------------------------------------------------------------------------
+# 2) Load Model + Validate shapes
+# ------------------------------------------------------------------------
+def load_lumen2_model():
+    """Loads Lumen2.keras with a custom layer if needed."""
+    if not os.path.exists(MODEL_PATH):
+        logging.error(f"No model at {MODEL_PATH}.")
         return None
     try:
-        model = load_model(model_path, custom_objects={'ReduceMeanLayer': ReduceMeanLayer})
-        logging.info(f"Loaded model from {model_path}")
+        model = load_model(MODEL_PATH, custom_objects={'ReduceMeanLayer': ReduceMeanLayer})
+        logging.info(f"Loaded model from {MODEL_PATH}")
         return model
-    except Exception as e:
-        logging.error(f"Error loading model: {e}")
+    except Exception as exc:
+        logging.error(f"Error loading model: {exc}")
         return None
 
+# ------------------------------------------------------------------------
+# 3) Prediction Flow
+# ------------------------------------------------------------------------
 def main():
-    # 1) Possibly download the test data from S3
-    maybe_download_test_data()
+    logging.info("[predict_lumen_2] Starting prediction on test set.")
+    os.makedirs(TRAINED_DIR, exist_ok=True)
 
-    # 2) Load the trained model
-    model = load_trained_model(MODEL_PATH)
+    # Download test npy files + model
+    download_test_data()
+    maybe_download_model()
+
+    # Load model
+    model = load_lumen2_model()
     if model is None:
-        logging.error("Could not load real-time Lumen2 model. Exiting.")
+        logging.error("Failed to load model => abort.")
         return
 
-    # 3) Check if local X_test_real exists now
-    if not os.path.exists(LOCAL_X_TEST_REAL):
-        logging.error(f"No real-time test data found at {LOCAL_X_TEST_REAL}. Exiting.")
+    # Load test arrays
+    if not os.path.exists(LOCAL_TEST_X):
+        logging.error(f"Missing test X => {LOCAL_TEST_X}. Exiting.")
         return
+    X_test = np.load(LOCAL_TEST_X)
+    logging.info(f"Loaded X_test => shape={X_test.shape}")
 
-    # 4) Load the real-time test data
-    X_test = np.load(LOCAL_X_TEST_REAL)
-    logging.info(f"Loaded real-time test data: shape={X_test.shape}")
+    if os.path.exists(LOCAL_TEST_Y):
+        Y_test = np.load(LOCAL_TEST_Y)
+        logging.info(f"Loaded Y_test => shape={Y_test.shape}")
+    else:
+        Y_test = None
+        logging.warning("No local Y test found => skipping error metrics.")
 
-    # 5) Compare to the model’s expected shape
-    exp_timesteps = model.input_shape[1]
-    exp_features  = model.input_shape[2]
-    logging.info(f"Model expects shape: (batch, {exp_timesteps}, {exp_features})")
+    # Validate feature shape
+    seq_len_model = model.input_shape[1]  # e.g., 60
+    feat_model    = model.input_shape[2]  # e.g., 31
+    seq_len_data  = X_test.shape[1]
+    feat_data     = X_test.shape[2]
 
-    actual_feats = X_test.shape[2]
-    if actual_feats < exp_features:
-        diff = exp_features - actual_feats
-        logging.warning(f"Padding X_test from {actual_feats} → {exp_features} features with zeros.")
-        X_test = np.pad(X_test, ((0,0), (0,0), (0,diff)), mode="constant", constant_values=0)
-    elif actual_feats > exp_features:
-        diff = actual_feats - exp_features
-        logging.warning(f"Trimming X_test from {actual_feats} → {exp_features} features.")
-        X_test = X_test[:, :, :exp_features]
+    if seq_len_model != seq_len_data or feat_model != feat_data:
+        logging.warning(f"Model expects (None, {seq_len_model}, {feat_model}), got {X_test.shape}.")
 
-    # 6) Predict
-    logging.info("Predicting on real-time test data...")
+    # Convert to float32 and predict
     X_test = X_test.astype("float32")
+    logging.info("Predicting on test data...")
     preds = model.predict(X_test, verbose=0)
     logging.info(f"Predictions shape: {preds.shape}")
 
-    # 7) Save predictions locally
-    np.save(LOCAL_PRED_REAL, preds)
-    logging.info(f"Saved predictions to {LOCAL_PRED_REAL}")
+    # Save predictions
+    np.save(PREDICTIONS_NPY, preds)
+    logging.info(f"Saved predictions => {PREDICTIONS_NPY}")
 
-    # 8) Optionally upload predictions back to S3
+    # Optional: upload predictions to S3
     try:
-        upload_file_to_s3(LOCAL_PRED_REAL, S3_PREDICTIONS_REAL)
+        upload_file_to_s3(PREDICTIONS_NPY, PREDICTIONS_S3)
+        logging.info(f"Uploaded predictions to s3://<bucket>/{PREDICTIONS_S3}")
     except Exception as exc:
         logging.warning(f"Could not upload predictions to S3: {exc}")
+
+    logging.info("[predict_lumen_2] Done.")
 
 if __name__ == "__main__":
     main()

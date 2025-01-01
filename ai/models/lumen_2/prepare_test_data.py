@@ -4,189 +4,179 @@ import logging
 import numpy as np
 import pandas as pd
 import joblib
+import boto3
 from dotenv import load_dotenv
+from sklearn.preprocessing import MinMaxScaler
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
-sys.path.append(project_root)
+##############################################################################
+# 1) AWS S3 UTILS
+##############################################################################
+def get_s3_client():
+    """
+    Build a boto3 S3 client using the AWS creds set in environment variables.
+    """
+    return boto3.client(
+        "s3",
+        region_name=os.getenv("AWS_REGION", "us-east-2"),
+        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY")
+    )
 
-try:
-    from ai.utils.aws_s3_utils import download_file_from_s3, auto_upload_file_to_s3
-except ImportError:
-    download_file_from_s3 = None
-    auto_upload_file_to_s3 = None
-    logging.warning("S3 utilities not found; skipping cloud operations.")
+def download_file_from_s3(s3_key: str, local_path: str):
+    """
+    Force-download a file from s3://<bucket>/<s3_key> into local_path.
+    If local_path already exists, remove it and re-download.
+    """
+    bucket_name = os.getenv("LUMEN_S3_BUCKET_NAME", "your-default-bucket")
+    s3 = get_s3_client()
 
+    if os.path.exists(local_path):
+        logging.info(f"[download_file_from_s3] Removing existing local file => {local_path}")
+        os.remove(local_path)
+
+    logging.info(f"[download_file_from_s3] Downloading s3://{bucket_name}/{s3_key} → {local_path}")
+    s3.download_file(bucket_name, s3_key, local_path)
+    logging.info("[download_file_from_s3] Done.")
+
+def upload_file_to_s3(local_path, s3_key):
+    """
+    Upload local_path to s3://<bucket>/<s3_key>.
+    """
+    bucket_name = os.getenv("LUMEN_S3_BUCKET_NAME", "your-default-bucket")
+    s3 = get_s3_client()
+    logging.info(f"[upload_file_to_s3] Uploading {local_path} → s3://{bucket_name}/{s3_key}")
+    s3.upload_file(local_path, bucket_name, s3_key)
+    logging.info("[upload_file_to_s3] Done.")
+
+##############################################################################
+# 2) ENV, LOGGING, PATHS
+##############################################################################
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
-BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
-FEATURED_DIR= os.path.join(BASE_DIR, "../../data/lumen_2/featured")
-MODEL_DIR   = os.path.join(BASE_DIR, "../../models/lumen_2")
-os.makedirs(MODEL_DIR, exist_ok=True)
+script_dir   = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
+sys.path.append(project_root)
 
-# Only handle real_time_spy in this file:
-DATA_S3_CSV      = "data/lumen2/featured/featured_real_time_spy.csv"
-SCALER_S3_PATH   = "models/lumen_2/scalers/real_time_spy_scaler.joblib"
+BASE_DIR      = os.path.abspath(os.path.join(script_dir, "..", ".."))
+DATA_DIR      = os.path.join(BASE_DIR, "data", "lumen_2", "processed")
+FEATURED_DIR  = os.path.join(BASE_DIR, "data", "lumen_2", "featured")
+SEQUENCES_DIR = os.path.join(FEATURED_DIR, "sequences")
+SCALER_DIR    = os.path.join(BASE_DIR, "models", "lumen_2", "scalers")
 
-LOCAL_CSV        = os.path.join(FEATURED_DIR, "real_time_spy.csv")
-SCALER_LOCAL_DIR = os.path.join(MODEL_DIR, "scalers")
-SCALER_LOCAL     = os.path.join(SCALER_LOCAL_DIR, "real_time_spy_data_scaler.joblib")
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(FEATURED_DIR, exist_ok=True)
+os.makedirs(SEQUENCES_DIR, exist_ok=True)
+os.makedirs(SCALER_DIR, exist_ok=True)
 
-TARGET_COL   = "current_price"
-TIMESTAMP_COL= "timestamp"
-SEQ_LEN      = 60  # match whatever seq_len your model expects (60 in your logs)
-X_TEST_REAL  = os.path.join(MODEL_DIR, "X_test_real.npy")
-Y_TEST_REAL  = os.path.join(MODEL_DIR, "y_test_real.npy")
+# The final test CSV & scaler we want to load from S3
+MERGED_CSV_S3_KEY  = "data/lumen2/featured/spx_spy_vix_merged_features.csv"
+LOCAL_MERGED_CSV   = os.path.join(FEATURED_DIR, "spx_spy_vix_merged_realtime.csv")
 
+SCALER_S3_KEY      = "models/lumen_2/scalers/spx_spy_vix_scaler.joblib"
+LOCAL_SCALER       = os.path.join(SCALER_DIR, "spx_spy_vix_scaler.joblib")
 
-def download_csv():
-    if not download_file_from_s3:
-        logging.warning("download_file_from_s3 not available; expecting local CSV only.")
-        return
-    os.makedirs(FEATURED_DIR, exist_ok=True)
-    try:
-        logging.info(f"Downloading {DATA_S3_CSV} → {LOCAL_CSV}")
-        download_file_from_s3(DATA_S3_CSV, LOCAL_CSV)
-    except Exception as e:
-        logging.error(f"Failed to download CSV from S3: {e}")
+##############################################################################
+# 3) DOWNLOAD TEST DATA & SCALER
+##############################################################################
+def download_test_data_and_scaler():
+    """
+    Force-downloads the 'spx_spy_vix_merged_features.csv' (test data)
+    and the 'spx_spy_vix_scaler.joblib' (scaler) from S3.
+    """
+    download_file_from_s3(MERGED_CSV_S3_KEY, LOCAL_MERGED_CSV)
+    download_file_from_s3(SCALER_S3_KEY, LOCAL_SCALER)
 
-
-def download_scaler():
-    if not download_file_from_s3:
-        logging.warning("No S3 download_file_from_s3; expecting local scaler.")
-        return
-    os.makedirs(SCALER_LOCAL_DIR, exist_ok=True)
-    try:
-        logging.info(f"Downloading {SCALER_S3_PATH} → {SCALER_LOCAL}")
-        download_file_from_s3(SCALER_S3_PATH, SCALER_LOCAL)
-    except Exception as e:
-        logging.error(f"Failed to download scaler from S3: {e}")
-
-
-def load_dataframe():
-    if not os.path.exists(LOCAL_CSV):
-        logging.error(f"CSV file missing at {LOCAL_CSV}")
+##############################################################################
+# 4) LOAD + SCALE + CREATE SEQUENCES
+##############################################################################
+def load_and_scale():
+    """
+    Loads spx_spy_vix_merged_realtime.csv, applies the same MinMaxScaler
+    used in feature engineering (spx_spy_vix_scaler.joblib), and returns a DataFrame.
+    If the scaler is missing, returns the DataFrame unscaled.
+    """
+    if not os.path.exists(LOCAL_MERGED_CSV):
+        logging.error(f"No CSV found at {LOCAL_MERGED_CSV} => cannot proceed.")
         return pd.DataFrame()
-    try:
-        df = pd.read_csv(LOCAL_CSV, parse_dates=[TIMESTAMP_COL])
-    except Exception:
-        logging.warning(f"parse_dates failed on {TIMESTAMP_COL}, reading plain CSV.")
-        df = pd.read_csv(LOCAL_CSV)
+
+    df = pd.read_csv(LOCAL_MERGED_CSV)
     if df.empty:
-        logging.warning("Loaded real_time_spy CSV is empty.")
+        logging.warning("[load_and_scale] CSV is empty => no data.")
+        return pd.DataFrame()
+
+    if not os.path.exists(LOCAL_SCALER):
+        logging.warning(f"No local scaler found at {LOCAL_SCALER}; using unscaled data.")
+        return df
+
+    # Load the previously fitted MinMaxScaler
+    scaler = joblib.load(LOCAL_SCALER)
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+
+    # Exclude columns we don't want to scale (e.g. 'timestamp', 'target_1h' if present)
+    for exclude_col in ["timestamp", "target_1h"]:
+        if exclude_col in numeric_cols:
+            numeric_cols.remove(exclude_col)
+
+    # Replace infs with NaNs, then drop rows if necessary
+    df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    df.dropna(subset=numeric_cols, inplace=True)
+
+    # Scale the numeric columns
+    df[numeric_cols] = scaler.transform(df[numeric_cols])
     return df
 
+def create_sequences(df, seq_len=60, prefix="spx_spy_vix_test"):
+    """
+    Builds test sequences (X_3D, Y_3D) from the scaled DataFrame, using
+    'target_1h' as the label. Saves them to the sequences folder as .npy files.
+    """
+    if "target_1h" not in df.columns:
+        logging.warning("[create_sequences] 'target_1h' missing => no Y array.")
+        return
 
-def load_scaler():
-    if not os.path.exists(SCALER_LOCAL):
-        logging.warning(f"Local scaler not found at {SCALER_LOCAL}. Data will remain unscaled.")
-        return None
-    return joblib.load(SCALER_LOCAL)
+    # X is all numeric columns except 'target_1h'
+    numeric_cols = [c for c in df.select_dtypes(include=[np.number]) if c != "target_1h"]
+    X_arr = df[numeric_cols].values
+    Y_arr = df["target_1h"].values
 
-
-def apply_scaler(df, scaler):
-    if df.empty:
-        return df
-    # Drop the timestamp + target from feature set
-    feats = df.drop(columns=[TIMESTAMP_COL, TARGET_COL], errors="ignore")
-
-    if not scaler:
-        logging.warning("No scaler loaded; returning unscaled features.")
-        return df  # unchanged
-
-    # Ensure columns match scaler
-    want_cols = getattr(scaler, "feature_names_in_", feats.columns)
-    feats = feats.reindex(columns=want_cols, fill_value=0)
-    scaled_arr = scaler.transform(feats)
-    scaled_df = pd.DataFrame(scaled_arr, columns=want_cols, index=df.index)
-
-    # Recombine: timestamp, scaled feats, target
-    out = pd.concat([
-        df[[TIMESTAMP_COL]].reset_index(drop=True),
-        scaled_df.reset_index(drop=True),
-        df[[TARGET_COL]].reset_index(drop=True)
-    ], axis=1)
-    return out
-
-
-def build_sequences(df, seq_len=60):
-    if df.empty:
-        return None, None
-
-    if TIMESTAMP_COL in df.columns:
-        df = df.drop(columns=[TIMESTAMP_COL], errors="ignore")
-    if TARGET_COL not in df.columns:
-        raise ValueError(f"Target '{TARGET_COL}' missing from DataFrame columns: {df.columns.tolist()}")
-
-    # Attempt to load feature_names_real (optional)
-    feats_list_path = os.path.join(MODEL_DIR, "feature_names_real.npy")
-    try:
-        feats_list = np.load(feats_list_path, allow_pickle=True).tolist()
-        logging.info(f"Using {len(feats_list)} features from feature_names_real.npy")
-    except FileNotFoundError:
-        feats_list = None
-        logging.warning("feature_names_real.npy not found; using all columns except target.")
-
-    if feats_list:
-        feats_list = [c for c in feats_list if c in df.columns]
-        feats_df   = df[feats_list]
-    else:
-        feats_df   = df.drop(columns=[TARGET_COL], errors="ignore")
-
-    X_vals = feats_df.values
-    y_vals = df[TARGET_COL].values
-
-    X_seq, y_seq = [], []
-    for i in range(len(X_vals) - seq_len):
-        X_seq.append(X_vals[i : i + seq_len])
-        y_seq.append(y_vals[i + seq_len])
+    X_seq, Y_seq = [], []
+    for i in range(len(X_arr) - seq_len):
+        X_seq.append(X_arr[i : i + seq_len])
+        Y_seq.append(Y_arr[i + seq_len])
 
     X_seq = np.array(X_seq, dtype=np.float32)
-    y_seq = np.array(y_seq, dtype=np.float32)
-    return X_seq, y_seq
+    Y_seq = np.array(Y_seq, dtype=np.float32).reshape(-1, 1)
 
+    if len(X_seq) == 0:
+        logging.warning("[create_sequences] Not enough rows => no sequences.")
+        return
 
+    # Save as a single chunk (part0)
+    x_filename = f"{prefix}_X_3D_part0.npy"
+    y_filename = f"{prefix}_Y_3D_part0.npy"
+    x_path = os.path.join(SEQUENCES_DIR, x_filename)
+    y_path = os.path.join(SEQUENCES_DIR, y_filename)
+
+    np.save(x_path, X_seq)
+    np.save(y_path, Y_seq)
+
+    logging.info(f"[create_sequences] Saved => {x_path}: {X_seq.shape}, {y_path}: {Y_seq.shape}")
+
+##############################################################################
+# 5) MAIN
+##############################################################################
 def main():
-    # 1) Possibly download from S3
-    download_csv()
-    download_scaler()
+    logging.info("[prepare_spx_spy_vix_test_data] Starting test data preparation...")
+    download_test_data_and_scaler()
 
-    # 2) Load
-    df = load_dataframe()
+    df = load_and_scale()
     if df.empty:
-        logging.error("No real_time_spy data found; abort.")
+        logging.error("DataFrame is empty => cannot create sequences.")
         return
 
-    # 3) Load scaler & apply
-    scl = load_scaler()
-    df_scaled = apply_scaler(df, scl)
-    if df_scaled.empty:
-        logging.error("After applying scaler, DataFrame is empty. Abort.")
-        return
-
-    # 4) Build sequences
-    X_real, y_real = build_sequences(df_scaled, seq_len=SEQ_LEN)
-    if X_real is None or y_real is None:
-        logging.error("No real_time_spy sequences generated.")
-        return
-
-    # 5) Save .npy
-    np.save(X_TEST_REAL, X_real)
-    np.save(Y_TEST_REAL, y_real)
-    logging.info(f"Saved real-time test arrays: X_test_real={X_real.shape}, y_test_real={y_real.shape}")
-
-    # 6) Optionally upload .npy to S3
-    if auto_upload_file_to_s3:
-        try:
-            auto_upload_file_to_s3(X_TEST_REAL, "models/lumen_2/trained")
-            auto_upload_file_to_s3(Y_TEST_REAL, "models/lumen_2/trained")
-            logging.info("Uploaded X_test_real & y_test_real to S3 => models/lumen_2/trained/")
-        except Exception as exc:
-            logging.warning(f"Could not upload test arrays to S3: {exc}")
-
-    logging.info("Real-time SPY test data preparation complete!")
-
+    create_sequences(df, seq_len=60, prefix="spx_spy_vix_test")
+    logging.info("[prepare_spx_spy_vix_test_data] Done.")
 
 if __name__ == "__main__":
     main()

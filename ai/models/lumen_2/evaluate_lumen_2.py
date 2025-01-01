@@ -2,131 +2,187 @@ import os
 import sys
 import logging
 import numpy as np
-from sklearn.metrics import mean_squared_error, r2_score
+from dotenv import load_dotenv
 from tensorflow.keras.models import load_model
-
+from sklearn.metrics import mean_squared_error, r2_score
 import boto3
 
-def get_s3_client():
-    """Hard-code region to us-east-2 (or whatever region your S3 bucket is in)."""
-    return boto3.client(
-        "s3",
-        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-        region_name="us-east-2"
-    )
+# -----------------------------------------------------------------------------
+# Setup environment + logging
+# -----------------------------------------------------------------------------
+load_dotenv()
+logging.basicConfig(level=logging.INFO)
 
-def download_file_from_s3(s3_key: str, local_path: str):
-    """Download a file from your S3 bucket -> local filesystem."""
-    bucket_name = os.getenv("LUMEN_S3_BUCKET_NAME", "lumenaibucket")
-    s3 = get_s3_client()
-    try:
-        s3.download_file(bucket_name, s3_key, local_path)
-        logging.info(f"Downloaded s3://{bucket_name}/{s3_key} → {local_path}")
-    except Exception as e:
-        logging.error(f"Error downloading {s3_key} from S3: {e}")
-        raise
-
-# --------------------------------------------------------------------------------
-# Evaluate script focusing on Real-Time test arrays only
-# --------------------------------------------------------------------------------
-script_dir = os.path.dirname(os.path.abspath(__file__))
+script_dir   = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
 sys.path.append(project_root)
 
-logging.basicConfig(level=logging.INFO)
 
-BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
-TRAINED_DIR = os.path.join(BASE_DIR, "trained")
+def get_s3_client():
+    """
+    Returns a boto3 S3 client object using AWS credentials from environment variables.
+    Hard-coded region to 'us-east-2' or whichever region your bucket is in.
+    """
+    return boto3.client(
+        "s3",
+        aws_access_key_id     = os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY"),
+        region_name           = "us-east-2"
+    )
 
-MODEL_FILENAME = "Lumen2.keras"
-MODEL_PATH     = os.path.join(TRAINED_DIR, MODEL_FILENAME)
+def download_file_from_s3(s3_key: str, local_path: str, force_download: bool = False):
+    """
+    Downloads a file from s3://<bucket>/<s3_key> into local_path.
+    If force_download=True, remove any existing local file and always re-download.
+    """
+    bucket_name = os.getenv("LUMEN_S3_BUCKET_NAME", "lumenaibucket")
+    s3 = get_s3_client()
 
-# The S3 keys & local paths for real-time test data:
-S3_X_TEST_REAL = "models/lumen_2/trained/X_test_real.npy"
-S3_Y_TEST_REAL = "models/lumen_2/trained/y_test_real.npy"
+    if os.path.exists(local_path) and not force_download:
+        logging.info(f"[download_file_from_s3] File already exists locally: {local_path}")
+        return
 
-LOCAL_X_TEST_REAL = os.path.join(TRAINED_DIR, "X_test_real.npy")
-LOCAL_Y_TEST_REAL = os.path.join(TRAINED_DIR, "y_test_real.npy")
+    if os.path.exists(local_path) and force_download:
+        logging.info(f"[download_file_from_s3] Removing existing local file => {local_path}")
+        os.remove(local_path)
 
-def maybe_download_test_files():
-    """Only download the real-time arrays from S3."""
+    logging.info(f"[download_file_from_s3] Downloading s3://{bucket_name}/{s3_key} → {local_path}")
+    try:
+        s3.download_file(bucket_name, s3_key, local_path)
+        logging.info("[download_file_from_s3] Done.")
+    except Exception as e:
+        logging.error(f"Error downloading {s3_key} from s3://{bucket_name}: {e}")
+        raise
+
+# -----------------------------------------------------------------------------
+# PATHS FOR TEST ARRAYS AND MODEL
+# -----------------------------------------------------------------------------
+BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
+TRAINED_DIR  = os.path.join(BASE_DIR, "trained")
+os.makedirs(TRAINED_DIR, exist_ok=True)
+
+# If your model is stored locally or in S3:
+MODEL_FILENAME = "Lumen2.keras"   # the trained model name
+MODEL_LOCAL    = os.path.join(TRAINED_DIR, MODEL_FILENAME)
+MODEL_S3_KEY   = "models/lumen_2/trained/Lumen2.keras"
+
+# Paths for your spx_spy_vix_test_X_3D_part0.npy and Y_3D_part0.npy in S3:
+S3_X_TEST = "data/lumen2/featured/sequences/spx_spy_vix_test_X_3D_part0.npy"
+S3_Y_TEST = "data/lumen2/featured/sequences/spx_spy_vix_test_Y_3D_part0.npy"
+
+# Local equivalents
+LOCAL_X_TEST = os.path.join(TRAINED_DIR, "spx_spy_vix_test_X_3D_part0.npy")
+LOCAL_Y_TEST = os.path.join(TRAINED_DIR, "spx_spy_vix_test_Y_3D_part0.npy")
+
+# -----------------------------------------------------------------------------
+# UTILS
+# -----------------------------------------------------------------------------
+def maybe_download_test_arrays(force_download: bool = False):
+    """
+    Downloads the test .npy arrays from S3 if not already present (or if forced),
+    storing them in the 'trained' subfolder.
+    """
     os.makedirs(TRAINED_DIR, exist_ok=True)
+    download_file_from_s3(S3_X_TEST, LOCAL_X_TEST, force_download=force_download)
+    download_file_from_s3(S3_Y_TEST, LOCAL_Y_TEST, force_download=force_download)
 
-    def attempt(s3_key, local_path):
-        logging.info(f"Downloading {s3_key} → {local_path}")
-        try:
-            download_file_from_s3(s3_key, local_path)
-        except Exception as exc:
-            logging.error(f"Error downloading {s3_key} from S3: {exc}")
+def maybe_download_model(force_download: bool = False):
+    """
+    Downloads the model .keras file from S3 if not already present (or if forced),
+    storing it in the 'trained' subfolder.
+    """
+    os.makedirs(TRAINED_DIR, exist_ok=True)
+    download_file_from_s3(MODEL_S3_KEY, MODEL_LOCAL, force_download=force_download)
 
-    attempt(S3_X_TEST_REAL, LOCAL_X_TEST_REAL)
-    attempt(S3_Y_TEST_REAL, LOCAL_Y_TEST_REAL)
-
-def load_npy(npy_path):
-    """Helper to load a single .npy file if it exists; otherwise None."""
-    if not os.path.exists(npy_path):
+def load_npy_or_none(local_path: str) -> np.ndarray:
+    """
+    Loads a .npy file from local filesystem or returns None if not found/empty.
+    """
+    if not os.path.exists(local_path):
+        logging.warning(f"{local_path} not found.")
         return None
-    return np.load(npy_path)
+    arr = np.load(local_path, allow_pickle=False)
+    if arr.size == 0:
+        logging.warning(f"{local_path} is empty.")
+        return None
+    return arr
 
-def evaluate_realtime(model, X_test, y_test):
-    """Evaluate the model on real-time test data."""
+def evaluate_model(model, X_test, y_test):
+    """
+    Evaluate the model on X_test / y_test arrays using MSE, RMSE, R².
+    """
     if X_test is None or y_test is None:
-        logging.error("No real-time test data loaded. Skipping evaluation.")
+        logging.error("X_test or y_test is None => cannot evaluate.")
         return
 
+    # Ensure dimensional match
     if len(X_test) != len(y_test):
-        logging.error(f"Mismatch: X={X_test.shape[0]}, y={y_test.shape[0]}")
+        logging.error(f"Mismatch: X_test has {len(X_test)} samples, y_test has {len(y_test)}.")
         return
 
-    # Check feature count
+    # Check feature dimension
     expected_feats = model.input_shape[-1]
-    if X_test.shape[-1] != expected_feats:
-        diff = expected_feats - X_test.shape[-1]
-        if diff > 0:
-            logging.warning(f"Padding X by {diff} features with zeros.")
-            X_test = np.pad(
-                X_test, ((0,0),(0,0),(0,diff)), mode="constant", constant_values=0
-            )
-        else:
-            logging.error(f"Feature mismatch: model wants {expected_feats}, got {X_test.shape[-1]}")
-            return
+    actual_feats   = X_test.shape[-1]
+    if actual_feats < expected_feats:
+        diff = expected_feats - actual_feats
+        logging.warning(f"Padding X_test from {actual_feats} → {expected_feats} features with zeros.")
+        X_test = np.pad(X_test, ((0,0), (0,0), (0,diff)), mode="constant", constant_values=0)
+    elif actual_feats > expected_feats:
+        diff = actual_feats - expected_feats
+        logging.warning(f"Truncating X_test from {actual_feats} → {expected_feats} features.")
+        X_test = X_test[:, :, :expected_feats]
 
-    # Evaluate
+    # Convert dtypes for safety
     X_test = X_test.astype("float32")
     y_test = y_test.astype("float32")
 
-    predictions = model.predict(X_test, verbose=0)
-    mse_val = mean_squared_error(y_test, predictions)
-    rmse_val = np.sqrt(mse_val)
-    r2_val   = r2_score(y_test, predictions)
+    # Predict
+    preds = model.predict(X_test, verbose=0)
 
-    logging.info("=== REAL-TIME EVALUATION ===")
+    # MSE, RMSE, R²
+    mse_val = mean_squared_error(y_test, preds)
+    rmse_val = np.sqrt(mse_val)
+    r2_val   = r2_score(y_test, preds)
+
+    logging.info("--- EVALUATION RESULTS (TEST) ---")
     logging.info(f"MSE:  {mse_val:.6f}")
     logging.info(f"RMSE: {rmse_val:.6f}")
     logging.info(f"R²:   {r2_val:.6f}")
+    logging.info("---------------------------------")
 
+# -----------------------------------------------------------------------------
+# MAIN
+# -----------------------------------------------------------------------------
 def main():
-    # 1) Download real-time test arrays
-    maybe_download_test_files()
+    logging.info("=== evaluate_lumen_2: Start ===")
 
-    # 2) Check local model
-    if not os.path.exists(MODEL_PATH):
-        logging.error(f"Model not found at {MODEL_PATH}. Exiting.")
+    # 1) Ensure test arrays are downloaded
+    maybe_download_test_arrays(force_download=False)
+
+    # 2) Ensure model is downloaded
+    maybe_download_model(force_download=False)
+
+    # 3) Load the model from local
+    if not os.path.exists(MODEL_LOCAL):
+        logging.error(f"Model file not found => {MODEL_LOCAL}")
+        return
+    model = load_model(MODEL_LOCAL)
+    logging.info(f"Loaded model from {MODEL_LOCAL}")
+
+    # 4) Load test data
+    X_test = load_npy_or_none(LOCAL_X_TEST)
+    y_test = load_npy_or_none(LOCAL_Y_TEST)
+    if X_test is None or y_test is None:
+        logging.error("Missing test arrays => cannot evaluate.")
         return
 
-    # 3) Load model
-    model = load_model(MODEL_PATH)
-    logging.info(f"Loaded model from {MODEL_PATH}")
+    logging.info(f"X_test shape: {X_test.shape}, y_test shape: {y_test.shape}")
 
-    # 4) Load test arrays
-    X_test_real = load_npy(LOCAL_X_TEST_REAL)
-    y_test_real = load_npy(LOCAL_Y_TEST_REAL)
-    logging.info(f"X_test_real shape: {None if X_test_real is None else X_test_real.shape}")
-    logging.info(f"y_test_real shape: {None if y_test_real is None else y_test_real.shape}")
+    # 5) Evaluate
+    evaluate_model(model, X_test, y_test)
 
-    # 5) Evaluate real-time
-    evaluate_realtime(model, X_test_real, y_test_real)
+    logging.info("=== evaluate_lumen_2: Done ===")
+
 
 if __name__ == "__main__":
     main()

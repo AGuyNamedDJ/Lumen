@@ -35,7 +35,6 @@ def create_hybrid_model(
         x = Dropout(dropout_rate)(x)
     # Transformer
     attn = MultiHeadAttention(num_heads=num_transformer_heads, key_dim=100)(x, x)
-    # Optional feed-forward on transformer output
     attn = Dense(100, activation='relu')(attn)
     attn = Dropout(dropout_rate)(attn)
     # Reduce
