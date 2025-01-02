@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from tensorflow.keras.models import load_model
 
 try:
-    from definitions_lumen_2 import ReduceMeanLayer
+    from models.lumen_2.definitions_lumen_2 import ReduceMeanLayer
 except ImportError:
     class ReduceMeanLayer:
         pass
@@ -22,7 +22,6 @@ logging.basicConfig(level=logging.INFO)
 # BOTO3 S3 UTILS
 # ------------------------------------------------------------------------
 def get_s3_client():
-    """Creates a boto3 S3 client from environment variables (region/key/secret)."""
     return boto3.client(
         "s3",
         region_name=os.getenv("AWS_REGION", "us-east-2"),
@@ -30,142 +29,130 @@ def get_s3_client():
         aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY")
     )
 
-def download_file_from_s3(s3_key: str, local_path: str):
-    """
-    Downloads a file from s3://<bucket>/<s3_key> → local_path.
-    Overwrites local_path if it already exists.
-    """
+def download_file_from_s3(s3_key: str, local_path: str, force: bool = False):
     bucket_name = os.getenv("LUMEN_S3_BUCKET_NAME", "your-default-bucket")
     s3 = get_s3_client()
-    if os.path.exists(local_path):
-        logging.info(f"[download_file_from_s3] Removing existing local file => {local_path}")
+    if os.path.exists(local_path) and not force:
+        logging.info(f"[download_file_from_s3] Already exists: {local_path}")
+        return
+    if os.path.exists(local_path) and force:
+        logging.info(f"[download_file_from_s3] Removing existing => {local_path}")
         os.remove(local_path)
     logging.info(f"[download_file_from_s3] Downloading s3://{bucket_name}/{s3_key} → {local_path}")
     s3.download_file(bucket_name, s3_key, local_path)
     logging.info("[download_file_from_s3] Done.")
 
 def upload_file_to_s3(local_path: str, s3_key: str):
-    """
-    Uploads a local file to s3://<bucket>/<s3_key>.
-    """
     bucket_name = os.getenv("LUMEN_S3_BUCKET_NAME", "your-default-bucket")
     s3 = get_s3_client()
-    logging.info(f"[upload_file_to_s3] Uploading {local_path} → s3://{bucket_name}/{s3_key}")
+    logging.info(f"[upload_file_to_s3] {local_path} → s3://{bucket_name}/{s3_key}")
     s3.upload_file(local_path, bucket_name, s3_key)
     logging.info("[upload_file_to_s3] Done.")
 
 # ------------------------------------------------------------------------
 # PATHS
 # ------------------------------------------------------------------------
-script_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
+script_dir    = os.path.dirname(os.path.abspath(__file__))
+project_root  = os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
 sys.path.append(project_root)
 
-TRAINED_DIR = os.path.join(script_dir, "trained")
+TRAINED_DIR   = os.path.join(script_dir, "trained")
 os.makedirs(TRAINED_DIR, exist_ok=True)
 
-# Default model path
-MODEL_FILENAME = "Lumen2.keras"
-MODEL_PATH     = os.path.join(TRAINED_DIR, MODEL_FILENAME)
+MODEL_NAME    = "Lumen2.keras"
+MODEL_S3_KEY  = "models/lumen_2/trained/Lumen2.keras"
+MODEL_LOCAL   = os.path.join(TRAINED_DIR, MODEL_NAME)
 
-TEST_X_S3_KEY  = "data/lumen2/featured/sequences/spx_spy_vix_test_X_3D_part0.npy"
-TEST_Y_S3_KEY  = "data/lumen2/featured/sequences/spx_spy_vix_test_Y_3D_part0.npy"
-LOCAL_TEST_X   = os.path.join(TRAINED_DIR, "spx_spy_vix_test_X_3D_part0.npy")
-LOCAL_TEST_Y   = os.path.join(TRAINED_DIR, "spx_spy_vix_test_Y_3D_part0.npy")
+TEST_X_S3_KEY = "data/lumen2/featured/sequences/spx_spy_vix_test_X_3D_part0.npy"
+TEST_Y_S3_KEY = "data/lumen2/featured/sequences/spx_spy_vix_test_Y_3D_part0.npy"
+LOCAL_X_TEST  = os.path.join(TRAINED_DIR, "spx_spy_vix_test_X_3D_part0.npy")
+LOCAL_Y_TEST  = os.path.join(TRAINED_DIR, "spx_spy_vix_test_Y_3D_part0.npy")
 
 PREDICTIONS_NPY = os.path.join(TRAINED_DIR, "predictions_test.npy")
-PREDICTIONS_S3  = "models/lumen_2/trained/predictions_test.npy" 
+PREDICTIONS_S3  = "models/lumen_2/trained/predictions_test.npy"
 
 # ------------------------------------------------------------------------
-# 1) Download test sequences + model if needed
+# DOWNLOAD UTILS
 # ------------------------------------------------------------------------
-def download_test_data():
-    """Download test X, Y from S3 => local, so we can do predictions."""
+def download_test_data(force=False):
     logging.info("[download_test_data] Ensuring test data is local.")
-    download_file_from_s3(TEST_X_S3_KEY, LOCAL_TEST_X)
-    download_file_from_s3(TEST_Y_S3_KEY, LOCAL_TEST_Y)
+    download_file_from_s3(TEST_X_S3_KEY, LOCAL_X_TEST, force)
+    download_file_from_s3(TEST_Y_S3_KEY, LOCAL_Y_TEST, force)
 
-def maybe_download_model():
-    """If the model isn't local, download it from S3, or skip if local file is present."""
-    if os.path.exists(MODEL_PATH):
-        logging.info(f"Model file already local: {MODEL_PATH}")
+def download_model(force=False):
+    if os.path.exists(MODEL_LOCAL) and not force:
+        logging.info(f"Model file already local: {MODEL_LOCAL}")
         return
-    # If you store the model on S3, define S3 key here:
-    model_s3_key = "models/lumen_2/trained/Lumen2.keras"
-    download_file_from_s3(model_s3_key, MODEL_PATH)
+    download_file_from_s3(MODEL_S3_KEY, MODEL_LOCAL, force)
 
 # ------------------------------------------------------------------------
-# 2) Load Model + Validate shapes
+# LOAD MODEL
 # ------------------------------------------------------------------------
 def load_lumen2_model():
-    """Loads Lumen2.keras with a custom layer if needed."""
-    if not os.path.exists(MODEL_PATH):
-        logging.error(f"No model at {MODEL_PATH}.")
+    if not os.path.exists(MODEL_LOCAL):
+        logging.error(f"No model file => {MODEL_LOCAL}")
         return None
     try:
-        model = load_model(MODEL_PATH, custom_objects={'ReduceMeanLayer': ReduceMeanLayer})
-        logging.info(f"Loaded model from {MODEL_PATH}")
+        model = load_model(MODEL_LOCAL, custom_objects={'ReduceMeanLayer': ReduceMeanLayer})
+        logging.info(f"Loaded model from {MODEL_LOCAL}")
         return model
     except Exception as exc:
         logging.error(f"Error loading model: {exc}")
         return None
 
 # ------------------------------------------------------------------------
-# 3) Prediction Flow
+# MAIN
 # ------------------------------------------------------------------------
 def main():
-    logging.info("[predict_lumen_2] Starting prediction on test set.")
+    logging.info("[predict_lumen_2] Starting predictions.")
     os.makedirs(TRAINED_DIR, exist_ok=True)
 
-    # Download test npy files + model
-    download_test_data()
-    maybe_download_model()
+    download_test_data(force=False)
+    download_model(force=False)
 
-    # Load model
     model = load_lumen2_model()
     if model is None:
-        logging.error("Failed to load model => abort.")
+        logging.error("Could not load Lumen2 model => abort.")
         return
 
-    # Load test arrays
-    if not os.path.exists(LOCAL_TEST_X):
-        logging.error(f"Missing test X => {LOCAL_TEST_X}. Exiting.")
+    if not os.path.exists(LOCAL_X_TEST):
+        logging.error(f"No test X => {LOCAL_X_TEST}")
         return
-    X_test = np.load(LOCAL_TEST_X)
+    X_test = np.load(LOCAL_X_TEST)
     logging.info(f"Loaded X_test => shape={X_test.shape}")
 
-    if os.path.exists(LOCAL_TEST_Y):
-        Y_test = np.load(LOCAL_TEST_Y)
+    Y_test = None
+    if os.path.exists(LOCAL_Y_TEST):
+        Y_test = np.load(LOCAL_Y_TEST)
         logging.info(f"Loaded Y_test => shape={Y_test.shape}")
-    else:
-        Y_test = None
-        logging.warning("No local Y test found => skipping error metrics.")
 
-    # Validate feature shape
-    seq_len_model = model.input_shape[1]  # e.g., 60
-    feat_model    = model.input_shape[2]  # e.g., 31
-    seq_len_data  = X_test.shape[1]
-    feat_data     = X_test.shape[2]
+    seq_len_model = model.input_shape[1]
+    feat_model    = model.input_shape[2]
+    if X_test.shape[1] != seq_len_model or X_test.shape[2] != feat_model:
+        logging.warning(f"Shape mismatch. Model expects (None,{seq_len_model},{feat_model}); got {X_test.shape}")
+        if X_test.shape[2] < feat_model:
+            diff = feat_model - X_test.shape[2]
+            logging.warning(f"Padding test data from {X_test.shape[2]} → {feat_model} features.")
+            X_test = np.pad(X_test, ((0,0),(0,0),(0,diff)), mode="constant", constant_values=0)
+        elif X_test.shape[2] > feat_model:
+            diff = X_test.shape[2] - feat_model
+            logging.warning(f"Trimming test data from {X_test.shape[2]} → {feat_model} features.")
+            X_test = X_test[:,:,:feat_model]
 
-    if seq_len_model != seq_len_data or feat_model != feat_data:
-        logging.warning(f"Model expects (None, {seq_len_model}, {feat_model}), got {X_test.shape}.")
-
-    # Convert to float32 and predict
+    # 5) Predict
     X_test = X_test.astype("float32")
-    logging.info("Predicting on test data...")
+    logging.info("Predicting test data now...")
     preds = model.predict(X_test, verbose=0)
-    logging.info(f"Predictions shape: {preds.shape}")
+    logging.info(f"Predictions shape => {preds.shape}")
 
-    # Save predictions
     np.save(PREDICTIONS_NPY, preds)
     logging.info(f"Saved predictions => {PREDICTIONS_NPY}")
 
-    # Optional: upload predictions to S3
     try:
         upload_file_to_s3(PREDICTIONS_NPY, PREDICTIONS_S3)
-        logging.info(f"Uploaded predictions to s3://<bucket>/{PREDICTIONS_S3}")
+        logging.info(f"Uploaded => s3://<bucket>/{PREDICTIONS_S3}")
     except Exception as exc:
-        logging.warning(f"Could not upload predictions to S3: {exc}")
+        logging.warning(f"Could not upload predictions => {exc}")
 
     logging.info("[predict_lumen_2] Done.")
 

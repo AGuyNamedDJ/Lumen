@@ -12,7 +12,6 @@ class ReduceMeanLayer(Layer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
     def call(self, inputs):
-        # Average over sequence (axis=1)
         return tf.reduce_mean(inputs, axis=1)
     def get_config(self):
         return super().get_config()
