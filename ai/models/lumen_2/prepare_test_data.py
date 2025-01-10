@@ -12,7 +12,9 @@ from sklearn.preprocessing import MinMaxScaler
 # 1) AWS S3 UTILS
 ##############################################################################
 def get_s3_client():
-    """Create a boto3 S3 client using AWS credentials from env vars."""
+    """
+    Create a boto3 S3 client using AWS credentials from env vars.
+    """
     return boto3.client(
         "s3",
         region_name=os.getenv("AWS_REGION", "us-east-2"),
@@ -27,15 +29,20 @@ def download_file_from_s3(s3_key: str, local_path: str):
     """
     bucket_name = os.getenv("LUMEN_S3_BUCKET_NAME", "your-default-bucket")
     s3 = get_s3_client()
+
+    # Always remove any local copy first to ensure we download fresh
     if os.path.exists(local_path):
         logging.info(f"[download_file_from_s3] Removing existing => {local_path}")
         os.remove(local_path)
+
     logging.info(f"[download_file_from_s3] Downloading s3://{bucket_name}/{s3_key} → {local_path}")
     s3.download_file(bucket_name, s3_key, local_path)
     logging.info("[download_file_from_s3] Done.")
 
 def upload_file_to_s3(local_path: str, s3_key: str):
-    """Uploads local_path => s3://<bucket>/<s3_key>."""
+    """
+    Uploads local_path => s3://<bucket>/<s3_key>.
+    """
     bucket_name = os.getenv("LUMEN_S3_BUCKET_NAME", "your-default-bucket")
     s3 = get_s3_client()
     logging.info(f"[upload_file_to_s3] Uploading {local_path} → s3://{bucket_name}/{s3_key}")
@@ -63,18 +70,20 @@ os.makedirs(FEATURED_DIR, exist_ok=True)
 os.makedirs(SEQUENCES_DIR, exist_ok=True)
 os.makedirs(SCALER_DIR, exist_ok=True)
 
-MERGED_CSV_S3_KEY = "data/lumen2/featured/spx_spy_vix_merged_features.csv"
+# These S3 keys should point to the correct, updated files
+MERGED_CSV_S3_KEY = "data/lumen2/featured/spx_vix_test.csv"
 LOCAL_MERGED_CSV  = os.path.join(FEATURED_DIR, "spx_spy_vix_merged_realtime.csv")
 
-SCALER_S3_KEY     = "models/lumen_2/scalers/spx_spy_vix_scaler.joblib"
-LOCAL_SCALER      = os.path.join(SCALER_DIR, "spx_spy_vix_scaler.joblib")
+SCALER_S3_KEY = "models/lumen_2/scalers/spx_feature_scaler.joblib"
+LOCAL_SCALER  = os.path.join(SCALER_DIR, "spx_feature_scaler.joblib")
 
 ##############################################################################
 # 3) DOWNLOAD
 ##############################################################################
 def download_test_data_and_scaler():
     """
-    Force-download test CSV + the fitted MinMaxScaler from S3 => local.
+    Force-download the test CSV + the fitted MinMaxScaler from S3 => local.
+    Always removes local copies first to ensure a fresh download.
     """
     download_file_from_s3(MERGED_CSV_S3_KEY, LOCAL_MERGED_CSV)
     download_file_from_s3(SCALER_S3_KEY,  LOCAL_SCALER)
@@ -96,29 +105,37 @@ def load_and_scale():
         logging.warning("[load_and_scale] Merged CSV is empty => returning empty df.")
         return pd.DataFrame()
 
+    # If there's no local scaler, skip scaling
     if not os.path.exists(LOCAL_SCALER):
         logging.warning(f"[load_and_scale] No scaler found => unscaled data returned.")
         return df
 
     scaler: MinMaxScaler = joblib.load(LOCAL_SCALER)
-    scaler_cols = list(scaler.feature_names_in_) 
+    scaler_cols = list(scaler.feature_names_in_)
 
+    # 1) Identify numeric columns from DF
     df_num = df.select_dtypes(include=[np.number]).copy()
+
+    # 2) Drop non-feature columns
     for skip_col in ["timestamp", "target_1h"]:
         if skip_col in df_num.columns:
             df_num.drop(columns=[skip_col], inplace=True, errors="ignore")
 
+    # 3) Align columns to scaler_cols
     aligned_df = pd.DataFrame(0.0, index=df_num.index, columns=scaler_cols)
     common_cols = set(df_num.columns).intersection(scaler_cols)
     for c in common_cols:
         aligned_df[c] = df_num[c]
 
+    # 4) Replace inf, drop rows w/ any NaN (strict drop)
     aligned_df.replace([np.inf, -np.inf], np.nan, inplace=True)
     aligned_df.dropna(axis=0, how="any", inplace=True)
 
+    # 5) Apply the scaler
     scaled_arr = scaler.transform(aligned_df[scaler_cols])
     aligned_df[scaler_cols] = scaled_arr
 
+    # 6) Re-attach scaled columns to original df, removing old numeric columns
     df.drop(columns=df_num.columns, inplace=True, errors="ignore")
     for c in scaler_cols:
         df[c] = aligned_df[c].values
@@ -131,13 +148,12 @@ def load_and_scale():
 def create_sequences(df, seq_len=60, prefix="spx_spy_vix_test"):
     """
     Builds X_3D, Y_3D from the final DataFrame. 'target_1h' is the label if present.
-    Saves as {prefix}_X_3D_part0.npy, {prefix}_Y_3D_part0.npy.
+    Saves as {prefix}_X_3D_part0.npy and {prefix}_Y_3D_part0.npy.
     """
     if "target_1h" not in df.columns:
         logging.warning("[create_sequences] 'target_1h' not found => skipping Y.")
         return
 
-    # numeric except 'target_1h'
     numeric_cols = [c for c in df.select_dtypes(include=[np.number]).columns if c != "target_1h"]
     X_vals = df[numeric_cols].values
     y_vals = df["target_1h"].values
@@ -148,7 +164,7 @@ def create_sequences(df, seq_len=60, prefix="spx_spy_vix_test"):
         y_seq.append(y_vals[i + seq_len])
 
     X_seq = np.array(X_seq, dtype=np.float32)
-    y_seq = np.array(y_seq, dtype=np.float32).reshape(-1,1)
+    y_seq = np.array(y_seq, dtype=np.float32).reshape(-1, 1)
 
     if len(X_seq) == 0:
         logging.warning(f"[create_sequences] Not enough rows => 0 sequences built.")

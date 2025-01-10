@@ -28,14 +28,14 @@ const handleWebSocket = () => {
     });
 
     socket.on('message', async (data) => {
-        const message = data.toString(); // Convert Buffer to string
-        const parsedData = JSON.parse(message); // Parse the JSON string
-        console.log('Received data:', parsedData); // Log the parsed data for debugging
+        const message = data.toString();
+        const parsedData = JSON.parse(message);
+        console.log('Received data:', parsedData);
 
         if (parsedData.type === 'trade') {
             parsedData.data.forEach(async (trade) => {
                 const utcTimestamp = new Date(trade.t);
-                const centralTime = moment(utcTimestamp).tz('America/Chicago').format(); // Convert to Central Time
+                const centralTime = moment(utcTimestamp).tz('America/Chicago').format(); 
                 const current_price = trade.p;
                 const volume = trade.v;
                 const conditions = trade.c ? trade.c.join(', ') : null; 
@@ -49,7 +49,7 @@ const handleWebSocket = () => {
                         } else if (symbol === 'GSPC' || symbol === '^GSPC' || symbol === 'OANDA:SPX500_USD') {
                             await createRealTimeSPXRecord({ timestamp: centralTime, current_price, volume, conditions });
                         } else if (symbol === '^VIX') {
-                            await createRealTimeVIXRecord({ timestamp: centralTime, current_price, volume, conditions }); // New handler for VIX
+                            await createRealTimeVIXRecord({ timestamp: centralTime, current_price, volume, conditions });
                         }
                         console.log('Data point stored successfully');
                     });

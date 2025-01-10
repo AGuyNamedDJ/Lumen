@@ -31,19 +31,15 @@ def get_s3_client():
         region_name           = "us-east-2"
     )
 
-def download_file_from_s3(s3_key: str, local_path: str, force_download: bool = False):
+def download_file_from_s3(s3_key: str, local_path: str):
     """
-    Downloads s3://<bucket>/<s3_key> to local_path.
-    If force_download=True, remove any existing local file first.
+    Always force-download from s3://<bucket>/<s3_key> to local_path,
+    removing local_path if it already exists.
     """
     bucket_name = os.getenv("LUMEN_S3_BUCKET_NAME", "lumenaibucket")
     s3 = get_s3_client()
 
-    if os.path.exists(local_path) and not force_download:
-        logging.info(f"[download_file_from_s3] Already local => {local_path}")
-        return
-
-    if os.path.exists(local_path) and force_download:
+    if os.path.exists(local_path):
         logging.info(f"[download_file_from_s3] Removing existing => {local_path}")
         os.remove(local_path)
 
@@ -66,33 +62,39 @@ MODEL_FILE        = "Lumen2.keras"
 MODEL_LOCAL       = os.path.join(TRAINED_DIR, MODEL_FILE)
 MODEL_S3_KEY      = "models/lumen_2/trained/Lumen2.keras"
 
-X_TEST_S3_KEY     = "data/lumen2/featured/sequences/spx_spy_vix_test_X_3D_part0.npy"
-Y_TEST_S3_KEY     = "data/lumen2/featured/sequences/spx_spy_vix_test_Y_3D_part0.npy"
+X_TEST_S3_KEY = "data/lumen2/featured/sequences/spx_test_X_3D_part0.npy"
+Y_TEST_S3_KEY = "data/lumen2/featured/sequences/spx_test_Y_3D_part0.npy"
 LOCAL_X_TEST      = os.path.join(TRAINED_DIR, "spx_spy_vix_test_X_3D_part0.npy")
 LOCAL_Y_TEST      = os.path.join(TRAINED_DIR, "spx_spy_vix_test_Y_3D_part0.npy")
 
-TARGET_SCALER_S3_KEY = "models/lumen_2/scalers/spx_spy_vix_target_scaler.joblib"
+TARGET_SCALER_S3_KEY = "models/lumen_2/scalers/spx_target_scaler.joblib"
 LOCAL_TARGET_SCALER  = os.path.join(TRAINED_DIR, "spx_spy_vix_target_scaler.joblib")
 
 ##############################################################################
 # 4) DOWNLOAD
 ##############################################################################
-def maybe_download_test_arrays(force=False):
-    """Download the single chunk test .npy files from S3 => local, if needed."""
-    download_file_from_s3(X_TEST_S3_KEY, LOCAL_X_TEST, force_download=force)
-    download_file_from_s3(Y_TEST_S3_KEY, LOCAL_Y_TEST, force_download=force)
+def maybe_download_test_arrays():
+    """
+    Force-download the single chunk test .npy files from S3 => local,
+    removing any existing local copies.
+    """
+    download_file_from_s3(X_TEST_S3_KEY, LOCAL_X_TEST)
+    download_file_from_s3(Y_TEST_S3_KEY, LOCAL_Y_TEST)
 
-def maybe_download_model(force=False):
-    """Download the trained Lumen2 model from S3 => local, if needed."""
-    download_file_from_s3(MODEL_S3_KEY, MODEL_LOCAL, force_download=force)
+def maybe_download_model():
+    """
+    Force-download the trained Lumen2 model from S3 => local,
+    removing any existing local file.
+    """
+    download_file_from_s3(MODEL_S3_KEY, MODEL_LOCAL)
 
-def maybe_download_target_scaler(force=False):
+def maybe_download_target_scaler():
     """
     If you have a separate target scaler for real-price domain metrics,
-    attempt to download it from S3 => local. If not found, we skip.
+    force-download it from S3 => local. If not found, we skip.
     """
     try:
-        download_file_from_s3(TARGET_SCALER_S3_KEY, LOCAL_TARGET_SCALER, force_download=force)
+        download_file_from_s3(TARGET_SCALER_S3_KEY, LOCAL_TARGET_SCALER)
         logging.info("[maybe_download_target_scaler] Target scaler downloaded.")
     except Exception as exc:
         logging.warning(f"[maybe_download_target_scaler] Could not download target scaler => {exc}")
@@ -127,6 +129,7 @@ def evaluate_model(model, X_test, y_test):
         logging.error(f"[evaluate_model] Mismatch: X_test={len(X_test)}, y_test={len(y_test)} => abort.")
         return
 
+    # Check for feature mismatch
     expected_feats = model.input_shape[-1]
     actual_feats   = X_test.shape[-1]
     if actual_feats < expected_feats:
@@ -178,9 +181,10 @@ def evaluate_model(model, X_test, y_test):
 def main():
     logging.info("=== evaluate_lumen_2 => Starting ===")
 
-    maybe_download_test_arrays(force=False)
-    maybe_download_model(force=False)
-    maybe_download_target_scaler(force=False)
+    # Force fresh downloads for test arrays, model, and target scaler
+    maybe_download_test_arrays()
+    maybe_download_model()
+    maybe_download_target_scaler()
 
     if not os.path.exists(MODEL_LOCAL):
         logging.error(f"Model file not found => {MODEL_LOCAL}")

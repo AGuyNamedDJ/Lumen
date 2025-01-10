@@ -28,40 +28,36 @@ logging.basicConfig(level=logging.INFO)
 LOCAL_MODEL_FILENAME = "Lumen2_from_s3.keras"
 S3_KEY = "models/lumen_2/trained/Lumen2.keras"
 
-def download_file_if_needed(s3_key, local_path, force_download=True):
+def download_file_if_needed(s3_key, local_path):
     """
-    If S3 download is available, optionally remove any existing local file,
-    then download from s3://<bucket>/<s3_key>.
+    ALWAYS remove any local file, then force-download from s3://<bucket>/<s3_key>.
     """
     if not download_file_from_s3 or not callable(download_file_from_s3):
-        logging.warning("No S3 download function => skipping S3 pull.")
+        logging.warning("No S3 download function => skipping S3 pull entirely.")
         return
 
-    if force_download and os.path.exists(local_path):
+    if os.path.exists(local_path):
         logging.info(f"[download_file_if_needed] Removing existing {local_path}")
         os.remove(local_path)
 
-    if not os.path.exists(local_path):
-        bucket_name = os.getenv("LUMEN_S3_BUCKET_NAME", "your-default-bucket")
-        logging.info(f"Downloading model s3://{bucket_name}/{s3_key} → {local_path}")
-        try:
-            download_file_from_s3(s3_key, local_path)
-            logging.info("Download complete.")
-        except Exception as exc:
-            logging.error(f"Error downloading {s3_key} => {exc}")
-    else:
-        logging.info(f"Local model file {local_path} already exists => skipping download.")
+    bucket_name = os.getenv("LUMEN_S3_BUCKET_NAME", "your-default-bucket")
+    logging.info(f"Downloading model s3://{bucket_name}/{s3_key} → {local_path}")
+    try:
+        download_file_from_s3(s3_key, local_path)
+        logging.info("Download complete.")
+    except Exception as exc:
+        logging.error(f"Error downloading {s3_key} => {exc}")
 
 def load_lumen2_model_from_s3(
     s3_key: str = S3_KEY,
-    local_filename: str = LOCAL_MODEL_FILENAME,
-    force_download: bool = True
+    local_filename: str = LOCAL_MODEL_FILENAME
 ):
     """
-    If `force_download=True`, remove any local .keras file, then pull from S3.
-    Finally, load the model with custom layer `ReduceMeanLayer`.
+    Unconditionally downloads the model from S3 to local_filename,
+    then loads the model with custom_objects for `ReduceMeanLayer`.
     """
-    download_file_if_needed(s3_key, local_filename, force_download)
+    download_file_if_needed(s3_key, local_filename)
+
     if not os.path.exists(local_filename):
         logging.error(f"Local file {local_filename} not found => cannot load model.")
         return None
@@ -78,8 +74,7 @@ def load_lumen2_model_from_s3(
 if __name__ == "__main__":
     model = load_lumen2_model_from_s3(
         s3_key=S3_KEY,
-        local_filename=LOCAL_MODEL_FILENAME,
-        force_download=True
+        local_filename=LOCAL_MODEL_FILENAME
     )
     if model:
         logging.info("Model loaded. Printing summary:")

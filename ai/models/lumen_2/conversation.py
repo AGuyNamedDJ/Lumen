@@ -12,22 +12,18 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from tensorflow.keras.models import load_model
 
-# If you have a local file "aws_s3_utils.py" in the same or parent directory,
-# adjust the import below accordingly or remove if unused.
 try:
     from utils.aws_s3_utils import download_file_from_s3
 except ImportError:
     download_file_from_s3 = None
     logging.warning("download_file_from_s3 not found; skipping S3 usage.")
 
-# definitions_lumen_2 should be in the same directory (i.e. “./definitions_lumen_2.py”).
 from .definitions_lumen_2 import ReduceMeanLayer
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 timezone = pytz.timezone("America/Chicago")
 
-# Single real-time model references:
 MODEL_S3_KEY = "models/lumen_2/trained/Lumen2.keras"
 LOCAL_MODEL_FILENAME = os.path.join(os.path.dirname(__file__), "Lumen2.keras")
 
