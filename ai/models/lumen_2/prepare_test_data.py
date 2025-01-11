@@ -70,7 +70,6 @@ os.makedirs(FEATURED_DIR, exist_ok=True)
 os.makedirs(SEQUENCES_DIR, exist_ok=True)
 os.makedirs(SCALER_DIR, exist_ok=True)
 
-# These S3 keys should point to the correct, updated files
 MERGED_CSV_S3_KEY = "data/lumen2/featured/spx_vix_test.csv"
 LOCAL_MERGED_CSV  = os.path.join(FEATURED_DIR, "spx_spy_vix_merged_realtime.csv")
 
@@ -105,7 +104,6 @@ def load_and_scale():
         logging.warning("[load_and_scale] Merged CSV is empty => returning empty df.")
         return pd.DataFrame()
 
-    # If there's no local scaler, skip scaling
     if not os.path.exists(LOCAL_SCALER):
         logging.warning(f"[load_and_scale] No scaler found => unscaled data returned.")
         return df
@@ -113,29 +111,23 @@ def load_and_scale():
     scaler: MinMaxScaler = joblib.load(LOCAL_SCALER)
     scaler_cols = list(scaler.feature_names_in_)
 
-    # 1) Identify numeric columns from DF
     df_num = df.select_dtypes(include=[np.number]).copy()
 
-    # 2) Drop non-feature columns
     for skip_col in ["timestamp", "target_1h"]:
         if skip_col in df_num.columns:
             df_num.drop(columns=[skip_col], inplace=True, errors="ignore")
 
-    # 3) Align columns to scaler_cols
     aligned_df = pd.DataFrame(0.0, index=df_num.index, columns=scaler_cols)
     common_cols = set(df_num.columns).intersection(scaler_cols)
     for c in common_cols:
         aligned_df[c] = df_num[c]
 
-    # 4) Replace inf, drop rows w/ any NaN (strict drop)
     aligned_df.replace([np.inf, -np.inf], np.nan, inplace=True)
     aligned_df.dropna(axis=0, how="any", inplace=True)
 
-    # 5) Apply the scaler
     scaled_arr = scaler.transform(aligned_df[scaler_cols])
     aligned_df[scaler_cols] = scaled_arr
 
-    # 6) Re-attach scaled columns to original df, removing old numeric columns
     df.drop(columns=df_num.columns, inplace=True, errors="ignore")
     for c in scaler_cols:
         df[c] = aligned_df[c].values

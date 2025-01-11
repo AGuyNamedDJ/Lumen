@@ -62,10 +62,11 @@ MODEL_FILE        = "Lumen2.keras"
 MODEL_LOCAL       = os.path.join(TRAINED_DIR, MODEL_FILE)
 MODEL_S3_KEY      = "models/lumen_2/trained/Lumen2.keras"
 
-X_TEST_S3_KEY = "data/lumen2/featured/sequences/spx_test_X_3D_part0.npy"
-Y_TEST_S3_KEY = "data/lumen2/featured/sequences/spx_test_Y_3D_part0.npy"
-LOCAL_X_TEST      = os.path.join(TRAINED_DIR, "spx_spy_vix_test_X_3D_part0.npy")
-LOCAL_Y_TEST      = os.path.join(TRAINED_DIR, "spx_spy_vix_test_Y_3D_part0.npy")
+X_TEST_S3_KEY     = "models/lumen_2/trained/X_test.npy"
+Y_TEST_S3_KEY     = "models/lumen_2/trained/y_test.npy"
+
+LOCAL_X_TEST      = os.path.join(TRAINED_DIR, "X_test.npy")
+LOCAL_Y_TEST      = os.path.join(TRAINED_DIR, "y_test.npy")
 
 TARGET_SCALER_S3_KEY = "models/lumen_2/scalers/spx_target_scaler.joblib"
 LOCAL_TARGET_SCALER  = os.path.join(TRAINED_DIR, "spx_spy_vix_target_scaler.joblib")
@@ -75,24 +76,18 @@ LOCAL_TARGET_SCALER  = os.path.join(TRAINED_DIR, "spx_spy_vix_target_scaler.jobl
 ##############################################################################
 def maybe_download_test_arrays():
     """
-    Force-download the single chunk test .npy files from S3 => local,
+    Force-download the single test set .npy files (X_test and y_test) from S3 => local,
     removing any existing local copies.
     """
     download_file_from_s3(X_TEST_S3_KEY, LOCAL_X_TEST)
     download_file_from_s3(Y_TEST_S3_KEY, LOCAL_Y_TEST)
 
 def maybe_download_model():
-    """
-    Force-download the trained Lumen2 model from S3 => local,
-    removing any existing local file.
-    """
+    """Force-download the trained Lumen2 model from S3 => local."""
     download_file_from_s3(MODEL_S3_KEY, MODEL_LOCAL)
 
 def maybe_download_target_scaler():
-    """
-    If you have a separate target scaler for real-price domain metrics,
-    force-download it from S3 => local. If not found, we skip.
-    """
+    """Force-download the target scaler if it exists on S3."""
     try:
         download_file_from_s3(TARGET_SCALER_S3_KEY, LOCAL_TARGET_SCALER)
         logging.info("[maybe_download_target_scaler] Target scaler downloaded.")
@@ -129,7 +124,6 @@ def evaluate_model(model, X_test, y_test):
         logging.error(f"[evaluate_model] Mismatch: X_test={len(X_test)}, y_test={len(y_test)} => abort.")
         return
 
-    # Check for feature mismatch
     expected_feats = model.input_shape[-1]
     actual_feats   = X_test.shape[-1]
     if actual_feats < expected_feats:
@@ -144,10 +138,8 @@ def evaluate_model(model, X_test, y_test):
     X_test = X_test.astype("float32")
     y_test = y_test.astype("float32")
 
-    # Predict in scaled domain
     preds = model.predict(X_test, verbose=0)
 
-    # MSE, RMSE, R² in scaled domain
     mse_val  = mean_squared_error(y_test, preds)
     rmse_val = np.sqrt(mse_val)
     r2_val   = r2_score(y_test, preds)
@@ -157,9 +149,9 @@ def evaluate_model(model, X_test, y_test):
     logging.info(f"RMSE: {rmse_val:.8f}")
     logging.info(f"R²:   {r2_val:.6f}")
 
-    # Attempt real-domain metrics if we have a target scaler
     if os.path.exists(LOCAL_TARGET_SCALER):
         try:
+            import joblib
             target_scaler = joblib.load(LOCAL_TARGET_SCALER)
             preds_inv = target_scaler.inverse_transform(preds.reshape(-1,1))
             y_test_inv= target_scaler.inverse_transform(y_test.reshape(-1,1))
@@ -181,7 +173,6 @@ def evaluate_model(model, X_test, y_test):
 def main():
     logging.info("=== evaluate_lumen_2 => Starting ===")
 
-    # Force fresh downloads for test arrays, model, and target scaler
     maybe_download_test_arrays()
     maybe_download_model()
     maybe_download_target_scaler()

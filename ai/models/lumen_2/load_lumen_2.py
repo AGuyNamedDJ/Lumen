@@ -21,7 +21,6 @@ except ImportError:
     download_file_from_s3 = None
     logging.warning("No 'download_file_from_s3' found; will do local-file-only model loading.")
 
-# 3) ENV + LOGGING
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 

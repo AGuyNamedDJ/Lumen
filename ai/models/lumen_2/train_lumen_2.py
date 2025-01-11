@@ -55,11 +55,9 @@ class NpyDataGenerator(Sequence):
             np.random.shuffle(self.indices)
 
     def __len__(self):
-        # The number of batches in one epoch
         return int(np.ceil(len(self.X) / self.batch_size))
 
     def __getitem__(self, idx):
-        # Return one batch (X_batch, y_batch)
         start = idx * self.batch_size
         end = min(start + self.batch_size, len(self.X))
         batch_indices = self.indices[start:end]
@@ -118,7 +116,6 @@ def load_npy_data(x_prefix, y_prefix):
     logging.info(f"Loaded X from '{x_prefix}': shape={X.shape}")
     logging.info(f"Loaded Y from '{y_prefix}': shape={y.shape}")
 
-    # Basic stats
     if X.size > 0:
         logging.info(f"  X range => [{X.min():.4f}, {X.max():.4f}]")
     if y.size > 0:
@@ -130,37 +127,30 @@ def load_npy_data(x_prefix, y_prefix):
 # Main training function
 # -----------------------------------------------------------------------------
 def main():
-    # 1) Load the prepared training data
-    #    (Ensure the prefix matches exactly what was used in feature_engineering)
     X_train, y_train = load_npy_data("spx_train_X_3D", "spx_train_Y_3D")
     if X_train is None or y_train is None:
         logging.error("[main] Missing or invalid train sequences => aborting.")
         return
 
-    # 2) Load validation
     X_val, y_val = load_npy_data("spx_val_X_3D", "spx_val_Y_3D")
     if X_val is None or y_val is None:
         logging.error("[main] Missing or invalid val sequences => aborting.")
         return
 
-    # 3) Optionally load test
     X_test, y_test = load_npy_data("spx_test_X_3D", "spx_test_Y_3D")
     if X_test is None or y_test is None:
         logging.warning("[main] Missing test => skipping test evaluation.")
         X_test, y_test = None, None
 
-    # 4) Build data generators
     batch_size = 32
     train_gen  = NpyDataGenerator(X_train, y_train, batch_size=batch_size, shuffle=True)
     val_gen    = NpyDataGenerator(X_val,   y_val,   batch_size=batch_size, shuffle=False)
 
-    # 5) Summaries
     seq_len   = X_train.shape[1]
     num_feats = X_train.shape[2]
     logging.info(f"[main] => Train samples = {len(X_train)}, Val = {len(X_val)}")
     logging.info(f"[main] => seq_len = {seq_len}, num_feats = {num_feats}")
 
-    # 6) Create the model
     model = create_hybrid_model(
         input_shape=(seq_len, num_feats),
         num_lstm_layers=2,
@@ -173,7 +163,6 @@ def main():
     logging.info("Model summary =>")
     model.summary(print_fn=logging.info)
 
-    # 7) Callbacks
     from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
 
     checkpoint_path = os.path.join(TRAINED_DIR, f"{MODEL_NAME}.keras")
@@ -197,7 +186,6 @@ def main():
         min_lr=1e-6
     )
 
-    # 8) Compile & fit
     model.fit(
         train_gen,
         validation_data=val_gen,
@@ -208,7 +196,6 @@ def main():
 
     logging.info(f"[main] Training complete. Best model => {checkpoint_path}")
 
-    # 9) Upload final model to S3 (optional)
     if chkpt_cb.best is not None and callable(auto_upload_file_to_s3):
         try:
             auto_upload_file_to_s3(checkpoint_path, "models/lumen_2/trained")
@@ -216,7 +203,6 @@ def main():
         except Exception as e:
             logging.warning(f"Could not upload final model => {e}")
 
-    # 10) Evaluate on test if available
     if X_test is not None and y_test is not None:
         logging.info(f"[main] Evaluating on test => {len(X_test)} samples.")
         test_gen = NpyDataGenerator(X_test, y_test, batch_size=batch_size, shuffle=False)

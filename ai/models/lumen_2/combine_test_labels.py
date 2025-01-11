@@ -27,15 +27,22 @@ def get_s3_client():
 ##############################################################################
 # 2) CONSTANTS
 ##############################################################################
-BUCKET_NAME          = os.getenv("LUMEN_S3_BUCKET_NAME", "lumenaibucket")
-SEQUENCES_PREFIX     = "data/lumen2/featured/sequences/"
-LABELS_PATTERN       = r"spx_test_Y_3D_part\d+\.npy"  # Regex to match chunk files
-LOCAL_CHUNKS_DIR     = "tmp_chunks"                   # local subfolder to store chunk downloads
-FINAL_LABELS_LOCAL   = "y_test.npy"
-FINAL_LABELS_S3_KEY  = "models/lumen_2/trained/y_test.npy"
+BUCKET_NAME           = os.getenv("LUMEN_S3_BUCKET_NAME", "lumenaibucket")
+SEQUENCES_PREFIX      = "data/lumen2/featured/sequences/"
+LOCAL_CHUNKS_DIR      = "tmp_chunks"
+
+# -- Y (Labels) --
+Y_PATTERN             = r"spx_test_Y_3D_part\d+\.npy" 
+FINAL_LABELS_LOCAL    = "y_test.npy"
+FINAL_LABELS_S3_KEY   = "models/lumen_2/trained/y_test.npy"
+
+# -- X (Features) --
+X_PATTERN             = r"spx_test_X_3D_part\d+\.npy"
+FINAL_FEATURES_LOCAL  = "X_test.npy"
+FINAL_FEATURES_S3_KEY = "models/lumen_2/trained/X_test.npy"
 
 ##############################################################################
-# 3) LIST OBJECTS IN S3
+# 3) HELPER: LIST OBJECTS IN S3
 ##############################################################################
 def list_s3_objects_with_prefix(s3_client, prefix):
     """
@@ -53,100 +60,92 @@ def list_s3_objects_with_prefix(s3_client, prefix):
     return results
 
 ##############################################################################
-# 4) DOWNLOAD + CONCATENATE
+# 4) GENERIC: Download + Combine Chunks
 ##############################################################################
-def download_and_combine_y_chunks():
+def download_and_combine_chunks(pattern, final_local_filename):
     """
-    1. List all spx_test_Y_3D_partX.npy files in S3 (under 'SEQUENCES_PREFIX').
-    2. Download them locally.
-    3. Load + concatenate into one big array => y_test.npy
-    4. Return the combined array shape.
+    1. Lists all .npy files under SEQUENCES_PREFIX that match `pattern` (regex).
+    2. Downloads each chunk locally into LOCAL_CHUNKS_DIR.
+    3. Loads + concatenates them into one big array => final_local_filename (e.g. "X_test.npy" or "y_test.npy").
+    4. Returns the final array shape or None if none found.
     """
     s3_client = get_s3_client()
-
-    # 1) List all objects
     logging.info(f"Listing S3 objects with prefix => {SEQUENCES_PREFIX}")
     all_objs = list_s3_objects_with_prefix(s3_client, SEQUENCES_PREFIX)
 
-    # 2) Filter for our label pattern (spx_test_Y_3D_partX.npy)
-    # Using a regex match:
     chunk_keys = []
     for obj in all_objs:
-        key = obj['Key']  # e.g. "data/lumen2/featured/sequences/spx_test_Y_3D_part0.npy"
+        key = obj["Key"]  
         filename = os.path.basename(key)
-        if re.match(LABELS_PATTERN, filename):
+        if re.match(pattern, filename):
             chunk_keys.append(key)
 
     if not chunk_keys:
-        logging.warning("No spx_test_Y_3D_part*.npy files found => nothing to combine.")
+        logging.warning(f"No files found matching pattern {pattern} => nothing to combine.")
         return None
 
-    logging.info(f"Found {len(chunk_keys)} label chunk file(s):")
+    logging.info(f"Found {len(chunk_keys)} chunk file(s) matching {pattern}:")
     for ck in chunk_keys:
         logging.info(f" - {ck}")
 
-    # 3) Download each chunk
     if not os.path.exists(LOCAL_CHUNKS_DIR):
         os.makedirs(LOCAL_CHUNKS_DIR, exist_ok=True)
 
-    y_parts = []
+    parts = []
     for ck in sorted(chunk_keys):
         base = os.path.basename(ck)
         local_path = os.path.join(LOCAL_CHUNKS_DIR, base)
 
-        # Remove local if exists
         if os.path.exists(local_path):
             os.remove(local_path)
 
         logging.info(f"Downloading s3://{BUCKET_NAME}/{ck} => {local_path}")
         s3_client.download_file(BUCKET_NAME, ck, local_path)
         arr = np.load(local_path)
-        y_parts.append(arr)
+        parts.append(arr)
 
-    # 4) Concatenate
-    if not y_parts:
+    if not parts:
         logging.warning("No arrays to concatenate => empty list.")
         return None
 
-    y_all = np.concatenate(y_parts, axis=0)
-    logging.info(f"Final y_all shape => {y_all.shape}")
+    combined = np.concatenate(parts, axis=0)
+    logging.info(f"Final combined shape => {combined.shape}")
 
-    # 5) Save local
-    np.save(FINAL_LABELS_LOCAL, y_all)
-    logging.info(f"Saved => {FINAL_LABELS_LOCAL}")
-    return y_all.shape
+    np.save(final_local_filename, combined)
+    logging.info(f"Saved => {final_local_filename}")
+    return combined.shape
 
 ##############################################################################
-# 5) UPLOAD THE COMBINED y_test.npy
+# 5) UPLOAD COMBINED FILE
 ##############################################################################
-def upload_combined_y_test():
-    """
-    Uploads 'y_test.npy' => 'models/lumen_2/trained/y_test.npy'
-    """
-    if not os.path.exists(FINAL_LABELS_LOCAL):
-        logging.error(f"File {FINAL_LABELS_LOCAL} not found => cannot upload.")
-        return
-
+def upload_file_to_s3(local_path, s3_key):
     s3_client = get_s3_client()
-    logging.info(f"Uploading {FINAL_LABELS_LOCAL} => s3://{BUCKET_NAME}/{FINAL_LABELS_S3_KEY}")
+    if not os.path.exists(local_path):
+        logging.error(f"File {local_path} not found => cannot upload.")
+        return
+    logging.info(f"Uploading {local_path} => s3://{BUCKET_NAME}/{s3_key}")
     try:
-        s3_client.upload_file(FINAL_LABELS_LOCAL, BUCKET_NAME, FINAL_LABELS_S3_KEY)
+        s3_client.upload_file(local_path, BUCKET_NAME, s3_key)
         logging.info("Upload complete.")
     except Exception as exc:
-        logging.error(f"Error uploading y_test.npy => {exc}")
+        logging.error(f"Error uploading {local_path} => {exc}")
 
 ##############################################################################
 # 6) MAIN
 ##############################################################################
 def main():
     logging.info("=== combine_test_labels_s3 => Start ===")
-    shape = download_and_combine_y_chunks()
 
-    if shape is None:
-        logging.error("No label chunks found => aborting.")
-        return
+    # -- Combine Y (labels) --
+    shape_y = download_and_combine_chunks(Y_PATTERN, FINAL_LABELS_LOCAL)
+    if shape_y is not None:
+        upload_file_to_s3(FINAL_LABELS_LOCAL, FINAL_LABELS_S3_KEY)
 
-    upload_combined_y_test()
+    # -- Combine X (features) --
+    shape_x = download_and_combine_chunks(X_PATTERN, FINAL_FEATURES_LOCAL)
+    if shape_x is not None:
+        upload_file_to_s3(FINAL_FEATURES_LOCAL, FINAL_FEATURES_S3_KEY)
+
     logging.info("=== combine_test_labels_s3 => Done ===")
 
 if __name__ == "__main__":

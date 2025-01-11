@@ -53,10 +53,8 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 TRAINED_DIR = os.path.join(script_dir, "trained")
 os.makedirs(TRAINED_DIR, exist_ok=True)
 
-# These should match the actual files in your S3 "trained" folder.
-# You already have predictions_test.npy. Make sure you also have y_test.npy (the ground truth).
 S3_PREDICTIONS_TEST = "models/lumen_2/trained/predictions_test.npy"
-S3_TRUE_VALUES_TEST = "models/lumen_2/trained/y_test.npy"  # or whatever you name your test labels
+S3_TRUE_VALUES_TEST = "models/lumen_2/trained/y_test.npy"
 
 LOCAL_PREDICTIONS_TEST = os.path.join(TRAINED_DIR, "predictions_test.npy")
 LOCAL_TRUE_VALUES_TEST = os.path.join(TRAINED_DIR, "y_test.npy")
@@ -95,7 +93,6 @@ def evaluate_predictions(predictions_path, groundtruth_path, label="Test Set"):
         logging.error(f"[{label}] Mismatch: preds={len(preds)}, y_true={len(y_true)}")
         return
 
-    # Flatten in case they're multi-dimensional
     preds_flat = preds.ravel()
     y_true_flat = y_true.ravel()
 
@@ -111,10 +108,8 @@ def evaluate_predictions(predictions_path, groundtruth_path, label="Test Set"):
 def main():
     logging.info("=== evaluate_predictions => Start ===")
 
-    # Force download the files we need
     download_test_files()
 
-    # Evaluate
     evaluate_predictions(LOCAL_PREDICTIONS_TEST, LOCAL_TRUE_VALUES_TEST, label="Test Set")
 
     logging.info("=== evaluate_predictions => Done ===")

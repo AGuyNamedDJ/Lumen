@@ -1,6 +1,7 @@
 import os
 import sys
 import logging
+import re
 import numpy as np
 import boto3
 from dotenv import load_dotenv
@@ -31,7 +32,7 @@ def get_s3_client():
 
 def download_file_from_s3(s3_key: str, local_path: str):
     """
-    Always remove any local copy, then download from s3://<bucket>/<s3_key>.
+    Always remove any local file, then download s3://<bucket>/<s3_key> => local_path.
     """
     bucket_name = os.getenv("LUMEN_S3_BUCKET_NAME", "your-default-bucket")
     s3 = get_s3_client()
@@ -52,7 +53,73 @@ def upload_file_to_s3(local_path: str, s3_key: str):
     logging.info("[upload_file_to_s3] Done.")
 
 ##############################################################################
-# 3) PATHS
+# 3) LIST + CONCAT PARTS
+##############################################################################
+def list_s3_objects_with_prefix(prefix):
+    """
+    Lists all objects in the S3 bucket that start with 'prefix'.
+    Returns a list of keys.
+    """
+    s3 = get_s3_client()
+    bucket_name = os.getenv("LUMEN_S3_BUCKET_NAME", "your-default-bucket")
+
+    results = []
+    paginator = s3.get_paginator('list_objects_v2')
+    pages = paginator.paginate(Bucket=bucket_name, Prefix=prefix)
+    for page in pages:
+        if 'Contents' in page:
+            for obj in page['Contents']:
+                results.append(obj['Key'])
+    return results
+
+def download_and_combine_testX(s3_prefix="data/lumen2/featured/sequences/", pattern=r"spx_test_X_3D_part\d+\.npy"):
+    """
+    1. List all parted X test files in S3 matching pattern (e.g., spx_test_X_3D_part0, part1...).
+    2. Download & concatenate them into one big X_test (N, seq_len, feats).
+    Returns the combined array or None if none found.
+    """
+    s3_keys = list_s3_objects_with_prefix(s3_prefix)
+    part_keys = []
+    for key in s3_keys:
+        fname = os.path.basename(key)
+        if re.match(pattern, fname):
+            part_keys.append(key)
+
+    if not part_keys:
+        logging.warning(f"No parted test X found matching pattern {pattern} => cannot combine.")
+        return None
+
+    logging.info(f"Found {len(part_keys)} parted X test files:")
+    for pk in part_keys:
+        logging.info(f" - s3://.../{pk}")
+
+    local_tmp = "tmp_testX"
+    if not os.path.exists(local_tmp):
+        os.makedirs(local_tmp, exist_ok=True)
+
+    all_arrays = []
+    for pk in sorted(part_keys):
+        base = os.path.basename(pk)
+        local_path = os.path.join(local_tmp, base)
+
+        if os.path.exists(local_path):
+            os.remove(local_path)
+
+        logging.info(f"Downloading parted test X => {pk}")
+        download_file_from_s3(pk, local_path)
+        arr = np.load(local_path)
+        all_arrays.append(arr)
+
+    if not all_arrays:
+        logging.warning("No parted arrays loaded => returning None.")
+        return None
+
+    combined = np.concatenate(all_arrays, axis=0)  # shape => (N, seq_len, feats)
+    logging.info(f"Combined X_test shape => {combined.shape}")
+    return combined
+
+##############################################################################
+# 4) PATHS
 ##############################################################################
 script_dir    = os.path.dirname(os.path.abspath(__file__))
 project_root  = os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
@@ -61,33 +128,22 @@ sys.path.append(project_root)
 TRAINED_DIR   = os.path.join(script_dir, "trained")
 os.makedirs(TRAINED_DIR, exist_ok=True)
 
-MODEL_NAME      = "Lumen2.keras"
-MODEL_S3_KEY    = "models/lumen_2/trained/Lumen2.keras"
-MODEL_LOCAL     = os.path.join(TRAINED_DIR, MODEL_NAME)
+MODEL_NAME       = "Lumen2.keras"
+MODEL_S3_KEY     = "models/lumen_2/trained/Lumen2.keras"
+MODEL_LOCAL      = os.path.join(TRAINED_DIR, MODEL_NAME)
 
-# Updated S3 keys to the actual test file names that exist in your bucket
-TEST_X_S3_KEY   = "data/lumen2/featured/sequences/spx_test_X_3D_part0.npy"
-TEST_Y_S3_KEY   = "data/lumen2/featured/sequences/spx_test_Y_3D_part0.npy"
-LOCAL_X_TEST    = os.path.join(TRAINED_DIR, "spx_test_X_3D_part0.npy")
-LOCAL_Y_TEST    = os.path.join(TRAINED_DIR, "spx_test_Y_3D_part0.npy")
-
-PREDICTIONS_NPY = os.path.join(TRAINED_DIR, "predictions_test.npy")
-PREDICTIONS_S3  = "models/lumen_2/trained/predictions_test.npy"
+PREDICTIONS_NPY  = os.path.join(TRAINED_DIR, "predictions_test.npy")
+PREDICTIONS_S3   = "models/lumen_2/trained/predictions_test.npy"
 
 ##############################################################################
-# 4) DOWNLOAD UTILS
+# 5) DOWNLOAD MODEL
 ##############################################################################
-def download_test_data():
-    logging.info("[download_test_data] Force-downloading test data.")
-    download_file_from_s3(TEST_X_S3_KEY, LOCAL_X_TEST)
-    download_file_from_s3(TEST_Y_S3_KEY, LOCAL_Y_TEST)
-
 def download_model():
     logging.info("[download_model] Force-downloading model file.")
     download_file_from_s3(MODEL_S3_KEY, MODEL_LOCAL)
 
 ##############################################################################
-# 5) LOAD MODEL
+# 6) LOAD MODEL
 ##############################################################################
 def load_lumen2_model():
     """
@@ -106,35 +162,27 @@ def load_lumen2_model():
         return None
 
 ##############################################################################
-# 6) MAIN
+# 7) MAIN
 ##############################################################################
 def main():
     logging.info("[predict_lumen_2] Starting predictions.")
-    os.makedirs(TRAINED_DIR, exist_ok=True)
-
-    # Always pull fresh copies from S3
-    download_test_data()
     download_model()
 
-    # Load the model
     model = load_lumen2_model()
     if model is None:
         logging.error("Could not load Lumen2 model => abort.")
         return
 
-    # Load test data
-    if not os.path.exists(LOCAL_X_TEST):
-        logging.error(f"No test X => {LOCAL_X_TEST}")
+    X_test = download_and_combine_testX(
+        s3_prefix="data/lumen2/featured/sequences/", 
+        pattern=r"spx_test_X_3D_part\d+\.npy"
+    )
+    if X_test is None:
+        logging.error("No parted X test data => cannot predict.")
         return
-    X_test = np.load(LOCAL_X_TEST)
-    logging.info(f"Loaded X_test => shape={X_test.shape}")
 
-    Y_test = None
-    if os.path.exists(LOCAL_Y_TEST):
-        Y_test = np.load(LOCAL_Y_TEST)
-        logging.info(f"Loaded Y_test => shape={Y_test.shape}")
+    logging.info(f"[predict_lumen_2] X_test shape => {X_test.shape}")
 
-    # Check shape mismatch
     seq_len_model = model.input_shape[1]
     feat_model    = model.input_shape[2]
     if X_test.shape[1] != seq_len_model or X_test.shape[2] != feat_model:
@@ -148,16 +196,14 @@ def main():
             logging.warning(f"Trimming test data from {X_test.shape[2]} → {feat_model} features.")
             X_test = X_test[:,:,:feat_model]
 
-    # Predict
     X_test = X_test.astype("float32")
-    logging.info("Predicting test data now...")
+    logging.info("Predicting now on the combined parted test set...")
     preds = model.predict(X_test, verbose=0)
     logging.info(f"Predictions shape => {preds.shape}")
 
     np.save(PREDICTIONS_NPY, preds)
     logging.info(f"Saved predictions => {PREDICTIONS_NPY}")
 
-    # Upload predictions to S3
     try:
         upload_file_to_s3(PREDICTIONS_NPY, PREDICTIONS_S3)
         logging.info(f"Uploaded => s3://<bucket>/{PREDICTIONS_S3}")

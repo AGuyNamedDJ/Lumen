@@ -9,9 +9,8 @@ from sklearn.preprocessing import MinMaxScaler
 import joblib
 import boto3
 
-# For correlation heatmap
 import matplotlib
-matplotlib.use("Agg")  # If running headless (no GUI)
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -110,7 +109,6 @@ def merge_spx_vix_3min():
     spx.set_index("timestamp", inplace=True)
     vix.set_index("timestamp", inplace=True)
 
-    # unify column names
     if "current_price" in spx.columns:
         spx.rename(columns={"current_price": "spx_price"}, inplace=True)
     if "volume" in spx.columns:
@@ -204,7 +202,6 @@ def add_time_features(df):
     df.sort_values("timestamp", inplace=True)
     df["dow"] = df["timestamp"].dt.dayofweek
     df["hour"] = df["timestamp"].dt.hour
-    # cyc transforms
     df["dow_sin"]  = np.sin(2.0*np.pi*df["dow"]/7.0)
     df["dow_cos"]  = np.cos(2.0*np.pi*df["dow"]/7.0)
     df["hour_sin"] = np.sin(2.0*np.pi*df["hour"]/24.0)
@@ -236,7 +233,6 @@ def visualize_correlations(df, output_png=None):
     plt.title("Feature Correlation Heatmap (SPX & VIX)")
 
     if output_png:
-        # Save locally
         plt.savefig(output_png, dpi=150, bbox_inches="tight")
         logging.info(f"[visualize_correlations] Saved heatmap => {output_png}")
 
@@ -288,12 +284,10 @@ def keep_topN_features(df, n=15, target_col="target_1h"):
         logging.warning("[keep_topN_features] target not in correlation matrix => skipping.")
         return df
 
-    # Sort features by absolute correlation with target, ignoring 'target_1h' itself
     target_corr = cmat[target_col].abs().sort_values(ascending=False)
     feats_sorted = target_corr.index.tolist()
     feats_sorted.remove(target_col)
 
-    # Keep only the top N
     topN = feats_sorted[:n]
     keep_set = set(topN + [target_col, "timestamp"])
     drop_list = [c for c in df.columns if c not in keep_set]
@@ -365,7 +359,6 @@ def time_series_split(df, train_frac=0.7, val_frac=0.15):
 # 11) CREATE SEQUENCES
 ##############################################################################
 def create_sequences_in_chunks(df, prefix="spx", seq_len=60, chunk_size=10000):
-    # remove timestamp from numeric columns but we will re-insert it
     timestamps = df.pop("timestamp")
     all_cols = df.select_dtypes(include=[np.number]).columns.tolist()
 
@@ -380,7 +373,6 @@ def create_sequences_in_chunks(df, prefix="spx", seq_len=60, chunk_size=10000):
     n = len(Xvals)
     if n < seq_len:
         logging.warning(f"[create_sequences_in_chunks] Not enough rows => {n} < seq_len={seq_len}")
-        # put timestamp back
         df.insert(0, "timestamp", timestamps)
         return
 
@@ -404,7 +396,6 @@ def create_sequences_in_chunks(df, prefix="spx", seq_len=60, chunk_size=10000):
         np.save(y_file, Y_np)
         logging.info(f"[create_sequences_in_chunks] part={part_i}, X={X_np.shape}, Y={Y_np.shape}")
 
-        # optionally upload chunks
         chunk_s3 = "data/lumen2/featured/sequences"
         try:
             auto_upload_file_to_s3(x_file, chunk_s3)
@@ -415,7 +406,6 @@ def create_sequences_in_chunks(df, prefix="spx", seq_len=60, chunk_size=10000):
         part_i += 1
         start = end
 
-    # put timestamp back
     df.insert(0, "timestamp", timestamps)
 
 ##############################################################################
@@ -424,42 +414,31 @@ def create_sequences_in_chunks(df, prefix="spx", seq_len=60, chunk_size=10000):
 def main():
     logging.info("=== Feature Engineering (SPX + VIX) with consistent final columns ===")
 
-    # 1) Download processed CSV => local
     download_processed_csvs()
 
-    # 2) Merge => upsample => fill
     df_merged = merge_spx_vix_3min()
     logging.info(f"[main] shape after merge => {df_merged.shape}")
 
-    # 3) Indicators
     df_merged = add_spx_indicators(df_merged)
     df_merged = add_vix_indicators(df_merged)
 
-    # synergy ratio + time-based
     df_merged = add_spx_vix_ratio(df_merged)
     df_merged = add_time_features(df_merged)
 
-    # 4) Create target => shift -20
     df_merged = create_target_1h(df_merged)
     df_merged.dropna(subset=["target_1h"], inplace=True)
 
-    # 5) Correlation heatmap
     heatmap_path = os.path.join(FEATURED_DIR, "spx_vix_corr_heatmap.png")
     visualize_correlations(df_merged, output_png=heatmap_path)
 
-    # 6) Drop low correlation
     df_merged = drop_low_corr_features(df_merged, threshold=0.05)
 
-    # 6B) Force exactly 15 features
     df_merged = keep_topN_features(df_merged, n=15, target_col="target_1h")
 
-    # 7) Scale => features + target
     df_merged = separate_feature_and_target_scaling(df_merged)
 
-    # 8) Time-split
     df_train, df_val, df_test = time_series_split(df_merged, train_frac=0.7, val_frac=0.15)
 
-    # 9) Save CSV
     def save_csv(sub, name):
         out_path = os.path.join(FEATURED_DIR, name)
         sub.to_csv(out_path, index=False)
@@ -473,7 +452,6 @@ def main():
     save_csv(df_val,   "spx_vix_val.csv")
     save_csv(df_test,  "spx_vix_test.csv")
 
-    # 10) Create sequences => (N, seq_len, feats)
     create_sequences_in_chunks(df_train, prefix="spx_train", seq_len=60)
     create_sequences_in_chunks(df_val,   prefix="spx_val",   seq_len=60)
     create_sequences_in_chunks(df_test,  prefix="spx_test",  seq_len=60)

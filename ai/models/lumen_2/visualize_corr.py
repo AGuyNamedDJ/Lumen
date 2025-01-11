@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import os
 import sys
 import logging
@@ -29,16 +28,12 @@ def download_file_from_s3(s3_key: str, local_path: str):
     logging.info("[download_file_from_s3] Done.")
 
 def main():
-    # We'll assume the heatmap was uploaded to e.g. data/lumen2/featured/spx_vix_corr_heatmap.png
     remote_s3_key = "data/lumen2/featured/spx_vix_corr_heatmap.png"
 
-    # We'll store it locally in the same directory or any desired path
     local_filename = "spx_vix_corr_heatmap_downloaded.png"
 
-    # 1) Download from S3
     download_file_from_s3(remote_s3_key, local_filename)
 
-    # 2) Display it
     logging.info("Displaying correlation heatmap locally...")
     img = plt.imread(local_filename)
     plt.imshow(img)
