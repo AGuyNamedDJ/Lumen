@@ -114,7 +114,6 @@ def merge_spx_vix_3min():
     if "volume" in spx.columns:
         spx.rename(columns={"volume": "spx_volume"}, inplace=True)
 
-    # upsample VIX to 3-min intervals
     vix_3m = vix.resample("3Min").last().ffill()
     if "current_price" in vix_3m.columns:
         vix_3m.rename(columns={"current_price": "vix_price"}, inplace=True)
@@ -139,32 +138,25 @@ def add_spx_indicators(df):
     df.sort_values("timestamp", inplace=True)
     p = df["spx_price"]
 
-    # MACD
     ema12 = p.ewm(span=12, adjust=False).mean()
     ema26 = p.ewm(span=26, adjust=False).mean()
-    df["SPX_MACD"]        = ema12 - ema26
+    df["SPX_MACD"] = ema12 - ema26
     df["SPX_MACD_Signal"] = df["SPX_MACD"].ewm(span=9, adjust=False).mean()
 
-    # Bollinger
     sma20 = p.rolling(20).mean()
     std20 = p.rolling(20).std()
     df["SPX_BollU"] = sma20 + 2.0 * std20
     df["SPX_BollL"] = sma20 - 2.0 * std20
 
-    # RSI
     delta = p.diff()
     gain  = delta.where(delta > 0, 0).rolling(14).mean()
     loss  = (-delta.where(delta < 0, 0)).rolling(14).mean()
     rs    = gain / (loss + 1e-9)
     df["SPX_RSI"] = 100 - 100.0/(1+rs)
 
-    # Rate-of-change
     df["SPX_ROC_10"] = p.pct_change(10) * 100.0
-
-    # Log-price
     df["SPX_LogPrice"] = np.log1p(p.clip(lower=1e-9))
 
-    # OBV, volume log
     if "spx_volume" in df.columns:
         sign_price = np.sign(delta.fillna(0))
         df["SPX_OBV"] = (sign_price * df["spx_volume"]).fillna(0).cumsum()
@@ -183,11 +175,9 @@ def add_vix_indicators(df):
     loss  = (-delta.where(delta<0,0)).rolling(14).mean()
     rs    = gain / (loss + 1e-9)
     df["VIX_RSI"] = 100 - 100.0/(1+rs)
-
     df["VIX_EMA_10"] = p.ewm(span=10, adjust=False).mean()
     df["VIX_EMA_20"] = p.ewm(span=20, adjust=False).mean()
     df["VIX_LogPrice"] = np.log1p(p.clip(lower=1e-9))
-
     return df
 
 def add_spx_vix_ratio(df):
@@ -202,8 +192,8 @@ def add_time_features(df):
     df.sort_values("timestamp", inplace=True)
     df["dow"] = df["timestamp"].dt.dayofweek
     df["hour"] = df["timestamp"].dt.hour
-    df["dow_sin"]  = np.sin(2.0*np.pi*df["dow"]/7.0)
-    df["dow_cos"]  = np.cos(2.0*np.pi*df["dow"]/7.0)
+    df["dow_sin"] = np.sin(2.0*np.pi*df["dow"]/7.0)
+    df["dow_cos"] = np.cos(2.0*np.pi*df["dow"]/7.0)
     df["hour_sin"] = np.sin(2.0*np.pi*df["hour"]/24.0)
     df["hour_cos"] = np.cos(2.0*np.pi*df["hour"]/24.0)
     return df
@@ -226,16 +216,13 @@ def visualize_correlations(df, output_png=None):
     if numeric_df.empty:
         logging.warning("[visualize_correlations] No numeric columns => skipping.")
         return
-
     corr = numeric_df.corr()
     plt.figure(figsize=(12, 10))
     sns.heatmap(corr, cmap="YlGnBu", annot=False)
     plt.title("Feature Correlation Heatmap (SPX & VIX)")
-
     if output_png:
         plt.savefig(output_png, dpi=150, bbox_inches="tight")
         logging.info(f"[visualize_correlations] Saved heatmap => {output_png}")
-
         s3_key = "data/lumen2/featured/spx_vix_corr_heatmap.png"
         logging.info(f"[visualize_correlations] Uploading heatmap => s3://<bucket>/{s3_key}")
         upload_file_to_s3(output_png, s3_key)
@@ -252,7 +239,6 @@ def drop_low_corr_features(df, threshold=0.05):
     cmat = df.corr(numeric_only=True)
     if "target_1h" not in cmat.columns:
         return df
-
     target_corr = cmat["target_1h"].abs().sort_values(ascending=False)
     keep = target_corr[target_corr >= threshold].index.tolist()
     keep = set(keep + ["timestamp", "target_1h"])
@@ -309,7 +295,6 @@ def separate_feature_and_target_scaling(df):
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     numeric_cols.remove("target_1h")
 
-    # fill
     if df[numeric_cols].isna().any().any():
         logging.warning("[separate_feature_and_target_scaling] NaNs => filling with 0.0")
         df[numeric_cols] = df[numeric_cols].fillna(0.0)

@@ -694,13 +694,20 @@ def preprocess_data(query, table_name):
     df = df.loc[:, ~df.columns.duplicated()]
     print(f"Dropped duplicate columns, if any, for {table_name}.")
 
+    target_col = None
+    if "target_1h" in df.columns:
+        target_col = df["target_1h"].copy()
+        df.drop(columns=["target_1h"], inplace=True)
+
     df, _ = normalize_data(df)
     print(f"Data normalized for {table_name}.")
+
+    if target_col is not None:
+        df["target_1h"] = target_col
 
     numeric_columns = df.select_dtypes(include=[np.number]).columns
     X = df[numeric_columns].values
     X_3D = create_sequences(X, seq_len=60)
-
     return df, X_3D
 
 TABLE_CLEANING_FUNCTIONS = {
