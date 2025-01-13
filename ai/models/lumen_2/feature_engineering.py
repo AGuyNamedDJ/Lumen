@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import os
 import sys
 import logging
@@ -114,6 +113,7 @@ def merge_spx_vix_3min():
     if "volume" in spx.columns:
         spx.rename(columns={"volume": "spx_volume"}, inplace=True)
 
+    # Resample VIX to 3-min intervals
     vix_3m = vix.resample("3Min").last().ffill()
     if "current_price" in vix_3m.columns:
         vix_3m.rename(columns={"current_price": "vix_price"}, inplace=True)
@@ -171,19 +171,20 @@ def add_vix_indicators(df):
     p = df["vix_price"]
 
     delta = p.diff()
-    gain  = delta.where(delta>0,0).rolling(14).mean()
-    loss  = (-delta.where(delta<0,0)).rolling(14).mean()
+    gain  = delta.where(delta>0, 0).rolling(14).mean()
+    loss  = (-delta.where(delta<0, 0)).rolling(14).mean()
     rs    = gain / (loss + 1e-9)
     df["VIX_RSI"] = 100 - 100.0/(1+rs)
     df["VIX_EMA_10"] = p.ewm(span=10, adjust=False).mean()
     df["VIX_EMA_20"] = p.ewm(span=20, adjust=False).mean()
     df["VIX_LogPrice"] = np.log1p(p.clip(lower=1e-9))
+
     return df
 
 def add_spx_vix_ratio(df):
     if "spx_price" in df.columns and "vix_price" in df.columns:
         df["spx_vix_ratio"] = df.apply(
-            lambda row: row["spx_price"] / row["vix_price"] if row["vix_price"]>0 else 0.0,
+            lambda row: row["spx_price"]/row["vix_price"] if row["vix_price"]>0 else 0.0,
             axis=1
         )
     return df
@@ -216,10 +217,12 @@ def visualize_correlations(df, output_png=None):
     if numeric_df.empty:
         logging.warning("[visualize_correlations] No numeric columns => skipping.")
         return
+
     corr = numeric_df.corr()
     plt.figure(figsize=(12, 10))
     sns.heatmap(corr, cmap="YlGnBu", annot=False)
     plt.title("Feature Correlation Heatmap (SPX & VIX)")
+
     if output_png:
         plt.savefig(output_png, dpi=150, bbox_inches="tight")
         logging.info(f"[visualize_correlations] Saved heatmap => {output_png}")
@@ -239,6 +242,7 @@ def drop_low_corr_features(df, threshold=0.05):
     cmat = df.corr(numeric_only=True)
     if "target_1h" not in cmat.columns:
         return df
+
     target_corr = cmat["target_1h"].abs().sort_values(ascending=False)
     keep = target_corr[target_corr >= threshold].index.tolist()
     keep = set(keep + ["timestamp", "target_1h"])
@@ -289,6 +293,10 @@ def keep_topN_features(df, n=15, target_col="target_1h"):
 # 9) SEPARATE FEATURE/TARGET SCALER
 ##############################################################################
 def separate_feature_and_target_scaling(df):
+    """
+    Fits MinMaxScalers for features and target, then saves them.
+    Leaves the DF's numeric values as-is, so the CSV remains unmodified.
+    """
     if "target_1h" not in df.columns:
         return df
 
@@ -300,7 +308,7 @@ def separate_feature_and_target_scaling(df):
         df[numeric_cols] = df[numeric_cols].fillna(0.0)
 
     feat_scaler = MinMaxScaler()
-    df[numeric_cols] = feat_scaler.fit_transform(df[numeric_cols])
+    feat_scaler.fit(df[numeric_cols])  # No transform here; we only fit
     fs_path = os.path.join(SCALER_DIR, "spx_feature_scaler.joblib")
     joblib.dump(feat_scaler, fs_path)
     try:
@@ -309,8 +317,8 @@ def separate_feature_and_target_scaling(df):
         pass
 
     tgt_scaler = MinMaxScaler()
-    tvals = df["target_1h"].fillna(method="ffill").fillna(method="bfill").values.reshape(-1,1)
-    df["target_1h"] = tgt_scaler.fit_transform(tvals)
+    tvals = df["target_1h"].fillna(method="ffill").fillna(method="bfill").values.reshape(-1, 1)
+    tgt_scaler.fit(tvals)  # Only fit
     ts_path = os.path.join(SCALER_DIR, "spx_target_scaler.joblib")
     joblib.dump(tgt_scaler, ts_path)
     try:
@@ -420,6 +428,7 @@ def main():
 
     df_merged = keep_topN_features(df_merged, n=15, target_col="target_1h")
 
+    # Fit only (not transform) to create & save feature and target scalers
     df_merged = separate_feature_and_target_scaling(df_merged)
 
     df_train, df_val, df_test = time_series_split(df_merged, train_frac=0.7, val_frac=0.15)
