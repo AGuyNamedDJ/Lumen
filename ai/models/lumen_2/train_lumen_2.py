@@ -205,7 +205,10 @@ def main():
 
     seq_len   = X_train.shape[1]
     num_feats = X_train.shape[2]
-    logging.info(f"[main] => Train samples = {len(X_train_scaled)}, Val = {len(X_val_scaled) if X_val_scaled else 0}")
+
+    # FIX: Check if X_val_scaled is None *explicitly* for logging
+    val_count = len(X_val_scaled) if X_val_scaled is not None else 0
+    logging.info(f"[main] => Train samples = {len(X_train_scaled)}, Val = {val_count}")
     logging.info(f"[main] => seq_len = {seq_len}, num_feats = {num_feats}")
 
     # 5. Build your updated model with reduced complexity

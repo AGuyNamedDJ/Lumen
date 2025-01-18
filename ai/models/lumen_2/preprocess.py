@@ -195,14 +195,20 @@ def add_time_features(df):
     df["hour_cos"] = np.cos(2.0*np.pi*df["hour"]/24.0)
     return df
 
-def create_target_1h(df):
+def create_target_EOD(df):
     """
-    Example: shift spx_price -20 steps => target_1h. No scaling.
+    Creates an end-of-day target for each row: the last spx_price of that same day.
+    Groups by the calendar date of 'timestamp' and assigns that day's final spx_price
+    to 'target_EOD'.
     """
-    if "spx_price" in df.columns:
-        df["target_1h"] = df["spx_price"].shift(-20)
-    else:
-        logging.warning("No spx_price => cannot create target_1h.")
+    if "spx_price" not in df.columns:
+        logging.warning("No spx_price => cannot create target_EOD.")
+        return df
+
+    df["date_only"] = df["timestamp"].dt.date
+    df["target_EOD"] = df.groupby("date_only")["spx_price"].transform("last")
+    df.drop(columns=["date_only"], inplace=True, errors="ignore")
+
     return df
 
 def visualize_correlations(df, output_png=None):
@@ -222,7 +228,6 @@ def visualize_correlations(df, output_png=None):
     if output_png:
         plt.savefig(output_png, dpi=150, bbox_inches="tight")
         logging.info(f"[visualize_correlations] Saved heatmap => {output_png}")
-
         s3_key = "data/lumen2/featured/spx_vix_corr_heatmap.png"
         logging.info(f"[visualize_correlations] Uploading heatmap => s3://<bucket>/{s3_key}")
         upload_file_to_s3(output_png, s3_key)
@@ -232,27 +237,26 @@ def visualize_correlations(df, output_png=None):
 
 def drop_low_corr_features(df, threshold=0.05):
     """
-    Optionally remove columns that have < threshold correlation w/ target_1h.
-    No scaling here.
+    Optionally remove columns that have < threshold correlation w/ target_EOD.
     """
-    if "target_1h" not in df.columns:
+    if "target_EOD" not in df.columns:
         return df
     cmat = df.corr(numeric_only=True)
-    if "target_1h" not in cmat.columns:
+    if "target_EOD" not in cmat.columns:
         return df
 
-    target_corr = cmat["target_1h"].abs().sort_values(ascending=False)
+    target_corr = cmat["target_EOD"].abs().sort_values(ascending=False)
     keep = target_corr[target_corr >= threshold].index.tolist()
-    keep = set(keep + ["timestamp", "target_1h"])
+    keep = set(keep + ["timestamp", "target_EOD"])
     drop_list = [c for c in df.columns if c not in keep]
     if drop_list:
         logging.info(f"[drop_low_corr_features] Dropping => {drop_list}")
         df.drop(columns=drop_list, inplace=True)
     return df
 
-def keep_topN_features(df, n=15, target_col="target_1h"):
+def keep_topN_features(df, n=15, target_col="target_EOD"):
     """
-    Optionally keep top N correlated columns with target_1h. No scaling here.
+    Optionally keep top N correlated columns with target_EOD.
     """
     if target_col not in df.columns:
         logging.warning("[keep_topN_features] target not found => skipping.")
@@ -296,18 +300,18 @@ def time_series_split(df, train_frac=0.7, val_frac=0.15):
 def create_sequences_in_chunks(df, prefix="spx", seq_len=60, chunk_size=10000):
     """
     Example chunk-based approach to build 3D (N, seq_len, features) arrays from df.
-    No scaling is applied here.
+    No scaling is applied here. We'll look for 'target_EOD' now.
     """
     timestamps = df.pop("timestamp")
     all_cols = df.select_dtypes(include=[np.number]).columns.tolist()
 
-    if "target_1h" not in all_cols:
-        logging.warning("[create_sequences_in_chunks] No target_1h => skipping.")
+    if "target_EOD" not in all_cols:
+        logging.warning("[create_sequences_in_chunks] No target_EOD => skipping.")
         return
-    all_cols.remove("target_1h")
+    all_cols.remove("target_EOD")
 
     Xvals = df[all_cols].values
-    Yvals = df["target_1h"].values
+    Yvals = df["target_EOD"].values
 
     n = len(Xvals)
     if n < seq_len:
@@ -328,7 +332,6 @@ def create_sequences_in_chunks(df, prefix="spx", seq_len=60, chunk_size=10000):
         X_np = np.array(X_list, dtype=np.float32)
         Y_np = np.array(Y_list, dtype=np.float32).reshape(-1, 1)
 
-        # Save parted .npy
         x_file = os.path.join(SEQUENCES_DIR, f"{prefix}_X_3D_part{part_i}.npy")
         y_file = os.path.join(SEQUENCES_DIR, f"{prefix}_Y_3D_part{part_i}.npy")
 
@@ -336,7 +339,6 @@ def create_sequences_in_chunks(df, prefix="spx", seq_len=60, chunk_size=10000):
         np.save(y_file, Y_np)
         logging.info(f"[create_sequences_in_chunks] part={part_i}, X={X_np.shape}, Y={Y_np.shape}")
 
-        # Optional: upload parted files to S3
         chunk_s3 = "data/lumen2/featured/sequences"
         try:
             auto_upload_file_to_s3(x_file, chunk_s3)
@@ -347,16 +349,15 @@ def create_sequences_in_chunks(df, prefix="spx", seq_len=60, chunk_size=10000):
         part_i += 1
         start = end
 
-    # Reinsert timestamp if needed
     df.insert(0, "timestamp", timestamps)
 
 def main():
-    logging.info("=== Preprocess => Merging spx + vix (no scaling) ===")
+    logging.info("=== Preprocess => Merging spx + vix (no scaling), using EOD target ===")
 
-    # 1. Download the processed CSVs (real_time_spx, real_time_vix) from S3
+    # 1. Download the processed CSVs
     download_processed_csvs()
 
-    # 2. Merge SPX + VIX data => raw domain
+    # 2. Merge spx + vix => raw domain
     df_merged = merge_spx_vix_3min()
     logging.info(f"[main] shape after merge => {df_merged.shape}")
 
@@ -365,25 +366,27 @@ def main():
     df_merged = add_vix_indicators(df_merged)
     df_merged = add_spx_vix_ratio(df_merged)
     df_merged = add_time_features(df_merged)
-    df_merged = create_target_1h(df_merged)
-    df_merged.dropna(subset=["target_1h"], inplace=True)
 
-    # 4. Optional correlation heatmap => raw domain
+    # 4. Create EOD target
+    df_merged = create_target_EOD(df_merged)
+    df_merged.dropna(subset=["target_EOD"], inplace=True)
+
+    # 5. Optional correlation heatmap => raw domain
     heatmap_path = os.path.join(FEATURED_DIR, "spx_vix_corr_heatmap.png")
     visualize_correlations(df_merged, output_png=heatmap_path)
 
-    # 5. Drop low-corr feats or keep topN feats => no scaling
+    # 6. Drop low-corr feats or keep topN feats => no scaling
     df_merged = drop_low_corr_features(df_merged, threshold=0.05)
-    df_merged = keep_topN_features(df_merged, n=15, target_col="target_1h")
+    df_merged = keep_topN_features(df_merged, n=15, target_col="target_EOD")
 
-    # 6. (No scaling here) => Save final CSV or parted .npy if needed
+    # 7. Save final CSV or parted .npy if needed
     output_path = os.path.join(FEATURED_DIR, "merged_spx_vix.csv")
     df_merged.to_csv(output_path, index=False)
     logging.info(f"[main] Saved final merged CSV => {output_path}")
 
-    # 7. Create parted 3D sequences in raw domain if needed
+    # 8. Create parted 3D sequences in raw domain if needed
     create_sequences_in_chunks(df_merged, prefix="spx_test", seq_len=60)
-    logging.info("=== Done with preprocess => raw domain only ===")
+    logging.info("=== Done with preprocess => raw domain => EOD target ===")
 
 if __name__ == "__main__":
     main()

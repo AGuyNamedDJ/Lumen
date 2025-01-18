@@ -96,14 +96,10 @@ def filter_market_hours(df):
     This ensures we’re mostly dealing with active market hours.
     """
     df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-    # Monday=0 ... Friday=4, so we exclude dayofweek >= 5 (weekends)
-    df = df[df["timestamp"].dt.dayofweek < 5]
-
-    # Example range: 9:00–15:59 local time (tweak to your actual session times)
+    df = df[df["timestamp"].dt.dayofweek < 5]  # Monday=0 ... Friday=4
     df = df[(df["timestamp"].dt.hour >= 9) & (df["timestamp"].dt.hour <= 15)]
     return df
 
-##############################################################################
 def download_processed_csvs():
     """
     Downloads the processed SPX & VIX CSVs from S3 => local DATA_DIR.
@@ -196,8 +192,8 @@ def add_spx_indicators(df):
     df["SPX_BollL"] = sma20 - 2.0 * std20
 
     delta = p.diff()
-    gain  = delta.where(delta>0, 0).rolling(14).mean()
-    loss  = (-delta.where(delta<0,0)).rolling(14).mean()
+    gain  = delta.where(delta > 0, 0).rolling(14).mean()
+    loss  = (-delta.where(delta < 0, 0)).rolling(14).mean()
     rs    = gain / (loss + 1e-9)
     df["SPX_RSI"] = 100 - 100.0/(1+rs)
 
@@ -235,7 +231,7 @@ def add_spx_vix_ratio(df):
     """
     if "spx_price" in df.columns and "vix_price" in df.columns:
         df["spx_vix_ratio"] = df.apply(
-            lambda row: row["spx_price"]/row["vix_price"] if row["vix_price"]>0 else 0.0,
+            lambda row: row["spx_price"]/row["vix_price"] if row["vix_price"] > 0 else 0.0,
             axis=1
         )
     return df
@@ -247,21 +243,23 @@ def add_time_features(df):
     df.sort_values("timestamp", inplace=True)
     df["dow"] = df["timestamp"].dt.dayofweek
     df["hour"] = df["timestamp"].dt.hour
-    df["dow_sin"] = np.sin(2.0*np.pi*df["dow"]/7.0)
-    df["dow_cos"] = np.cos(2.0*np.pi*df["dow"]/7.0)
-    df["hour_sin"] = np.sin(2.0*np.pi*df["hour"]/24.0)
-    df["hour_cos"] = np.cos(2.0*np.pi*df["hour"]/24.0)
+    df["dow_sin"] = np.sin(2.0*np.pi * df["dow"] / 7.0)
+    df["dow_cos"] = np.cos(2.0*np.pi * df["dow"] / 7.0)
+    df["hour_sin"] = np.sin(2.0*np.pi * df["hour"] / 24.0)
+    df["hour_cos"] = np.cos(2.0*np.pi * df["hour"] / 24.0)
     return df
 
-def create_target_1h(df):
+def create_target_EOD(df):
     """
-    Creates target_1h = spx_price shifted up by 20 rows (i.e., next 1 hour if data is 3-min).
-    Remains in raw domain.
+    Creates target_EOD = last spx_price of each trading day, assigned to every row of that day.
     """
-    if "spx_price" in df.columns:
-        df["target_1h"] = df["spx_price"].shift(-20)
-    else:
-        logging.warning("No spx_price => cannot create target_1h.")
+    if "spx_price" not in df.columns:
+        logging.warning("No spx_price => cannot create target_EOD.")
+        return df
+
+    df["date_only"] = df["timestamp"].dt.date
+    df["target_EOD"] = df.groupby("date_only")["spx_price"].transform("last")
+    df.drop(columns=["date_only"], inplace=True, errors="ignore")
     return df
 
 ##############################################################################
@@ -293,7 +291,7 @@ def visualize_correlations(df, output_png=None):
         plt.show()
     plt.close()
 
-def rank_features_by_target_corr(df, target_col="target_1h"):
+def rank_features_by_target_corr(df, target_col="target_EOD"):
     """
     Returns a Series of absolute correlations with target_col, sorted descending,
     excluding the target_col itself.
@@ -313,26 +311,26 @@ def rank_features_by_target_corr(df, target_col="target_1h"):
 ##############################################################################
 def drop_low_corr_features(df, threshold=0.05):
     """
-    Drops columns that have correlation < threshold with target_1h.
+    Drops columns that have correlation < threshold with target_EOD.
     """
-    if "target_1h" not in df.columns:
+    if "target_EOD" not in df.columns:
         return df
     cmat = df.corr(numeric_only=True)
-    if "target_1h" not in cmat.columns:
+    if "target_EOD" not in cmat.columns:
         return df
 
-    target_corr = cmat["target_1h"].abs().sort_values(ascending=False)
+    target_corr = cmat["target_EOD"].abs().sort_values(ascending=False)
     keep = target_corr[target_corr >= threshold].index.tolist()
-    keep = set(keep + ["timestamp", "target_1h"])
+    keep = set(keep + ["timestamp", "target_EOD"])
     drop_list = [c for c in df.columns if c not in keep]
     if drop_list:
         logging.info(f"[drop_low_corr_features] Dropping => {drop_list}")
         df.drop(columns=drop_list, inplace=True)
     return df
 
-def keep_topN_features(df, n=15, target_col="target_1h"):
+def keep_topN_features(df, n=15, target_col="target_EOD"):
     """
-    Retains only the top N correlated features w.r.t. target_1h + target_1h + timestamp.
+    Retains only the top N correlated features w.r.t. target_EOD + target_EOD + timestamp.
     """
     if target_col not in df.columns:
         logging.warning("[keep_topN_features] target not found => skipping.")
@@ -363,15 +361,15 @@ def keep_topN_features(df, n=15, target_col="target_1h"):
 ##############################################################################
 def separate_feature_and_target_scaling(df):
     """
-    Fits the feature-scaler on numeric columns (excluding target_1h),
-    and fits a separate target-scaler on target_1h. Saves both as .joblib,
+    Fits the feature-scaler on numeric columns (excluding target_EOD),
+    and fits a separate target-scaler on target_EOD. Saves both as .joblib,
     but does NOT transform the DataFrame. The CSV remains in real domain.
     """
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-    if "target_1h" not in numeric_cols:
+    if "target_EOD" not in numeric_cols:
         return df
 
-    numeric_cols.remove("target_1h")
+    numeric_cols.remove("target_EOD")
 
     # Fill any NaNs
     if df[numeric_cols].isna().any().any():
@@ -390,8 +388,8 @@ def separate_feature_and_target_scaling(df):
 
     # Fit target scaler (no transform)
     tgt_scaler = MinMaxScaler()
-    tvals = df["target_1h"].fillna(method="ffill").fillna(method="bfill").values.reshape(-1,1)
-    logging.info(f"[Scaler Validation] target_1h raw range: {tvals.min()} to {tvals.max()}")
+    tvals = df["target_EOD"].fillna(method="ffill").fillna(method="bfill").values.reshape(-1,1)
+    logging.info(f"[Scaler Validation] target_EOD raw range: {tvals.min()} to {tvals.max()}")
     tgt_scaler.fit(tvals)
     ts_path = os.path.join(SCALER_DIR, "spx_target_scaler.joblib")
     joblib.dump(tgt_scaler, ts_path)
@@ -434,17 +432,18 @@ def create_sequences_in_chunks(df, prefix="spx", seq_len=60, chunk_size=10000):
     """
     Creates parted 3D arrays => (N, seq_len, features). Saves them as .npy,
     optionally uploads them to S3. Raw domain, no scaling done here.
+    Instead of target_1h, we look for 'target_EOD'.
     """
     timestamps = df.pop("timestamp")
     all_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-    if "target_1h" not in all_cols:
-        logging.warning("[create_sequences_in_chunks] No target_1h => skipping.")
+    if "target_EOD" not in all_cols:
+        logging.warning("[create_sequences_in_chunks] No target_EOD => skipping.")
         return
 
-    all_cols.remove("target_1h")
+    all_cols.remove("target_EOD")
 
     Xvals = df[all_cols].values
-    Yvals = df["target_1h"].values
+    Yvals = df["target_EOD"].values
     n = len(Xvals)
     if n < seq_len:
         logging.warning(f"[create_sequences_in_chunks] Not enough rows => {n} < seq_len={seq_len}")
@@ -489,7 +488,7 @@ def create_sequences_in_chunks(df, prefix="spx", seq_len=60, chunk_size=10000):
 # MAIN
 ##############################################################################
 def main():
-    logging.info("=== Feature Engineering (SPX + VIX) with Approach A (no in-place scaling) ===")
+    logging.info("=== Feature Engineering (SPX + VIX) with EOD target (no in-place scaling) ===")
 
     # 1) Download processed CSVs
     download_processed_csvs()
@@ -504,16 +503,16 @@ def main():
     df_merged = add_spx_vix_ratio(df_merged)
     df_merged = add_time_features(df_merged)
 
-    # 4) Create target_1h
-    df_merged = create_target_1h(df_merged)
-    df_merged.dropna(subset=["target_1h"], inplace=True)
+    # 4) Create EOD target, then drop any rows missing it
+    df_merged = create_target_EOD(df_merged)
+    df_merged.dropna(subset=["target_EOD"], inplace=True)
 
-    # 5) Visualize correlation (optional) & drop low-corr, keep top-N
+    # 5) Visualize correlation (optional) & then drop low-corr or keep top-N
     heatmap_path = os.path.join(FEATURED_DIR, "spx_vix_corr_heatmap.png")
     visualize_correlations(df_merged, output_png=heatmap_path)
 
     df_merged = drop_low_corr_features(df_merged, threshold=0.05)
-    df_merged = keep_topN_features(df_merged, n=15, target_col="target_1h")
+    df_merged = keep_topN_features(df_merged, n=15, target_col="target_EOD")
 
     # 6) Fit scalers only (leave CSV in real domain)
     df_merged = separate_feature_and_target_scaling(df_merged)
@@ -535,12 +534,12 @@ def main():
     save_csv(df_val,   "spx_vix_val.csv")
     save_csv(df_test,  "spx_vix_test.csv")
 
-    # 9) Create parted 3D sequences from each split
+    # 9) Create parted 3D sequences from each split referencing target_EOD
     create_sequences_in_chunks(df_train, prefix="spx_train", seq_len=60)
     create_sequences_in_chunks(df_val,   prefix="spx_val",   seq_len=60)
     create_sequences_in_chunks(df_test,  prefix="spx_test",  seq_len=60)
 
-    logging.info("=== Done with feature engineering ===")
+    logging.info("=== Done with feature engineering (EOD) ===")
 
 if __name__ == "__main__":
     main()
